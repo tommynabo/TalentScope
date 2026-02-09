@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { ArrowLeft, Save, Briefcase, Code, Brain, Target, Sparkles, Trash2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Save, Briefcase, Code, Brain, Target, Trash2, AlertTriangle } from 'lucide-react';
 import { CampaignService } from '../lib/services';
 import Toast from './Toast';
 
@@ -10,7 +10,6 @@ interface CampaignCreationViewProps {
 }
 
 const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onCampaignCreated }) => {
-    const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState({ show: false, message: '' });
 
@@ -72,9 +71,6 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
         if (confirm("DANGER: This will delete ALL campaigns. Are you sure?")) {
             setLoading(true);
             try {
-                // Delete all campaigns (we need to expose a method for this or iterate)
-                // For now, let's implement a 'deleteAll' in services or just one by one if generic
-                // But requirements asked to "borrar todas".
                 await CampaignService.deleteAll();
                 setToast({ show: true, message: 'All campaigns deleted.' });
             } catch (e: any) {
@@ -84,23 +80,6 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
             }
         }
     }
-
-    // Preset for "Campaña 1"
-    const loadPresetCampaña1 = () => {
-        setFormData({
-            title: 'Product Engineer - Flutter (Campaña 1)',
-            role: 'Product Engineer (Mobile)',
-            platform: 'LinkedIn',
-            skills: 'Flutter, Dart, Mobile Architecture',
-            experienceLevel: 'Senior',
-            keywords: 'Flutter AND (Startup OR Founder OR Co-founder OR CTO), Mobile Developer AND Flutter AND Shipped',
-            factorStartup: true, // "Experiencia en Startups"
-            factorFounder: true, // "Mentalidad Builder / Ex-Founder"
-            factorAppStore: true, // "Portafolio Desplegado / App Store"
-            factorOpenSource: true // "Github Activity"
-        });
-        setToast({ show: true, message: 'Preset loaded!' });
-    };
 
     return (
         <div className="p-6 md:p-8 animate-in slide-in-from-right duration-300 max-w-4xl mx-auto">
@@ -121,12 +100,6 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
                         className="px-4 py-2 bg-red-950/30 text-red-400 border border-red-900/50 hover:bg-red-900/50 rounded-lg flex items-center gap-2 transition-all"
                     >
                         <Trash2 className="h-4 w-4" /> Reset All
-                    </button>
-                    <button
-                        onClick={loadPresetCampaña1}
-                        className="px-4 py-2 bg-purple-900/30 text-purple-400 border border-purple-500/30 hover:bg-purple-900/50 rounded-lg flex items-center gap-2 transition-all"
-                    >
-                        <Sparkles className="h-4 w-4" /> Load "Campaña 1" Preset
                     </button>
                 </div>
             </div>

@@ -13,7 +13,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
     <div className="p-6 md:p-8 animate-in fade-in slide-in-from-right-8 duration-500 h-full flex flex-col">
       {/* Header & Nav */}
       <div className="flex items-center gap-4 mb-8">
-        <button 
+        <button
           onClick={onBack}
           className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500 hover:text-cyan-400 text-slate-400 transition-all"
         >
@@ -35,7 +35,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
             <p className="text-slate-400 text-sm font-medium">Alcance Total</p>
             <Send className="h-4 w-4 text-slate-500" />
           </div>
-          <p className="text-3xl font-bold text-white">{campaign.stats.sent}</p>
+          <p className="text-3xl font-bold text-white">{campaign.stats?.sent || 0}</p>
           <div className="w-full bg-slate-800 h-1 rounded-full mt-3 overflow-hidden">
             <div className="bg-blue-500 h-full w-[70%]"></div>
           </div>
@@ -46,9 +46,9 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
             <p className="text-slate-400 text-sm font-medium">Tasa de Respuesta</p>
             <MessageSquare className="h-4 w-4 text-slate-500" />
           </div>
-          <p className="text-3xl font-bold text-white">{campaign.stats.responseRate}%</p>
+          <p className="text-3xl font-bold text-white">{campaign.stats?.responseRate || 0}%</p>
           <div className="w-full bg-slate-800 h-1 rounded-full mt-3 overflow-hidden">
-            <div className="bg-cyan-500 h-full" style={{ width: `${campaign.stats.responseRate}%` }}></div>
+            <div className="bg-cyan-500 h-full" style={{ width: `${campaign.stats?.responseRate || 0}%` }}></div>
           </div>
         </div>
 
@@ -58,7 +58,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
             <p className="text-cyan-100 text-sm font-medium">Interesados (Hot)</p>
             <Calendar className="h-4 w-4 text-cyan-400" />
           </div>
-          <p className="text-3xl font-bold text-cyan-400">{campaign.stats.leads}</p>
+          <p className="text-3xl font-bold text-cyan-400">{campaign.stats?.leads || 0}</p>
           <div className="w-full bg-slate-800 h-1 rounded-full mt-3 overflow-hidden">
             <div className="bg-gradient-to-r from-cyan-400 to-white h-full w-[45%]"></div>
           </div>
@@ -73,7 +73,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
             Exportar CSV
           </button>
         </div>
-        
+
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -117,8 +117,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="flex-1 w-24 bg-slate-800 h-2 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full ${candidate.matchScore > 90 ? 'bg-gradient-to-r from-emerald-400 to-cyan-400' : candidate.matchScore > 80 ? 'bg-cyan-500' : 'bg-slate-500'}`} 
+                        <div
+                          className={`h-full rounded-full ${candidate.matchScore > 90 ? 'bg-gradient-to-r from-emerald-400 to-cyan-400' : candidate.matchScore > 80 ? 'bg-cyan-500' : 'bg-slate-500'}`}
                           style={{ width: `${candidate.matchScore}%` }}
                         ></div>
                       </div>

@@ -91,7 +91,8 @@ export const CampaignService = {
             .from('campaigns')
             .insert([{
                 ...campaignData,
-                user_id: user.id
+                user_id: user.id,
+                stats: { sent: 0, responseRate: 0, leads: 0 }
             }])
             .select()
             .single();

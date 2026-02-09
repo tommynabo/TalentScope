@@ -1,17 +1,25 @@
+
 import React from 'react';
 import { LayoutDashboard, Users, Activity, Settings, Zap, LogOut } from 'lucide-react';
-import { ViewMode } from '../types';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface SidebarProps {
-  currentView: ViewMode;
-  onNavigate: (view: ViewMode) => void;
   onLogout: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, onLogout }) => {
-  const getButtonClass = (viewName: ViewMode) => {
-    const isActive = currentView === viewName;
-    return isActive
+const Sidebar: React.FC<SidebarProps> = ({ onLogout }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPath = location.pathname;
+
+  const isActive = (path: string) => {
+    if (path === '/dashboard' && (currentPath === '/dashboard' || currentPath === '/')) return true;
+    if (path === '/tablero' && currentPath.includes('/tablero')) return true;
+    return currentPath.startsWith(path);
+  };
+
+  const getButtonClass = (path: string) => {
+    return isActive(path)
       ? "flex items-center justify-center lg:justify-start gap-3 p-3 rounded-xl bg-slate-900 text-cyan-400 border border-slate-800 shadow-[0_0_15px_rgba(34,211,238,0.1)] transition-all"
       : "flex items-center justify-center lg:justify-start gap-3 p-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition-all";
   };
@@ -27,24 +35,33 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, onLogout }) 
 
       <nav className="flex-1 py-6 flex flex-col gap-2 px-2">
         <button
-          onClick={() => onNavigate('dashboard')}
-          className={getButtonClass('dashboard')}
+          onClick={() => navigate('/dashboard')}
+          className={getButtonClass('/dashboard')}
         >
           <LayoutDashboard className="h-5 w-5" />
+          <span className="hidden lg:block font-medium">Dashboard</span>
+        </button>
+
+        <button
+          onClick={() => navigate('/tablero/linkedin')}
+          className={getButtonClass('/tablero')}
+        >
+          <LayoutDashboard className="h-5 w-5" />
+          {/* "Tablero" usually maps to Campaigns/Pipeline in this context */}
           <span className="hidden lg:block font-medium">Tablero</span>
         </button>
 
         <button
-          onClick={() => onNavigate('talent-pool')}
-          className={getButtonClass('talent-pool')}
+          onClick={() => navigate('/talento')}
+          className={getButtonClass('/talento')}
         >
           <Users className="h-5 w-5" />
           <span className="hidden lg:block font-medium">Talento</span>
         </button>
 
         <button
-          onClick={() => onNavigate('analytics')}
-          className={getButtonClass('analytics')}
+          onClick={() => navigate('/analytics')}
+          className={getButtonClass('/analytics')}
         >
           <Activity className="h-5 w-5" />
           <span className="hidden lg:block font-medium">Analíticas</span>
@@ -53,8 +70,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, onLogout }) 
 
       <div className="p-4 border-t border-slate-800 space-y-2">
         <button
-          onClick={() => onNavigate('settings')}
-          className={getButtonClass('settings')}
+          onClick={() => navigate('/settings')}
+          className={getButtonClass('/settings')}
         >
           <Settings className="h-5 w-5" />
           <span className="hidden lg:block font-medium">Configuración</span>
