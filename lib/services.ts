@@ -83,9 +83,16 @@ export const CampaignService = {
     },
 
     async create(campaignData: Partial<Campaign>) {
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (!user) throw new Error("User must be logged in to create a campaign.");
+
         const { data, error } = await supabase
             .from('campaigns')
-            .insert([campaignData])
+            .insert([{
+                ...campaignData,
+                user_id: user.id
+            }])
             .select()
             .single();
 

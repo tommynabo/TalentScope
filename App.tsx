@@ -136,7 +136,16 @@ const App: React.FC = () => {
           onCampaignCreated={() => setCurrentView('campaign-list')}
         />;
       case 'settings':
-        return <SettingsView />;
+        return <SettingsView
+          currentName={user.name}
+          onNameChange={(newName) => {
+            setUser({ ...user, name: newName });
+            setToastMessage('Name updated successfully!');
+            setShowToast(true);
+            // Optionally update Supabase metadata here
+            supabase.auth.updateUser({ data: { full_name: newName } });
+          }}
+        />;
       default:
         return (
           <DashboardView
