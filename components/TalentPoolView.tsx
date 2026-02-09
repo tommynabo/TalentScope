@@ -93,7 +93,50 @@ const TalentPoolView: React.FC = () => {
         {viewMode === 'kanban' ? (
           <KanbanBoard candidates={[]} onStatusChange={() => { }} />
         ) : (
-          <div className="p-10 text-center text-slate-500">List View Coming Soon</div>
+          <div className="p-0 overflow-auto h-full">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-slate-900/50 sticky top-0 z-10 backdrop-blur-md">
+                <tr>
+                  <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-700">Candidate</th>
+                  <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-700">Role</th>
+                  <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-700">Symmetry Score</th>
+                  <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-700">Detected Skills</th>
+                  <th className="p-4 text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-700 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {/* Mock Rows for now - In future connect to real candidates */}
+                <tr className="hover:bg-slate-800/30 transition-colors group">
+                  <td className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-xs font-bold text-white">TD</div>
+                      <span className="font-medium text-white">Tomas Demo</span>
+                    </div>
+                  </td>
+                  <td className="p-4 text-slate-300">Senior Flutter Engineer</td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-emerald-400 font-bold font-mono">98</span>
+                      <div className="w-24 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 w-[98%]"></div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex gap-1 flex-wrap">
+                      <span className="px-2 py-0.5 bg-slate-800 rounded text-xs text-slate-400 border border-slate-700">Flutter</span>
+                      <span className="px-2 py-0.5 bg-slate-800 rounded text-xs text-slate-400 border border-slate-700">Dart</span>
+                    </div>
+                  </td>
+                  <td className="p-4 text-right">
+                    <button className="text-slate-500 hover:text-white transition-colors">
+                      <Filter className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

@@ -51,15 +51,35 @@ export const CandidateService = {
 
 // --- Campaign Service ---
 export const CampaignService = {
-    async getAll(userId: string) {
-        const { data, error } = await supabase
+    async getAll(userId?: string) {
+        let query = supabase
             .from('campaigns')
             .select('*')
-            .eq('user_id', userId)
             .order('created_at', { ascending: false });
 
+        if (userId) {
+            query = query.eq('user_id', userId);
+        }
+
+        const { data, error } = await query;
         if (error) throw error;
         return data as Campaign[];
+    },
+
+    async deleteAll() {
+        const { error } = await supabase
+            .from('campaigns')
+            .delete()
+            .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all rows
+        if (error) throw error;
+    },
+
+    async delete(id: string) {
+        const { error } = await supabase
+            .from('campaigns')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
     },
 
     async create(campaignData: Partial<Campaign>) {

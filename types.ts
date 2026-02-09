@@ -1,4 +1,4 @@
-export type ViewMode = 'login' | 'dashboard' | 'campaign-list' | 'campaign-detail' | 'talent-pool' | 'analytics';
+export type ViewMode = 'login' | 'dashboard' | 'campaign-list' | 'campaign-detail' | 'campaign-create' | 'talent-pool' | 'analytics' | 'settings';
 
 export interface User {
   id: string;

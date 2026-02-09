@@ -1,92 +1,154 @@
-import React from 'react';
-import { Campaign } from '../types';
-import { MOCK_CAMPAIGNS } from '../constants';
-import { Plus, ArrowRight, Activity, PauseCircle, PlayCircle, Clock } from 'lucide-react';
+
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, UserPlus, Search, Trash2, Plus, X } from 'lucide-react';
+import { Campaign } from '../types/database';
+import { CampaignService } from '../lib/services';
+import Toast from './Toast';
 
 interface CampaignListViewProps {
   platform: string;
   onSelectCampaign: (campaign: Campaign) => void;
   onBack: () => void;
+  onCreate: () => void;
 }
 
-const CampaignListView: React.FC<CampaignListViewProps> = ({ platform, onSelectCampaign, onBack }) => {
-  const filteredCampaigns = MOCK_CAMPAIGNS.filter(c => c.platform === platform);
+const CampaignListView: React.FC<CampaignListViewProps> = ({ platform, onSelectCampaign, onBack, onCreate }) => {
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newCampaignTitle, setNewCampaignTitle] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '' });
+
+  useEffect(() => {
+    loadCampaigns();
+  }, [platform]);
+
+  const loadCampaigns = async () => {
+    setLoading(true);
+    const data = await CampaignService.getAll();
+    // Filter by platform if needed, but for now show all as 'LinkedIn' is the main one
+    setCampaigns(data);
+    setLoading(false);
+  };
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (confirm('Are you sure you want to delete this campaign?')) {
+      await CampaignService.delete(id);
+      loadCampaigns();
+      setToast({ show: true, message: 'Campaign deleted.' });
+    }
+  };
+
+  const handleCreate = async () => {
+    if (!newCampaignTitle.trim()) return;
+
+    try {
+      await CampaignService.create({
+        title: newCampaignTitle,
+        status: 'Running',
+        platform: 'LinkedIn',
+        description: 'New campaign',
+        target_role: 'General'
+      });
+      setToast({ show: true, message: 'Campaign created!' });
+      setShowCreateModal(false);
+      setNewCampaignTitle('');
+      loadCampaigns();
+    } catch (e) {
+      console.error(e);
+      setToast({ show: true, message: 'Error creating campaign.' });
+    }
+  };
 
   return (
-    <div className="p-6 md:p-8 animate-in fade-in slide-in-from-right-4 duration-500">
-      <div className="flex justify-between items-center mb-8">
+    <div className="p-6 md:p-8 animate-in slide-in-from-right duration-300">
+      <div className="flex items-center gap-4 mb-8">
+        <button
+          onClick={onBack}
+          className="p-2 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
         <div>
-          <button onClick={onBack} className="text-slate-400 hover:text-white text-sm mb-2 transition-colors">
-            ← Volver al Tablero
-          </button>
-          <h1 className="text-3xl font-bold text-white">Campañas de {platform}</h1>
-          <p className="text-slate-400">Gestiona tus búsquedas activas y flujos de trabajo.</p>
+          <h1 className="text-3xl font-bold text-white tracking-tight">{platform} Campaigns</h1>
+          <p className="text-slate-400">Gestiona tus campañas de reclutamiento activo.</p>
         </div>
-        <button className="flex items-center gap-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-cyan-900/20">
-          <Plus className="h-5 w-5" /> Nueva Campaña
+        <button
+          onClick={onCreate}
+          className="ml-auto bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium shadow-lg shadow-cyan-900/20"
+        >
+          <Plus className="h-4 w-4" /> New Campaign
         </button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        {filteredCampaigns.map((campaign) => (
-          <div 
-            key={campaign.id}
-            onClick={() => onSelectCampaign(campaign)}
-            className="group bg-slate-900/40 border border-slate-800 hover:border-cyan-500/30 rounded-2xl p-6 cursor-pointer hover:bg-slate-900/60 transition-all duration-300 relative overflow-hidden"
-          >
-             <div className="absolute top-0 left-0 w-1 h-full bg-slate-800 group-hover:bg-cyan-500 transition-colors"></div>
-            
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-1">
-                  <h3 className="text-xl font-semibold text-white group-hover:text-cyan-400 transition-colors">{campaign.title}</h3>
-                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border flex items-center gap-1
-                    ${campaign.status === 'Running' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                      campaign.status === 'Paused' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 
-                      'bg-slate-800 text-slate-400 border-slate-700'}`}>
-                    {campaign.status === 'Running' ? <PlayCircle className="h-3 w-3" /> : <PauseCircle className="h-3 w-3" />}
-                    {campaign.status}
-                  </span>
+      {loading ? (
+        <div className="text-slate-500 text-center py-20">Loading campaigns...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {campaigns.map((campaign) => (
+            <div
+              key={campaign.id}
+              onClick={() => onSelectCampaign(campaign)}
+              className="group bg-slate-900/50 border border-slate-800 rounded-2xl p-6 cursor-pointer hover:border-cyan-500/50 hover:bg-slate-900/80 transition-all relative"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-cyan-950/30 rounded-xl text-cyan-400 border border-cyan-900/50">
+                  <UserPlus className="h-6 w-6" />
                 </div>
-                <p className="text-slate-400 text-sm flex items-center gap-2">
-                  <span className="bg-slate-800 px-2 py-0.5 rounded text-xs text-slate-300">Rol: {campaign.role}</span>
-                  <span className="text-slate-600">•</span>
-                  <span className="text-xs text-slate-500 flex items-center gap-1"><Clock className="h-3 w-3"/> Creado el {campaign.createdAt}</span>
-                </p>
+                <div className={`px-3 py-1 rounded-full text-xs font-medium border ${campaign.status === 'Running' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' :
+                  campaign.status === 'Completed' ? 'bg-slate-800 text-slate-400 border-slate-700' :
+                    'bg-yellow-950/30 text-yellow-400 border-yellow-900/50'
+                  }`}>
+                  {campaign.status.toUpperCase()}
+                </div>
               </div>
 
-              <div className="flex items-center gap-8">
-                <div className="text-center">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Enviados</p>
-                  <p className="text-xl font-bold text-white">{campaign.stats.sent}</p>
+              <h3 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors">{campaign.title}</h3>
+              <p className="text-sm text-slate-400 mb-6 line-clamp-2">{campaign.description || "No description"}</p>
+
+              <div className="flex items-center justify-between mt-auto">
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <Search className="h-4 w-4" />
+                  <span>{campaign.target_role || "General Audience"}</span>
                 </div>
-                <div className="text-center">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Respuesta</p>
-                  <p className={`text-xl font-bold ${campaign.stats.responseRate > 10 ? 'text-emerald-400' : 'text-slate-200'}`}>
-                    {campaign.stats.responseRate}%
-                  </p>
-                </div>
-                <div className="text-center hidden sm:block">
-                  <p className="text-xs text-cyan-400 uppercase tracking-wider mb-1">Leads (Hot)</p>
-                  <p className="text-xl font-bold text-cyan-400">{campaign.stats.leads}</p>
-                </div>
-                <div className="pl-4 border-l border-slate-800">
-                  <ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-1 transition-all" />
-                </div>
+                <button
+                  onClick={(e) => handleDelete(e, campaign.id)}
+                  className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
+      )}
 
-        {filteredCampaigns.length === 0 && (
-          <div className="text-center py-12 bg-slate-900/30 border border-slate-800 border-dashed rounded-2xl">
-            <Activity className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-300">No hay campañas activas</h3>
-            <p className="text-slate-500 mb-4">Inicia una nueva búsqueda para comenzar.</p>
-            <button className="text-cyan-400 hover:text-cyan-300 text-sm font-medium">Crear primera campaña &rarr;</button>
+      {/* Create Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-xl p-6 animate-in zoom-in-95">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-white">New Campaign</h3>
+              <button onClick={() => setShowCreateModal(false)} className="text-slate-500 hover:text-white"><X className="h-6 w-6" /></button>
+            </div>
+            <input
+              type="text"
+              value={newCampaignTitle}
+              onChange={(e) => setNewCampaignTitle(e.target.value)}
+              placeholder="Campaign Name (e.g. Senior React Devs)"
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white mb-6 focus:border-cyan-500 outline-none"
+              autoFocus
+            />
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-slate-400 hover:text-white">Cancel</button>
+              <button onClick={handleCreate} className="px-6 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-bold">Create</button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      <Toast isVisible={toast.show} message={toast.message} onClose={() => setToast({ ...toast, show: false })} />
     </div>
   );
 };
