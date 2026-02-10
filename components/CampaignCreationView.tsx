@@ -82,26 +82,24 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
     }
 
     return (
-        <div className="p-6 md:p-8 animate-in slide-in-from-right duration-300 max-w-4xl mx-auto">
-            <div className="flex items-center gap-4 mb-8">
+        <div className="p-4 md:p-6 lg:p-8 animate-in slide-in-from-right duration-300">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-6 md:mb-8">
                 <button
                     onClick={onBack}
-                    className="p-2 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                    className="p-1.5 md:p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors flex-shrink-0"
                 >
-                    <ArrowLeft className="h-6 w-6" />
+                    <ArrowLeft className="h-5 md:h-6 w-5 md:w-6" />
                 </button>
-                <div>
-                    <h1 className="text-3xl font-bold text-white tracking-tight">New Campaign</h1>
-                    <p className="text-slate-400">Configure search parameters and "A-Player" signals.</p>
+                <div className="flex-1">
+                    <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">New Campaign</h1>
+                    <p className="text-slate-400 text-sm">Configure search parameters and "A-Player" signals.</p>
                 </div>
-                <div className="ml-auto flex gap-3">
-                    <button
-                        onClick={handleDeleteAll}
-                        className="px-4 py-2 bg-red-950/30 text-red-400 border border-red-900/50 hover:bg-red-900/50 rounded-lg flex items-center gap-2 transition-all"
-                    >
-                        <Trash2 className="h-4 w-4" /> Reset All
-                    </button>
-                </div>
+                <button
+                    onClick={handleDeleteAll}
+                    className="px-3 md:px-4 py-1.5 md:py-2 bg-red-950/30 text-red-400 border border-red-900/50 hover:bg-red-900/50 rounded-lg flex items-center gap-2 transition-all text-sm md:text-base flex-shrink-0"
+                >
+                    <Trash2 className="h-4 md:h-5 w-4 md:w-5" /> <span className="hidden sm:inline">Reset All</span>
+                </button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

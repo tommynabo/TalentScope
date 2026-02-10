@@ -98,44 +98,45 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
   };
 
   return (
-    <div className="p-6 md:p-8 animate-in fade-in slide-in-from-right-8 duration-500 h-full flex flex-col relative">
+    <div className="p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-right-8 duration-500 h-full flex flex-col relative">
       {/* Header & Nav */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 lg:gap-4 mb-4">
+        <div className="flex items-center gap-2 lg:gap-4 flex-1 min-w-0">
           <button
             onClick={onBack}
-            className="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500 hover:text-cyan-400 text-slate-400 transition-all"
+            className="p-1.5 lg:p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500 hover:text-cyan-400 text-slate-400 transition-all flex-shrink-0"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <div>
-            <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-              <Linkedin className="h-6 w-6 text-blue-500" />
-              {campaign.title}
+          <div className="min-w-0">
+            <h2 className="text-xl lg:text-2xl font-bold text-white flex items-center gap-2 lg:gap-3 truncate">
+              <Linkedin className="h-5 lg:h-6 w-5 lg:w-6 text-blue-500 flex-shrink-0" />
+              <span className="truncate">{campaign.title}</span>
             </h2>
-            <p className="text-slate-400 text-sm">Rol: <span className="text-cyan-400">{campaign.target_role}</span> • Estado: <span className="text-slate-300">{campaign.status}</span></p>
+            <p className="text-slate-400 text-xs lg:text-sm line-clamp-1">Rol: <span className="text-cyan-400">{campaign.target_role}</span> • Estado: <span className="text-slate-300">{campaign.status}</span></p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
-            <span className="text-slate-400 text-sm">Cantidad:</span>
+        <div className="flex items-center gap-2 lg:gap-4 flex-shrink-0">
+          <div className="flex items-center gap-1 lg:gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2 lg:px-3 py-1.5 lg:py-2">
+            <span className="text-slate-400 text-xs lg:text-sm hidden sm:inline">Cant:</span>
             <input
               type="number"
               min="1"
               max="50"
               value={leadCount}
               onChange={(e) => setLeadCount(Number(e.target.value))}
-              className="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white text-center focus:outline-none focus:border-cyan-500"
+              className="w-12 lg:w-16 bg-slate-800 border border-slate-700 rounded px-1.5 lg:px-2 py-0.5 lg:py-1 text-white text-xs lg:text-sm text-center focus:outline-none focus:border-cyan-500"
             />
           </div>
           <button
             onClick={handleRunSearch}
             disabled={searching}
-            className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-900/20 transition-all flex items-center gap-2 disabled:opacity-50"
+            className="px-3 lg:px-6 py-1.5 lg:py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-lg lg:rounded-xl text-xs lg:text-sm lg:font-bold shadow-lg shadow-cyan-900/20 transition-all flex items-center gap-1 lg:gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
           >
-            {searching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5" />}
-            {searching ? 'Buscando...' : 'Ejecutar Búsqueda Manual'}
+            {searching ? <Loader2 className="h-4 lg:h-5 w-4 lg:w-5 animate-spin" /> : <Play className="h-4 lg:h-5 w-4 lg:w-5" />}
+            <span className="hidden sm:inline">{searching ? 'Buscando...' : 'Buscar'}</span>
+            <span className="sm:hidden">{searching ? '...' : '🔍'}</span>
           </button>
         </div>
       </div>
@@ -170,7 +171,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 lg:gap-6 mb-6 lg:mb-8">
         {/* Scheduler Card */}
         <div className="lg:col-span-1">
           <Scheduler
@@ -181,37 +182,37 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
         </div>
 
         {/* Stats Bar */}
-        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl backdrop-blur-sm">
+        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-4">
+          <div className="bg-slate-900/50 border border-slate-800 p-3 lg:p-4 rounded-xl backdrop-blur-sm">
             <div className="flex justify-between items-start mb-2">
-              <p className="text-slate-400 text-sm font-medium">Alcance Total</p>
-              <Send className="h-4 w-4 text-slate-500" />
+              <p className="text-slate-400 text-xs lg:text-sm font-medium">Alcance Total</p>
+              <Send className="h-3 lg:h-4 w-3 lg:w-4 text-slate-500" />
             </div>
-            <p className="text-3xl font-bold text-white">{campaign.settings?.stats?.sent || 0}</p>
-            <div className="w-full bg-slate-800 h-1 rounded-full mt-3 overflow-hidden">
+            <p className="text-2xl lg:text-3xl font-bold text-white">{campaign.settings?.stats?.sent || 0}</p>
+            <div className="w-full bg-slate-800 h-1 rounded-full mt-2 lg:mt-3 overflow-hidden">
               <div className="bg-blue-500 h-full w-[70%]"></div>
             </div>
           </div>
 
-          <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl backdrop-blur-sm">
+          <div className="bg-slate-900/50 border border-slate-800 p-3 lg:p-4 rounded-xl backdrop-blur-sm">
             <div className="flex justify-between items-start mb-2">
-              <p className="text-slate-400 text-sm font-medium">Tasa de Respuesta</p>
-              <MessageSquare className="h-4 w-4 text-slate-500" />
+              <p className="text-slate-400 text-xs lg:text-sm font-medium">Tasa de Respuesta</p>
+              <MessageSquare className="h-3 lg:h-4 w-3 lg:w-4 text-slate-500" />
             </div>
-            <p className="text-3xl font-bold text-white">{campaign.settings?.stats?.responseRate || 0}%</p>
-            <div className="w-full bg-slate-800 h-1 rounded-full mt-3 overflow-hidden">
+            <p className="text-2xl lg:text-3xl font-bold text-white">{campaign.settings?.stats?.responseRate || 0}%</p>
+            <div className="w-full bg-slate-800 h-1 rounded-full mt-2 lg:mt-3 overflow-hidden">
               <div className="bg-cyan-500 h-full" style={{ width: `${campaign.settings?.stats?.responseRate || 0}%` }}></div>
             </div>
           </div>
 
-          <div className="bg-slate-900/50 border border-cyan-500/20 p-4 rounded-xl backdrop-blur-sm relative overflow-hidden">
+          <div className="bg-slate-900/50 border border-cyan-500/20 p-3 lg:p-4 rounded-xl backdrop-blur-sm relative overflow-hidden">
             <div className="absolute top-0 right-0 w-16 h-16 bg-cyan-500/10 rounded-full blur-2xl -mr-8 -mt-8"></div>
             <div className="flex justify-between items-start mb-2">
-              <p className="text-cyan-100 text-sm font-medium">Interesados (Hot)</p>
-              <Calendar className="h-4 w-4 text-cyan-400" />
+              <p className="text-cyan-100 text-xs lg:text-sm font-medium">Interesados (Hot)</p>
+              <Calendar className="h-3 lg:h-4 w-3 lg:w-4 text-cyan-400" />
             </div>
-            <p className="text-3xl font-bold text-cyan-400">{campaign.settings?.stats?.leads || 0}</p>
-            <div className="w-full bg-slate-800 h-1 rounded-full mt-3 overflow-hidden">
+            <p className="text-2xl lg:text-3xl font-bold text-cyan-400">{campaign.settings?.stats?.leads || 0}</p>
+            <div className="w-full bg-slate-800 h-1 rounded-full mt-2 lg:mt-3 overflow-hidden">
               <div className="bg-gradient-to-r from-cyan-400 to-white h-full w-[45%]"></div>
             </div>
           </div>

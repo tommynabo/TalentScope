@@ -31,7 +31,7 @@ const Scheduler: React.FC<SchedulerProps> = ({
     return (
         <div
             className={`
-                relative overflow-hidden rounded-2xl p-6 transition-all duration-500 border
+                relative overflow-hidden rounded-xl lg:rounded-2xl p-4 lg:p-6 transition-all duration-500 border
                 ${enabled
                     ? 'bg-gradient-to-br from-indigo-900/40 to-cyan-900/40 border-cyan-500/50 shadow-[0_0_30px_rgba(6,182,212,0.15)]'
                     : 'bg-slate-900/40 border-slate-800'

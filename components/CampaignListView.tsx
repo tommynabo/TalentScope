@@ -62,23 +62,23 @@ const CampaignListView: React.FC<CampaignListViewProps> = ({ platform, onSelectC
   };
 
   return (
-    <div className="p-6 md:p-8 animate-in slide-in-from-right duration-300">
-      <div className="flex items-center gap-4 mb-8">
+    <div className="p-4 md:p-6 lg:p-8 animate-in slide-in-from-right duration-300">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-6 md:mb-8">
         <button
           onClick={onBack}
-          className="p-2 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+          className="p-1.5 md:p-2 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors flex-shrink-0"
         >
-          <ArrowLeft className="h-6 w-6" />
+          <ArrowLeft className="h-5 md:h-6 w-5 md:w-6" />
         </button>
-        <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">{platform} Campaigns</h1>
-          <p className="text-slate-400">Gestiona tus campañas de reclutamiento activo.</p>
+        <div className="flex-1">
+          <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">{platform} Campaigns</h1>
+          <p className="text-slate-400 text-sm">Gestiona tus campañas de reclutamiento activo.</p>
         </div>
         <button
           onClick={onCreate}
-          className="ml-auto bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium shadow-lg shadow-cyan-900/20"
+          className="ml-auto bg-cyan-600 hover:bg-cyan-500 text-white px-3 md:px-4 py-2 rounded-lg flex items-center gap-2 font-medium shadow-lg shadow-cyan-900/20 text-sm md:text-base flex-shrink-0"
         >
-          <Plus className="h-4 w-4" /> New Campaign
+          <Plus className="h-4 md:h-5 w-4 md:w-5" /> <span className="hidden sm:inline">New Campaign</span>
         </button>
       </div>
 
