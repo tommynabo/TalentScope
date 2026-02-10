@@ -280,6 +280,7 @@ export class SearchEngine {
                                 "sales_angle": "Mejor ángulo de venta/acercamiento en 1 frase",
                                 "bottleneck": "Posible cuello de botella o dolor principal",
                                 "summary": "Resumen ejecutivo en 1 frase",
+                                "outreach_message": "Mensaje personalizado (<280 chars) ofreciendo puesto de Product Engineer e invitando a https://symmetry.club/roles/product-engineer",
                                 "skills": ["Habilidad 1", "Habilidad 2", "Habilidad 3"],
                                 "symmetry_score": (numero del 0 al 100 indicando ajuste al perfil ideal)
                             }`

@@ -221,7 +221,43 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
       <div className="flex-1 bg-slate-900/40 border border-slate-800 rounded-2xl overflow-hidden flex flex-col min-h-[400px]">
         <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/60">
           <h3 className="font-semibold text-white">Pipeline de Candidatos ({candidates.length})</h3>
-          <button className="px-3 py-1.5 text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors">
+          <button
+            onClick={() => {
+              const headers = ['Name', 'Role', 'Company', 'Email', 'LinkedIn', 'Score', 'Message', 'Analysis'];
+              const csvContent = [
+                headers.join(','),
+                ...candidates.map(c => {
+                  const analysis = parseAnalysis(c.ai_analysis);
+                  const message = analysis?.outreach_message || '';
+                  const summary = analysis?.summary || '';
+
+                  return [
+                    `"${c.full_name}"`,
+                    `"${c.job_title}"`,
+                    `"${c.current_company}"`,
+                    `"${c.email || ''}"`,
+                    `"${c.linkedin_url || ''}"`,
+                    `"${c.symmetry_score || 0}"`,
+                    `"${message.replace(/"/g, '""')}"`, // Escape quotes
+                    `"${summary.replace(/"/g, '""')}"`
+                  ].join(',');
+                })
+              ].join('\n');
+
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const link = document.createElement('a');
+              if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `talentscope_export_${campaign.id}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }
+            }}
+            className="px-3 py-1.5 text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors"
+          >
             Exportar CSV
           </button>
         </div>
