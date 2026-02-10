@@ -122,5 +122,27 @@ export const CampaignService = {
 
         if (error) throw error;
         return data as CampaignCandidate;
+    },
+
+    async getCandidatesByCampaign(campaignId: string) {
+        // Fetch relations. inner join with candidates
+        const { data, error } = await supabase
+            .from('campaign_candidates')
+            .select(`
+                *,
+                candidate:candidates(*)
+            `)
+            .eq('campaign_id', campaignId);
+
+        if (error) throw error;
+
+        // Flatten structure for the UI
+        return data.map((item: any) => ({
+            ...item.candidate,
+            // Overwrite candidate status with campaign-specific status if needed, 
+            // but UI currently uses a generic status. 
+            // We'll attach the campaign_candidate status to the candidate object for display.
+            status_in_campaign: item.status
+        })) as (Candidate & { status_in_campaign: string })[];
     }
 };

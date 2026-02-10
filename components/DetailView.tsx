@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Candidate, Campaign, CampaignCandidate } from '../types/database';
-import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Search, Play, Loader2 } from 'lucide-react';
+import { Candidate, Campaign } from '../types/database';
+import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Search, Play, Loader2, ExternalLink } from 'lucide-react';
 import { SearchService } from '../lib/search';
 import { CampaignService, CandidateService } from '../lib/services';
 import Scheduler from './Scheduler';
@@ -12,44 +12,57 @@ interface DetailViewProps {
 }
 
 const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [candidates, setCandidates] = useState<(Candidate & { status_in_campaign?: string })[]>([]);
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '' });
 
-  // Load existing candidates (Mock for now, normally fetch from relation)
+  // Load existing candidates
   useEffect(() => {
-    // In a real app we would fetch campaign_candidates here
-  }, []);
+    loadCandidates();
+  }, [campaign.id]);
+
+  const loadCandidates = async () => {
+    setLoading(true);
+    try {
+      const data = await CampaignService.getCandidatesByCampaign(campaign.id);
+      setCandidates(data);
+    } catch (e) {
+      console.error("Error loading candidates:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleRunSearch = async () => {
     setSearching(true);
     try {
       const newCandidates = await SearchService.searchCandidates(campaign.target_role || 'Developer', 10);
 
-      // Add to state (Visual only for now, ideally save to DB)
-      setCandidates(prev => [...newCandidates, ...prev]);
-
-      // Save to DB in background
+      // Save to DB
       const savePromises = newCandidates.map(async (c) => {
+        // 1. Create candidate
         const savedCandidate = await CandidateService.create(c);
+        // 2. Link to campaign
         await CampaignService.addCandidateToCampaign(campaign.id, savedCandidate.id);
       });
 
       await Promise.all(savePromises);
 
-      setToast({ show: true, message: 'Found 10 new candidates!' });
+      // Refresh list to get 'real' DB data
+      await loadCandidates();
+
+      setToast({ show: true, message: '¡10 nuevos candidatos encontrados!' });
     } catch (e: any) {
-      setToast({ show: true, message: 'Search failed: ' + e.message });
+      setToast({ show: true, message: 'Error en la búsqueda: ' + e.message });
     } finally {
       setSearching(false);
     }
   };
 
   const handleScheduleChange = async (enabled: boolean, time: string, leads: number) => {
-    console.log("Schedule updated:", { enabled, time, leads });
-    // Save to campaign settings
-    // await CampaignService.update(campaign.id, { settings: { ...campaign.settings, schedule: { enabled, time, leads } } });
+    console.log("Horario actualizado:", { enabled, time, leads });
+    // Here we would save to campaign settings
   };
 
   return (
@@ -79,7 +92,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
             className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-900/20 transition-all flex items-center gap-2 disabled:opacity-50"
           >
             {searching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5" />}
-            {searching ? 'Sourcing...' : 'Find 10 Candidates'}
+            {searching ? 'Buscando...' : 'Ejecutar Búsqueda Manual (10)'}
           </button>
         </div>
       </div>
@@ -142,11 +155,15 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
         </div>
 
         <div className="overflow-x-auto flex-1">
-          {candidates.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center h-full text-slate-500">
+              <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
+            </div>
+          ) : candidates.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-500">
               <Search className="h-12 w-12 mb-4 opacity-20" />
-              <p>No candidates found yet.</p>
-              <button onClick={handleRunSearch} className="text-cyan-400 hover:text-cyan-300 text-sm mt-2">Run a search to get started</button>
+              <p>No se encontraron candidatos.</p>
+              <button onClick={handleRunSearch} className="text-cyan-400 hover:text-cyan-300 text-sm mt-2">Ejecutar búsqueda para comenzar</button>
             </div>
           ) : (
             <table className="w-full text-left border-collapse">
@@ -165,7 +182,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {candidates.map((candidate: Candidate) => (
+                {candidates.map((candidate) => (
                   <tr key={candidate.id} className="hover:bg-slate-800/30 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
@@ -181,7 +198,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
                       <p className="text-xs text-slate-500">@ {candidate.current_company}</p>
                     </td>
                     <td className="px-6 py-4">
-                      <StatusBadge status="Pool" />
+                      <StatusBadge status={candidate.status_in_campaign || 'Pool'} />
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-xs text-slate-400 max-w-[200px] leading-relaxed">
@@ -204,9 +221,14 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button className="text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors">
-                        Ver Perfil
-                      </button>
+                      <a
+                        href={candidate.linkedin_url || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                      >
+                        Ver Perfil <ExternalLink className="h-3 w-3" />
+                      </a>
                     </td>
                   </tr>
                 ))}
@@ -227,6 +249,8 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     'Responded': 'Respondió',
     'Scheduled': 'Agendado',
     'Offer Sent': 'Oferta Enviada',
+    'Hired': 'Contratado',
+    'Rejected': 'Rechazado',
     'Pool': 'En Reserva'
   };
 
@@ -239,7 +263,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   };
 
   return (
-    <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${styles[status] || styles['Contacted']}`}>
+    <span className={`px-2.5 py-1 rounded-full text-xs font-medium border ${styles[status] || styles['Pool']}`}>
       {statusMap[status] || status}
     </span>
   );

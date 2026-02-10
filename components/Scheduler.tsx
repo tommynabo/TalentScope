@@ -54,8 +54,8 @@ const Scheduler: React.FC<SchedulerProps> = ({
                             <Clock className={`h-6 w-6 ${enabled ? 'animate-pulse' : ''}`} />
                         </div>
                         <div>
-                            <h3 className={`text-lg font-bold ${enabled ? 'text-white' : 'text-slate-400'}`}>Auto-Pilot</h3>
-                            <p className="text-xs text-slate-500">Daily Candidate Sourcing</p>
+                            <h3 className={`text-lg font-bold ${enabled ? 'text-white' : 'text-slate-400'}`}>Piloto Automático</h3>
+                            <p className="text-xs text-slate-500">Búsqueda Diaria de Candidatos</p>
                         </div>
                     </div>
 
@@ -80,7 +80,7 @@ const Scheduler: React.FC<SchedulerProps> = ({
                     <div className="bg-slate-950/50 rounded-xl p-3 border border-slate-800 flex items-center justify-between group-hover:border-slate-700 transition-colors">
                         <div className="flex items-center gap-2 text-slate-400">
                             <Clock className="h-4 w-4" />
-                            <span className="text-sm font-medium">Run Daily At</span>
+                            <span className="text-sm font-medium">Ejecutar a las</span>
                         </div>
                         <input
                             type="time"
@@ -96,7 +96,7 @@ const Scheduler: React.FC<SchedulerProps> = ({
                         <div className="flex justify-between items-center mb-2">
                             <div className="flex items-center gap-2 text-slate-400">
                                 <Calendar className="h-4 w-4" />
-                                <span className="text-sm font-medium">Daily Candidates</span>
+                                <span className="text-sm font-medium">Candidatos por día</span>
                             </div>
                             <span className="text-cyan-400 font-bold font-mono text-lg">{leads}</span>
                         </div>

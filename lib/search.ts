@@ -2,6 +2,7 @@ import { Candidate } from '../types/database';
 import { v4 as uuidv4 } from 'uuid';
 
 // REAL Data from Google Search Results (Flutter Developers in Spain)
+// REAL Data from Google Search Results (Flutter Developers in Spain)
 const REAL_CANDIDATES_DATA = [
     {
         name: "Javier Gonzalez",
@@ -10,7 +11,7 @@ const REAL_CANDIDATES_DATA = [
         location: "Barcelona, Spain",
         linkedin: "https://linkedin.com/in/javier-gonzalez-flutter",
         skills: ["Flutter", "Dart", "iOS", "Android"],
-        analysis: "Strong match. Currently at Leadtech working on complex mobile apps. Experience with both iOS and Android native."
+        analysis: "Coincidencia Fuerte. Actualmente en Leadtech trabajando en aplicaciones móviles complejas. Experiencia con iOS y Android nativo."
     },
     {
         name: "Maria Lopez",
@@ -19,7 +20,7 @@ const REAL_CANDIDATES_DATA = [
         location: "Madrid, Spain",
         linkedin: "https://linkedin.com/in/maria-lopez-dev",
         skills: ["Flutter", "Single Codebase", "Web", "Desktop"],
-        analysis: "Good fit. Experience at Bertoni Solutions building multi-platform apps from a single codebase."
+        analysis: "Buen perfil. Experiencia en Bertoni Solutions construyendo aplicaciones multiplataforma desde una sola base de código."
     },
     {
         name: "Alex Popov",
@@ -28,7 +29,7 @@ const REAL_CANDIDATES_DATA = [
         location: "Valencia, Spain",
         linkedin: "https://linkedin.com/in/alex-popov-mobile",
         skills: ["Flutter", "Riverpod", "Clean Architecture"],
-        analysis: "A-Player potential. Senior role at Brainrocket, likely handling high-scale architecture."
+        analysis: "Potencial A-Player. Rol senior en Brainrocket, probablemente manejando arquitectura de alta escala."
     },
     {
         name: "Sofia Martinez",
@@ -37,7 +38,7 @@ const REAL_CANDIDATES_DATA = [
         location: "Barcelona, Spain",
         linkedin: "https://linkedin.com/in/sofia-martinez-apps",
         skills: ["Flutter", "UI/UX", "Consumer Apps"],
-        analysis: "High growth potential. Working at Codeway on scaling consumer apps. Good for product-focused roles."
+        analysis: "Alto potencial de crecimiento. Trabajando en Codeway escalando aplicaciones de consumo. Bueno para roles enfocados en producto."
     },
     {
         name: "Daniel Ruiz",
@@ -46,7 +47,7 @@ const REAL_CANDIDATES_DATA = [
         location: "Remote / Spain",
         linkedin: "https://linkedin.com/in/daniel-ruiz-tech",
         skills: ["Flutter", "Team Leadership", "Architecture"],
-        analysis: "Leadership material. Freelance Tech Lead experience implies self-management and architectural skills."
+        analysis: "Material de liderazgo. Experiencia como Tech Lead freelance implica autogestión y habilidades arquitectónicas."
     },
     {
         name: "Laura Garcia",
@@ -55,7 +56,7 @@ const REAL_CANDIDATES_DATA = [
         location: "Barcelona, Spain",
         linkedin: "https://linkedin.com/in/laura-garcia-eng",
         skills: ["Flutter", "React Native", "High Scale"],
-        analysis: "Top Tier. Engineering experience at Glovo suggests familiarity with high-pressure, high-scale environments."
+        analysis: "Top Tier. Experiencia en ingeniería en Glovo sugiere familiaridad con entornos de alta presión y alta escala."
     },
     {
         name: "Pablo Rodriguez",
@@ -64,7 +65,7 @@ const REAL_CANDIDATES_DATA = [
         location: "A Coruña, Spain",
         linkedin: "https://linkedin.com/in/pablo-rodriguez-zar",
         skills: ["Flutter", "Enterprise", "Retail Tech"],
-        analysis: "Enterprise ready. Experience at Inditex indicates discipline and understanding of large systems."
+        analysis: "Listo para Enterprise. Experiencia en Inditex indica disciplina y comprensión de grandes sistemas."
     },
     {
         name: "Carmen Vega",
@@ -73,7 +74,7 @@ const REAL_CANDIDATES_DATA = [
         location: "Madrid, Spain",
         linkedin: "https://linkedin.com/in/carmen-vega-fs",
         skills: ["Flutter", "Node.js", "Backend"],
-        analysis: "Versatile. Full stack background at Cabify is a strong signal for problem-solving across the stack."
+        analysis: "Versátil. Background full stack en Cabify es una señal fuerte para resolución de problemas."
     },
     {
         name: "Diego Fernandes",
@@ -82,7 +83,7 @@ const REAL_CANDIDATES_DATA = [
         location: "Remote / Portugal/Spain",
         linkedin: "https://linkedin.com/in/diego-fernandes-open",
         skills: ["Flutter", "Open Source", "Community"],
-        analysis: "Passionate. Strong open source activity suggests intrinsic motivation and deep knowledge."
+        analysis: "Apasionado. Fuerte actividad en open source sugiere motivación intrínseca y conocimiento profundo."
     },
     {
         name: "Ana Torres",
@@ -91,7 +92,7 @@ const REAL_CANDIDATES_DATA = [
         location: "Madrid, Spain",
         linkedin: "https://linkedin.com/in/ana-torres-fever",
         skills: ["Flutter", "Product Growth", "Experimentation"],
-        analysis: "Product-minded. Engineering at Fever involves rapid iteration and growth hacking mindset."
+        analysis: "Mentalidad de producto. Ingeniería en Fever involucra iteración rápida y mindset de growth hacking."
     }
 ];
 
