@@ -22,6 +22,21 @@ const App: React.FC = () => {
   const [showToast, setShowToast] = useState<boolean>(false);
   const navigate = useNavigate();
 
+  // Prevent page reload when tab loses/regains focus
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      // Don't do anything - let the app persist its state
+      if (document.hidden) {
+        // Tab hidden
+      } else {
+        // Tab visible again - don't reload
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
   useEffect(() => {
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {

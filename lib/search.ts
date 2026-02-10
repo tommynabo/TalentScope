@@ -1,6 +1,20 @@
 import { Candidate } from '../types/database';
 import { v4 as uuidv4 } from 'uuid';
 
+/**
+ * SYMMETRY SCORE CRITERIA (0-100):
+ * - 90+: A-Player Material | Senior level, proven track record, ideal role fit
+ * - 80-89: Strong Match | Mid-Senior with leadership potential or specialized expertise
+ * - 70-79: Good Candidate | Meets requirements, has growth potential, reasonable bottleneck
+ * - <70: Filtered Out | Doesn't meet minimum criteria (filtered in SearchEngine)
+ * 
+ * Scoring Factors:
+ * - Company reputation & role seniority (40%)
+ * - Skills alignment & specialization (30%)
+ * - Growth mindset & ambition signals (20%)
+ * - Bottleneck assessment & overqualification (10%)
+ */
+
 // REAL Data from Google Search Results (Flutter Developers in Spain)
 const REAL_CANDIDATES_DATA = [
     {
