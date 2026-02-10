@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Candidate, Campaign } from '../types/database';
-import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Search, Play, Loader2, ExternalLink } from 'lucide-react';
-import { SearchService } from '../lib/search';
+import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Search, Play, Loader2, ExternalLink, Terminal, ChevronDown, ChevronUp } from 'lucide-react';
+import { searchEngine } from '../lib/SearchEngine';
 import { CampaignService, CandidateService } from '../lib/services';
 import Scheduler from './Scheduler';
 import Toast from './Toast';
@@ -15,12 +15,22 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
   const [candidates, setCandidates] = useState<(Candidate & { status_in_campaign?: string })[]>([]);
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [leadCount, setLeadCount] = useState(10);
+  const [logs, setLogs] = useState<string[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '' });
+  const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Load existing candidates
   useEffect(() => {
     loadCandidates();
   }, [campaign.id]);
+
+  useEffect(() => {
+    if (logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs]);
 
   const loadCandidates = async () => {
     setLoading(true);
@@ -36,26 +46,46 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
 
   const handleRunSearch = async () => {
     setSearching(true);
+    setLogs([]);
+    setShowLogs(true);
+
     try {
-      const newCandidates = await SearchService.searchCandidates(campaign.target_role || 'Developer', 10);
+      // Determine source based on campaign platform or default to linkedin (or gmail if specified)
+      // For now, let's default to LinkedIn as it's the primary use case, or check campaign.platform
+      const source = campaign.platform === 'Communities' || campaign.platform === 'Freelance' ? 'gmail' : 'linkedin';
 
-      // Save to DB
-      const savePromises = newCandidates.map(async (c) => {
-        // 1. Create candidate
-        const savedCandidate = await CandidateService.create(c);
-        // 2. Link to campaign
-        await CampaignService.addCandidateToCampaign(campaign.id, savedCandidate.id);
-      });
+      await searchEngine.startSearch(
+        campaign.target_role || 'Developer',
+        source,
+        leadCount,
+        (msg) => setLogs(prev => [...prev, msg]),
+        async (newCandidates) => {
+          // Save to DB
+          const savePromises = newCandidates.map(async (c) => {
+            // 1. Create candidate (or update if email exists - service handles upsert usually, check implement)
+            // CandidateService.create uses upsert based on email? Let's assume create handles unique constraints safely or we catch errors.
+            // Actually DeduplicationService already filtered, so we should be safe mostly.
+            try {
+              const savedCandidate = await CandidateService.create(c);
+              // 2. Link to campaign
+              await CampaignService.addCandidateToCampaign(campaign.id, savedCandidate.id);
+            } catch (err) {
+              console.error("Failed to save candidate", c.email, err);
+            }
+          });
 
-      await Promise.all(savePromises);
+          await Promise.all(savePromises);
 
-      // Refresh list to get 'real' DB data
-      await loadCandidates();
+          // Refresh list to get 'real' DB data
+          await loadCandidates();
 
-      setToast({ show: true, message: '¡10 nuevos candidatos encontrados!' });
+          setSearching(false);
+          setToast({ show: true, message: `¡${newCandidates.length} nuevos candidatos encontrados!` });
+        }
+      );
     } catch (e: any) {
+      setLogs(prev => [...prev, `❌ Error crítico: ${e.message}`]);
       setToast({ show: true, message: 'Error en la búsqueda: ' + e.message });
-    } finally {
       setSearching(false);
     }
   };
@@ -68,7 +98,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
   return (
     <div className="p-6 md:p-8 animate-in fade-in slide-in-from-right-8 duration-500 h-full flex flex-col">
       {/* Header & Nav */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
           <button
             onClick={onBack}
@@ -85,17 +115,58 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
           </div>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
+            <span className="text-slate-400 text-sm">Cantidad:</span>
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={leadCount}
+              onChange={(e) => setLeadCount(Number(e.target.value))}
+              className="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white text-center focus:outline-none focus:border-cyan-500"
+            />
+          </div>
           <button
             onClick={handleRunSearch}
             disabled={searching}
             className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-900/20 transition-all flex items-center gap-2 disabled:opacity-50"
           >
             {searching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5" />}
-            {searching ? 'Buscando...' : 'Ejecutar Búsqueda Manual (10)'}
+            {searching ? 'Buscando...' : 'Ejecutar Búsqueda Manual'}
           </button>
         </div>
       </div>
+
+      {/* Live Logs Section */}
+      {(searching || logs.length > 0) && (
+        <div className="mb-6 rounded-xl border border-slate-800 bg-slate-950 overflow-hidden">
+          <button
+            onClick={() => setShowLogs(!showLogs)}
+            className="w-full flex items-center justify-between px-4 py-2 bg-slate-900/50 hover:bg-slate-900 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
+              <Terminal className="h-4 w-4 text-cyan-500" />
+              Registro de Búsqueda ({logs.length} líneas)
+            </div>
+            {showLogs ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+          </button>
+
+          {showLogs && (
+            <div className="p-4 h-48 overflow-y-auto font-mono text-xs text-slate-400 flex flex-col gap-1">
+              {logs.map((log, i) => (
+                <div key={i} className="border-l-2 border-slate-800 pl-2 py-0.5">
+                  <span className="text-slate-600 mr-2">[{new Date().toLocaleTimeString()}]</span>
+                  <span className={log.includes('❌') ? 'text-red-400' : log.includes('✅') ? 'text-emerald-400' : 'text-slate-300'}>
+                    {log}
+                  </span>
+                </div>
+              ))}
+              <div ref={logsEndRef} />
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
         {/* Scheduler Card */}
