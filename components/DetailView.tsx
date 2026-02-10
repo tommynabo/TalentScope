@@ -98,44 +98,44 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
   };
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-right-8 duration-500 h-full flex flex-col relative">
+    <div className="p-3 md:p-4 lg:p-6 animate-in fade-in slide-in-from-right-8 duration-500 h-full flex flex-col relative">
       {/* Header & Nav */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 lg:gap-4 mb-4">
-        <div className="flex items-center gap-2 lg:gap-4 flex-1 min-w-0">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-2 lg:gap-3 mb-3">
+        <div className="flex items-center gap-1.5 lg:gap-3 flex-1 min-w-0">
           <button
             onClick={onBack}
-            className="p-1.5 lg:p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500 hover:text-cyan-400 text-slate-400 transition-all flex-shrink-0"
+            className="p-1 lg:p-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-cyan-500 hover:text-cyan-400 text-slate-400 transition-all flex-shrink-0"
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft className="h-4 lg:h-5 w-4 lg:w-5" />
           </button>
           <div className="min-w-0">
-            <h2 className="text-xl lg:text-2xl font-bold text-white flex items-center gap-2 lg:gap-3 truncate">
-              <Linkedin className="h-5 lg:h-6 w-5 lg:w-6 text-blue-500 flex-shrink-0" />
+            <h2 className="text-lg lg:text-xl font-bold text-white flex items-center gap-1.5 lg:gap-2 truncate">
+              <Linkedin className="h-4 lg:h-5 w-4 lg:w-5 text-blue-500 flex-shrink-0" />
               <span className="truncate">{campaign.title}</span>
             </h2>
-            <p className="text-slate-400 text-xs lg:text-sm line-clamp-1">Rol: <span className="text-cyan-400">{campaign.target_role}</span> • Estado: <span className="text-slate-300">{campaign.status}</span></p>
+            <p className="text-slate-400 text-xs line-clamp-1">Rol: <span className="text-cyan-400">{campaign.target_role}</span> • Estado: <span className="text-slate-300">{campaign.status}</span></p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 lg:gap-4 flex-shrink-0">
-          <div className="flex items-center gap-1 lg:gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2 lg:px-3 py-1.5 lg:py-2">
-            <span className="text-slate-400 text-xs lg:text-sm hidden sm:inline">Cant:</span>
+        <div className="flex items-center gap-1.5 lg:gap-3 flex-shrink-0">
+          <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg px-2 lg:px-2.5 py-1 lg:py-1.5">
+            <span className="text-slate-400 text-xs hidden sm:inline">Cant:</span>
             <input
               type="number"
               min="1"
               max="50"
               value={leadCount}
               onChange={(e) => setLeadCount(Number(e.target.value))}
-              className="w-12 lg:w-16 bg-slate-800 border border-slate-700 rounded px-1.5 lg:px-2 py-0.5 lg:py-1 text-white text-xs lg:text-sm text-center focus:outline-none focus:border-cyan-500"
+              className="w-11 lg:w-14 bg-slate-800 border border-slate-700 rounded px-1 lg:px-1.5 py-0.5 text-white text-xs text-center focus:outline-none focus:border-cyan-500"
             />
           </div>
           <button
             onClick={handleRunSearch}
             disabled={searching}
-            className="px-3 lg:px-6 py-1.5 lg:py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-lg lg:rounded-xl text-xs lg:text-sm lg:font-bold shadow-lg shadow-cyan-900/20 transition-all flex items-center gap-1 lg:gap-2 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
+            className="px-2.5 lg:px-5 py-1 lg:py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-lg text-xs shadow-lg shadow-cyan-900/20 transition-all flex items-center gap-1 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
           >
-            {searching ? <Loader2 className="h-4 lg:h-5 w-4 lg:w-5 animate-spin" /> : <Play className="h-4 lg:h-5 w-4 lg:w-5" />}
-            <span className="hidden sm:inline">{searching ? 'Buscando...' : 'Buscar'}</span>
+            {searching ? <Loader2 className="h-3 lg:h-4 w-3 lg:w-4 animate-spin" /> : <Play className="h-3 lg:h-4 w-3 lg:w-4" />}
+            <span className="hidden sm:inline text-xs">{searching ? 'Buscando...' : 'Buscar'}</span>
             <span className="sm:hidden">{searching ? '...' : '🔍'}</span>
           </button>
         </div>
@@ -171,7 +171,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 lg:gap-6 mb-6 lg:mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-2 lg:gap-4 mb-4 lg:mb-6">
         {/* Scheduler Card */}
         <div className="lg:col-span-1">
           <Scheduler
@@ -182,37 +182,37 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
         </div>
 
         {/* Stats Bar */}
-        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-4">
-          <div className="bg-slate-900/50 border border-slate-800 p-3 lg:p-4 rounded-xl backdrop-blur-sm">
-            <div className="flex justify-between items-start mb-2">
-              <p className="text-slate-400 text-xs lg:text-sm font-medium">Alcance Total</p>
-              <Send className="h-3 lg:h-4 w-3 lg:w-4 text-slate-500" />
+        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-2 lg:gap-3">
+          <div className="bg-slate-900/50 border border-slate-800 p-2.5 lg:p-3 rounded-lg backdrop-blur-sm">
+            <div className="flex justify-between items-start mb-1.5">
+              <p className="text-slate-400 text-xs font-medium">Alcance Total</p>
+              <Send className="h-3 lg:h-3.5 w-3 lg:w-3.5 text-slate-500" />
             </div>
-            <p className="text-2xl lg:text-3xl font-bold text-white">{campaign.settings?.stats?.sent || 0}</p>
-            <div className="w-full bg-slate-800 h-1 rounded-full mt-2 lg:mt-3 overflow-hidden">
+            <p className="text-xl lg:text-2xl font-bold text-white">{campaign.settings?.stats?.sent || 0}</p>
+            <div className="w-full bg-slate-800 h-0.5 rounded-full mt-1.5 lg:mt-2 overflow-hidden">
               <div className="bg-blue-500 h-full w-[70%]"></div>
             </div>
           </div>
 
-          <div className="bg-slate-900/50 border border-slate-800 p-3 lg:p-4 rounded-xl backdrop-blur-sm">
-            <div className="flex justify-between items-start mb-2">
-              <p className="text-slate-400 text-xs lg:text-sm font-medium">Tasa de Respuesta</p>
-              <MessageSquare className="h-3 lg:h-4 w-3 lg:w-4 text-slate-500" />
+          <div className="bg-slate-900/50 border border-slate-800 p-2.5 lg:p-3 rounded-lg backdrop-blur-sm">
+            <div className="flex justify-between items-start mb-1.5">
+              <p className="text-slate-400 text-xs font-medium">Tasa de Respuesta</p>
+              <MessageSquare className="h-3 lg:h-3.5 w-3 lg:w-3.5 text-slate-500" />
             </div>
-            <p className="text-2xl lg:text-3xl font-bold text-white">{campaign.settings?.stats?.responseRate || 0}%</p>
-            <div className="w-full bg-slate-800 h-1 rounded-full mt-2 lg:mt-3 overflow-hidden">
+            <p className="text-xl lg:text-2xl font-bold text-white">{campaign.settings?.stats?.responseRate || 0}%</p>
+            <div className="w-full bg-slate-800 h-0.5 rounded-full mt-1.5 lg:mt-2 overflow-hidden">
               <div className="bg-cyan-500 h-full" style={{ width: `${campaign.settings?.stats?.responseRate || 0}%` }}></div>
             </div>
           </div>
 
-          <div className="bg-slate-900/50 border border-cyan-500/20 p-3 lg:p-4 rounded-xl backdrop-blur-sm relative overflow-hidden">
+          <div className="bg-slate-900/50 border border-cyan-500/20 p-2.5 lg:p-3 rounded-lg backdrop-blur-sm relative overflow-hidden">
             <div className="absolute top-0 right-0 w-16 h-16 bg-cyan-500/10 rounded-full blur-2xl -mr-8 -mt-8"></div>
-            <div className="flex justify-between items-start mb-2">
-              <p className="text-cyan-100 text-xs lg:text-sm font-medium">Interesados (Hot)</p>
-              <Calendar className="h-3 lg:h-4 w-3 lg:w-4 text-cyan-400" />
+            <div className="flex justify-between items-start mb-1.5">
+              <p className="text-cyan-100 text-xs font-medium">Interesados (Hot)</p>
+              <Calendar className="h-3 lg:h-3.5 w-3 lg:w-3.5 text-cyan-400" />
             </div>
-            <p className="text-2xl lg:text-3xl font-bold text-cyan-400">{campaign.settings?.stats?.leads || 0}</p>
-            <div className="w-full bg-slate-800 h-1 rounded-full mt-2 lg:mt-3 overflow-hidden">
+            <p className="text-xl lg:text-2xl font-bold text-cyan-400">{campaign.settings?.stats?.leads || 0}</p>
+            <div className="w-full bg-slate-800 h-0.5 rounded-full mt-1.5 lg:mt-2 overflow-hidden">
               <div className="bg-gradient-to-r from-cyan-400 to-white h-full w-[45%]"></div>
             </div>
           </div>
@@ -220,9 +220,9 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
       </div>
 
       {/* Main Table */}
-      <div className="flex-1 bg-slate-900/40 border border-slate-800 rounded-2xl overflow-hidden flex flex-col min-h-[400px]">
-        <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/60">
-          <h3 className="font-semibold text-white">Pipeline de Candidatos ({candidates.length})</h3>
+      <div className=\"flex-1 bg-slate-900/40 border border-slate-800 rounded-lg overflow-hidden flex flex-col min-h-[400px]\">
+        <div className=\"px-3 py-2 border-b border-slate-800 flex justify-between items-center bg-slate-900/60\">
+          <h3 className=\"font-semibold text-sm text-white\">Pipeline de Candidatos ({candidates.length})</h3>
           <button
             onClick={() => {
               const headers = ['Name', 'Role', 'Company', 'Email', 'LinkedIn', 'Score', 'Message', 'Analysis'];
@@ -258,69 +258,69 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
                 document.body.removeChild(link);
               }
             }}
-            className="px-3 py-1.5 text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors"
+            className="px-2.5 py-1 text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors"
           >
-            Exportar CSV
+            Exportar
           </button>
         </div>
 
         <div className="overflow-x-auto flex-1">
           {loading ? (
             <div className="flex items-center justify-center h-full text-slate-500">
-              <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
+              <Loader2 className="h-6 w-6 animate-spin text-cyan-500" />
             </div>
           ) : candidates.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-500">
-              <Search className="h-12 w-12 mb-4 opacity-20" />
-              <p>No se encontraron candidatos.</p>
-              <button onClick={handleRunSearch} className="text-cyan-400 hover:text-cyan-300 text-sm mt-2">Ejecutar búsqueda para comenzar</button>
+              <Search className="h-10 w-10 mb-3 opacity-20" />
+              <p className="text-sm">No se encontraron candidatos.</p>
+              <button onClick={handleRunSearch} className="text-cyan-400 hover:text-cyan-300 text-xs mt-2">Ejecutar búsqueda para comenzar</button>
             </div>
           ) : (
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-800">
-                  <th className="px-6 py-4">Candidato</th>
-                  <th className="px-6 py-4">Rol Actual</th>
-                  <th className="px-6 py-4">Estado</th>
-                  <th className="px-6 py-4">Mensaje Personalizado</th>
-                  <th className="px-6 py-4">
+                <tr className="text-xs font-semibold text-slate-500 uppercase tracking-widest border-b border-slate-800">
+                  <th className="px-3 lg:px-4 py-2">Candidato</th>
+                  <th className="px-3 lg:px-4 py-2">Rol Actual</th>
+                  <th className="px-3 lg:px-4 py-2">Estado</th>
+                  <th className="px-3 lg:px-4 py-2">Mensaje</th>
+                  <th className="px-3 lg:px-4 py-2">
                     <div className="flex items-center gap-1">
                       <BrainCircuit className="h-3 w-3" /> Score
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-right">Acciones</th>
+                  <th className="px-3 lg:px-4 py-2 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {candidates.map((candidate) => (
                   <tr key={candidate.id} className="hover:bg-slate-800/30 transition-colors group">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
+                    <td className="px-3 lg:px-4 py-2">
+                      <div className="flex items-center gap-2">
                         <img
                           src={candidate.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.full_name)}&background=0F172A&color=94A3B8`}
                           alt={candidate.full_name}
-                          className="h-10 w-10 rounded-full object-cover ring-2 ring-slate-800"
+                          className="h-8 w-8 rounded-full object-cover ring-2 ring-slate-800"
                         />
-                        <div>
-                          <p className="font-medium text-white">{candidate.full_name}</p>
-                          <p className="text-xs text-slate-500">{candidate.location}</p>
+                        <div className="min-w-0">
+                          <p className="font-medium text-white text-xs lg:text-sm truncate">{candidate.full_name}</p>
+                          <p className="text-xs text-slate-500 hidden sm:block">{candidate.location}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-slate-300">{candidate.job_title}</p>
-                      <p className="text-xs text-slate-500">@ {candidate.current_company}</p>
+                    <td className="px-3 lg:px-4 py-2">
+                      <p className="text-xs lg:text-sm text-slate-300">{candidate.job_title}</p>
+                      <p className="text-xs text-slate-500 hidden md:block">@ {candidate.current_company}</p>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 lg:px-4 py-2">
                       <StatusBadge status={candidate.status_in_campaign || 'Pool'} />
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 lg:px-4 py-2">
                       {(() => {
                         const analysis = parseAnalysis(candidate.ai_analysis);
                         const message = analysis?.outreach_message || '';
                         return message ? (
-                          <div className="max-w-sm">
-                            <p className="text-sm text-slate-300 line-clamp-2" title={message}>
+                          <div className="max-w-xs">
+                            <p className="text-xs text-slate-300 line-clamp-2" title={message}>
                               {message}
                             </p>
                             <button
@@ -328,20 +328,20 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
                                 navigator.clipboard.writeText(message);
                                 setToast({ show: true, message: '✅ Mensaje copiado!' });
                               }}
-                              className="text-xs text-cyan-400 hover:text-cyan-300 mt-1"
+                              className="text-xs text-cyan-400 hover:text-cyan-300 mt-0.5"
                             >
                               Copiar
                             </button>
                           </div>
                         ) : (
-                          <span className="text-slate-500 text-sm">No disponible</span>
+                          <span className="text-slate-500 text-xs">No disponible</span>
                         );
                       })()}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 lg:px-4 py-2">
                       {candidate.symmetry_score !== undefined && (
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 w-24 bg-slate-800 h-2 rounded-full overflow-hidden">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 w-16 bg-slate-800 h-1.5 rounded-full overflow-hidden">
                             <div
                               className={`h-full rounded-full ${candidate.symmetry_score > 90 ? 'bg-gradient-to-r from-emerald-400 to-cyan-400' : candidate.symmetry_score > 80 ? 'bg-cyan-500' : 'bg-slate-500'}`}
                               style={{ width: `${candidate.symmetry_score}%` }}
@@ -353,19 +353,19 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-3 lg:px-4 py-2 text-right">
+                      <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => setSelectedCandidate(candidate)}
-                          className="inline-flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-cyan-400 hover:bg-slate-700 px-2 py-1.5 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-cyan-400 hover:bg-slate-700 px-1.5 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
                         >
-                          <BrainCircuit className="h-3 w-3" /> Ver
+                          <BrainCircuit className="h-3 w-3" /> <span className="hidden sm:inline">Ver</span>
                         </button>
                         <a
                           href={candidate.linkedin_url || '#'}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-700 px-2 py-1.5 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-700 px-1.5 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
                         >
                           <ExternalLink className="h-3 w-3" />
                         </a>
@@ -382,31 +382,31 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
       {/* Analysis Modal */}
       {selectedCandidate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/90">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <BrainCircuit className="h-5 w-5 text-cyan-500" />
+          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="px-3 py-2.5 border-b border-slate-800 flex justify-between items-center bg-slate-900/90">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <BrainCircuit className="h-4 w-4 text-cyan-500" />
                 Análisis Deep Research
               </h3>
               <button
                 onClick={() => setSelectedCandidate(null)}
                 className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 transition-colors"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto max-h-[80vh]">
-              <div className="flex items-center gap-4 mb-6">
+            <div className="p-4 overflow-y-auto max-h-[80vh]">
+              <div className="flex items-center gap-3 mb-4">
                 <img
                   src={selectedCandidate.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedCandidate.full_name)}&background=0F172A&color=94A3B8`}
                   alt={selectedCandidate.full_name}
-                  className="h-16 w-16 rounded-full object-cover ring-2 ring-cyan-500/50"
+                  className="h-12 w-12 rounded-full object-cover ring-2 ring-cyan-500/50"
                 />
                 <div>
-                  <h4 className="text-xl font-bold text-white">{selectedCandidate.full_name}</h4>
-                  <p className="text-slate-400 text-sm">{selectedCandidate.job_title} @ {selectedCandidate.current_company}</p>
-                  <div className="flex items-center gap-2 mt-2">
+                  <h4 className="text-base font-bold text-white">{selectedCandidate.full_name}</h4>
+                  <p className="text-slate-400 text-xs">{selectedCandidate.job_title} @ {selectedCandidate.current_company}</p>
+                  <div className="flex items-center gap-2 mt-1.5">
                     <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded text-xs">Score: {selectedCandidate.symmetry_score}%</span>
                   </div>
                 </div>
@@ -419,8 +419,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
                 // If it's old string format
                 if (typeof analysis === 'string' || (!analysis.psychological_profile && analysis.summary)) {
                   return (
-                    <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
-                      <p className="text-slate-300 leading-relaxed">{analysis.summary || analysis}</p>
+                    <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
+                      <p className="text-slate-300 text-xs leading-relaxed">{analysis.summary || analysis}</p>
                     </div>
                   )
                 }
