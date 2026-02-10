@@ -281,12 +281,12 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
                   <th className="px-6 py-4">Candidato</th>
                   <th className="px-6 py-4">Rol Actual</th>
                   <th className="px-6 py-4">Estado</th>
+                  <th className="px-6 py-4">Mensaje Personalizado</th>
                   <th className="px-6 py-4">
                     <div className="flex items-center gap-1">
-                      <BrainCircuit className="h-3 w-3" /> Análisis AI
+                      <BrainCircuit className="h-3 w-3" /> Score
                     </div>
                   </th>
-                  <th className="px-6 py-4">Symmetry Score</th>
                   <th className="px-6 py-4 text-right">Acciones</th>
                 </tr>
               </thead>
@@ -314,13 +314,28 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
                       <StatusBadge status={candidate.status_in_campaign || 'Pool'} />
                     </td>
                     <td className="px-6 py-4">
-                      <button
-                        onClick={() => setSelectedCandidate(candidate)}
-                        className="px-3 py-1.5 text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-all flex items-center gap-2"
-                      >
-                        <BrainCircuit className="h-3 w-3" />
-                        Ver Análisis 🧠
-                      </button>
+                      {(() => {
+                        const analysis = parseAnalysis(candidate.ai_analysis);
+                        const message = analysis?.outreach_message || '';
+                        return message ? (
+                          <div className="max-w-sm">
+                            <p className="text-sm text-slate-300 line-clamp-2" title={message}>
+                              {message}
+                            </p>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(message);
+                                setToast({ show: true, message: '✅ Mensaje copiado!' });
+                              }}
+                              className="text-xs text-cyan-400 hover:text-cyan-300 mt-1"
+                            >
+                              Copiar
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-slate-500 text-sm">No disponible</span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4">
                       {candidate.symmetry_score !== undefined && (
@@ -338,14 +353,22 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <a
-                        href={candidate.linkedin_url || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-transparent hover:border-slate-600"
-                      >
-                        Ver Perfil <ExternalLink className="h-3 w-3" />
-                      </a>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setSelectedCandidate(candidate)}
+                          className="inline-flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-cyan-400 hover:bg-slate-700 px-2 py-1.5 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                        >
+                          <BrainCircuit className="h-3 w-3" /> Ver
+                        </button>
+                        <a
+                          href={candidate.linkedin_url || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-700 px-2 py-1.5 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -452,6 +475,26 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
                           </span>
                         ))}
                       </div>
+                    </div>
+
+                    <div className="col-span-1 md:col-span-2 mt-4 p-4 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30">
+                      <div className="flex items-center gap-2 mb-2 text-purple-400 font-semibold text-sm">
+                        <Send className="h-4 w-4" />
+                        MENSAJE PERSONALIZADO (DM)
+                      </div>
+                      <p className="text-slate-200 text-sm leading-relaxed italic">
+                        "{analysis.outreach_message || `¡Hola ${selectedCandidate.full_name}! Tenemos roles perfectos para ti.`}"
+                      </p>
+                      <button
+                        onClick={() => {
+                          const msg = analysis.outreach_message || `¡Hola ${selectedCandidate.full_name}! Tenemos roles perfectos para ti.`;
+                          navigator.clipboard.writeText(msg);
+                          setToast({ show: true, message: '✅ Mensaje copiado al portapapeles!' });
+                        }}
+                        className="mt-3 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-medium transition-all"
+                      >
+                        📋 Copiar Mensaje
+                      </button>
                     </div>
                   </div>
                 );
