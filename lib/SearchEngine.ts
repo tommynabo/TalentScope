@@ -141,7 +141,6 @@ export class SearchEngine {
             symmetry_score: analysis.symmetry_score
         };
     }
-    }
 
     private async callApifyActor(actorId: string, input: any, onLog: LogCallback): Promise<any[]> {
         if (!this.apiKey) {
