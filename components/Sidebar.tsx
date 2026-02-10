@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Users, Activity, Settings, Zap, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Activity, Settings, Zap, LogOut, Lock } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 interface SidebarProps {
@@ -23,6 +23,13 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout }) => {
       ? "flex items-center justify-center lg:justify-start gap-3 p-3 rounded-xl bg-slate-900 text-cyan-400 border border-slate-800 shadow-[0_0_15px_rgba(34,211,238,0.1)] transition-all"
       : "flex items-center justify-center lg:justify-start gap-3 p-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-900 transition-all";
   };
+
+  const getLockedClass = (path: string) => {
+    // Locked style (dimmed, but still clickable to show the locked screen)
+    return isActive(path)
+      ? "flex items-center justify-center lg:justify-start gap-3 p-3 rounded-xl bg-slate-900/50 text-slate-500 border border-slate-800 transition-all cursor-not-allowed"
+      : "flex items-center justify-center lg:justify-start gap-3 p-3 rounded-xl text-slate-600 hover:text-slate-500 hover:bg-slate-900/30 transition-all cursor-not-allowed";
+  }
 
   return (
     <div className="hidden md:flex flex-col w-20 lg:w-64 h-screen border-r border-slate-800 bg-slate-950 sticky top-0">
@@ -53,17 +60,17 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout }) => {
 
         <button
           onClick={() => navigate('/talento')}
-          className={getButtonClass('/talento')}
+          className={getLockedClass('/talento')}
         >
-          <Users className="h-5 w-5" />
+          <Lock className="h-5 w-5" />
           <span className="hidden lg:block font-medium">Talento</span>
         </button>
 
         <button
           onClick={() => navigate('/analytics')}
-          className={getButtonClass('/analytics')}
+          className={getLockedClass('/analytics')}
         >
-          <Activity className="h-5 w-5" />
+          <Lock className="h-5 w-5" />
           <span className="hidden lg:block font-medium">Analíticas</span>
         </button>
       </nav>
