@@ -110,15 +110,16 @@ const App: React.FC = () => {
         />
       )}
 
-      <main className="flex-1 relative z-10 flex flex-col h-screen overflow-hidden">
+      <main className="flex-1 relative z-10 flex flex-col h-screen overflow-hidden bg-gradient-to-br from-slate-950 via-slate-950 to-blue-950/20">
         {/* Top Header / Status Bar (Mobile Only) */}
         <header className="h-16 border-b border-slate-800/50 bg-slate-950/50 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 md:hidden">
           <span className="font-bold text-lg text-white tracking-tight">TalentScope</span>
         </header>
 
-        {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto">
-          <Routes>
+        {/* Scrollable Content Area with Responsive Padding */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden w-full">
+          <div className="w-full min-h-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 2xl:px-24 py-4 md:py-6">
+            <Routes>
             <Route path="/" element={!user ? <LoginView onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/dashboard" replace />} />
 
             <Route path="/dashboard" element={
@@ -183,7 +184,8 @@ const App: React.FC = () => {
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+            </Routes>
+          </div>
         </div>
       </main>
 
