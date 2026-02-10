@@ -124,7 +124,7 @@ export class SearchEngine {
         const searchInput = {
             queries: `site:linkedin.com/in ${query}`,
             maxPagesPerQuery: 2,
-            resultsPerPage: maxResults * 1.5, // Overfetch
+            resultsPerPage: Math.ceil(maxResults * 1.5), // Overfetch, ensure integer
             languageCode: 'es',
             countryCode: 'es',
         };
@@ -193,7 +193,7 @@ export class SearchEngine {
         // 1. Google Maps Search
         const mapsInput = {
             searchStringsArray: [query],
-            maxCrawledPlacesPerSearch: maxResults * 2,
+            maxCrawledPlacesPerSearch: Math.ceil(maxResults * 2), // Ensure integer
             language: 'es',
             includeWebsiteEmail: true,
         };

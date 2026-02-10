@@ -77,28 +77,28 @@ const Scheduler: React.FC<SchedulerProps> = ({
 
                 <div className={`space-y-4 transition-all duration-300 ${enabled ? 'opacity-100' : 'opacity-50 grayscale'}`}>
                     {/* Time Picker */}
-                    <div className="bg-slate-950/50 rounded-xl p-3 border border-slate-800 flex items-center justify-between group-hover:border-slate-700 transition-colors">
-                        <div className="flex items-center gap-2 text-slate-400">
+                    <div className="bg-slate-950/50 rounded-full p-4 border border-slate-800 flex items-center justify-between group-hover:border-slate-700 transition-colors shadow-inner">
+                        <div className="flex items-center gap-2 text-slate-400 pl-2">
                             <Clock className="h-4 w-4" />
-                            <span className="text-sm font-medium">Ejecutar a las</span>
+                            <span className="text-sm font-semibold">Ejecutar a las</span>
                         </div>
                         <input
                             type="time"
                             value={time}
                             onChange={(e) => setTime(e.target.value)}
                             disabled={!enabled}
-                            className="bg-transparent text-white font-mono text-lg focus:outline-none text-right w-32 cursor-pointer"
+                            className="bg-transparent text-white font-bold text-xl focus:outline-none text-right w-32 cursor-pointer pr-2"
                         />
                     </div>
 
                     {/* Leads Slider */}
-                    <div className="bg-slate-950/50 rounded-xl p-3 border border-slate-800 group-hover:border-slate-700 transition-colors">
-                        <div className="flex justify-between items-center mb-2">
-                            <div className="flex items-center gap-2 text-slate-400">
+                    <div className="bg-slate-950/50 rounded-[2rem] p-5 border border-slate-800 group-hover:border-slate-700 transition-colors shadow-inner">
+                        <div className="flex justify-between items-center mb-3">
+                            <div className="flex items-center gap-2 text-slate-400 px-2">
                                 <Calendar className="h-4 w-4" />
-                                <span className="text-sm font-medium">Candidatos por día</span>
+                                <span className="text-sm font-semibold">Candidatos por día</span>
                             </div>
-                            <span className="text-cyan-400 font-bold font-mono text-lg">{leads}</span>
+                            <span className="text-cyan-400 font-bold text-xl px-2">{leads}</span>
                         </div>
                         <input
                             type="range"
@@ -109,7 +109,7 @@ const Scheduler: React.FC<SchedulerProps> = ({
                             disabled={!enabled}
                             className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500 hover:accent-cyan-400 transition-all"
                         />
-                        <div className="flex justify-between text-[10px] text-slate-600 mt-1">
+                        <div className="flex justify-between text-[10px] text-slate-600 mt-2 px-1">
                             <span>1</span>
                             <span>25</span>
                             <span>50</span>

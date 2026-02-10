@@ -83,7 +83,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
   };
 
   const handleScheduleChange = async (enabled: boolean, time: string, leads: number) => {
-    console.log("Horario actualizado:", { enabled, time, leads });
+    // console.log("Horario actualizado:", { enabled, time, leads });
+    // TODO: Save to DB
   };
 
   // Helper to safely parse AI analysis
