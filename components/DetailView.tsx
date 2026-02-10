@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Candidate, Campaign } from '../types/database';
-import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Search, Play, Loader2, ExternalLink, Terminal, ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Search, Play, Loader2, ExternalLink, Terminal, ChevronDown, ChevronUp, X, Target, TrendingUp, AlertTriangle } from 'lucide-react';
 import { searchEngine } from '../lib/SearchEngine';
 import { CampaignService, CandidateService } from '../lib/services';
 import Scheduler from './Scheduler';
@@ -18,6 +18,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
   const [leadCount, setLeadCount] = useState(10);
   const [logs, setLogs] = useState<string[]>([]);
   const [showLogs, setShowLogs] = useState(false);
+  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [toast, setToast] = useState({ show: false, message: '' });
   const logsEndRef = useRef<HTMLDivElement>(null);
 
@@ -50,8 +51,6 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
     setShowLogs(true);
 
     try {
-      // Determine source based on campaign platform or default to linkedin (or gmail if specified)
-      // For now, let's default to LinkedIn as it's the primary use case, or check campaign.platform
       const source = campaign.platform === 'Communities' || campaign.platform === 'Freelance' ? 'gmail' : 'linkedin';
 
       await searchEngine.startSearch(
@@ -60,14 +59,9 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
         leadCount,
         (msg) => setLogs(prev => [...prev, msg]),
         async (newCandidates) => {
-          // Save to DB
           const savePromises = newCandidates.map(async (c) => {
-            // 1. Create candidate (or update if email exists - service handles upsert usually, check implement)
-            // CandidateService.create uses upsert based on email? Let's assume create handles unique constraints safely or we catch errors.
-            // Actually DeduplicationService already filtered, so we should be safe mostly.
             try {
               const savedCandidate = await CandidateService.create(c);
-              // 2. Link to campaign
               await CampaignService.addCandidateToCampaign(campaign.id, savedCandidate.id);
             } catch (err) {
               console.error("Failed to save candidate", c.email, err);
@@ -75,8 +69,6 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
           });
 
           await Promise.all(savePromises);
-
-          // Refresh list to get 'real' DB data
           await loadCandidates();
 
           setSearching(false);
@@ -92,11 +84,20 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
 
   const handleScheduleChange = async (enabled: boolean, time: string, leads: number) => {
     console.log("Horario actualizado:", { enabled, time, leads });
-    // Here we would save to campaign settings
+  };
+
+  // Helper to safely parse AI analysis
+  const parseAnalysis = (analysis: string | null) => {
+    if (!analysis) return null;
+    try {
+      return JSON.parse(analysis);
+    } catch (e) {
+      return { summary: analysis }; // Fallback to plain string
+    }
   };
 
   return (
-    <div className="p-6 md:p-8 animate-in fade-in slide-in-from-right-8 duration-500 h-full flex flex-col">
+    <div className="p-6 md:p-8 animate-in fade-in slide-in-from-right-8 duration-500 h-full flex flex-col relative">
       {/* Header & Nav */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-4">
@@ -257,7 +258,11 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
                   <tr key={candidate.id} className="hover:bg-slate-800/30 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <img src={candidate.avatar_url || ''} alt={candidate.full_name} className="h-10 w-10 rounded-full object-cover ring-2 ring-slate-800" />
+                        <img
+                          src={candidate.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.full_name)}&background=0F172A&color=94A3B8`}
+                          alt={candidate.full_name}
+                          className="h-10 w-10 rounded-full object-cover ring-2 ring-slate-800"
+                        />
                         <div>
                           <p className="font-medium text-white">{candidate.full_name}</p>
                           <p className="text-xs text-slate-500">{candidate.location}</p>
@@ -272,9 +277,13 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
                       <StatusBadge status={candidate.status_in_campaign || 'Pool'} />
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-xs text-slate-400 max-w-[200px] leading-relaxed">
-                        {candidate.ai_analysis}
-                      </p>
+                      <button
+                        onClick={() => setSelectedCandidate(candidate)}
+                        className="px-3 py-1.5 text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-all flex items-center gap-2"
+                      >
+                        <BrainCircuit className="h-3 w-3" />
+                        Ver Análisis 🧠
+                      </button>
                     </td>
                     <td className="px-6 py-4">
                       {candidate.symmetry_score !== undefined && (
@@ -308,6 +317,113 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
           )}
         </div>
       </div>
+
+      {/* Analysis Modal */}
+      {selectedCandidate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/90">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <BrainCircuit className="h-5 w-5 text-cyan-500" />
+                Análisis Deep Research
+              </h3>
+              <button
+                onClick={() => setSelectedCandidate(null)}
+                className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[80vh]">
+              <div className="flex items-center gap-4 mb-6">
+                <img
+                  src={selectedCandidate.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedCandidate.full_name)}&background=0F172A&color=94A3B8`}
+                  alt={selectedCandidate.full_name}
+                  className="h-16 w-16 rounded-full object-cover ring-2 ring-cyan-500/50"
+                />
+                <div>
+                  <h4 className="text-xl font-bold text-white">{selectedCandidate.full_name}</h4>
+                  <p className="text-slate-400 text-sm">{selectedCandidate.job_title} @ {selectedCandidate.current_company}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded text-xs">Score: {selectedCandidate.symmetry_score}%</span>
+                  </div>
+                </div>
+              </div>
+
+              {(() => {
+                const analysis = parseAnalysis(selectedCandidate.ai_analysis);
+                if (!analysis) return <p className="text-slate-500 italic">No hay análisis detallado disponible.</p>;
+
+                // If it's old string format
+                if (typeof analysis === 'string' || (!analysis.psychological_profile && analysis.summary)) {
+                  return (
+                    <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                      <p className="text-slate-300 leading-relaxed">{analysis.summary || analysis}</p>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-slate-800/30 p-4 rounded-xl border border-blue-500/20">
+                      <div className="flex items-center gap-2 mb-2 text-blue-400 font-semibold text-sm">
+                        <BrainCircuit className="h-4 w-4" />
+                        PERFIL PSICOLÓGICO
+                      </div>
+                      <p className="text-slate-300 text-sm leading-relaxed">
+                        {analysis.psychological_profile}
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-800/30 p-4 rounded-xl border border-emerald-500/20">
+                      <div className="flex items-center gap-2 mb-2 text-emerald-400 font-semibold text-sm">
+                        <TrendingUp className="h-4 w-4" />
+                        MOMENTO EMPRESARIAL
+                      </div>
+                      <p className="text-slate-300 text-sm leading-relaxed">
+                        {analysis.business_moment}
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-800/30 p-4 rounded-xl border border-amber-500/20">
+                      <div className="flex items-center gap-2 mb-2 text-amber-400 font-semibold text-sm">
+                        <Target className="h-4 w-4" />
+                        ÁNGULO DE VENTA
+                      </div>
+                      <p className="text-slate-300 text-sm leading-relaxed">
+                        {analysis.sales_angle}
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-800/30 p-4 rounded-xl border border-pink-500/20">
+                      <div className="flex items-center gap-2 mb-2 text-pink-400 font-semibold text-sm">
+                        <AlertTriangle className="h-4 w-4" />
+                        CUELLO DE BOTELLA
+                      </div>
+                      <p className="text-slate-300 text-sm leading-relaxed">
+                        {analysis.bottleneck}
+                      </p>
+                    </div>
+
+                    <div className="col-span-1 md:col-span-2 mt-2">
+                      <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Habilidades Clave</p>
+                      <div className="flex flex-wrap gap-2">
+                        {analysis.skills?.map((skill: string, idx: number) => (
+                          <span key={idx} className="bg-slate-800 border border-slate-700 text-slate-300 px-2 py-1 rounded-md text-xs">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       <Toast isVisible={toast.show} message={toast.message} onClose={() => setToast({ ...toast, show: false })} />
     </div>
   );

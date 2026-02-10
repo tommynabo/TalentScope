@@ -155,21 +155,29 @@ export class SearchEngine {
                 name,
                 company: 'Linkedin Search',
                 role,
-                snippet: p.description
+                snippet: p.description,
+                query: query // Pass query for context on scoring
             });
+
+            // STRICT FILTERING: Score must be >= 70
+            if (analysis.symmetry_score < 70) {
+                onLog(`[FILTER] 📉 Candidato ${name} descartado (Score: ${analysis.symmetry_score}%)`);
+                continue;
+            }
 
             candidates.push({
                 id: crypto.randomUUID(),
                 full_name: name,
                 email: null, // Hard to get from just google search of linkedin
                 linkedin_url: p.url,
+                avatar_url: p.pagemap?.cse_image?.[0]?.src || null, // Try to get image from Google Search
                 job_title: role,
                 current_company: 'Ver Perfil',
                 location: 'España',
                 experience_years: 0,
-                skills: [],
-                ai_analysis: analysis,
-                symmetry_score: 85,
+                skills: analysis.skills || [],
+                ai_analysis: JSON.stringify(analysis), // Store structured data as string
+                symmetry_score: analysis.symmetry_score,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             } as Candidate);
@@ -210,21 +218,29 @@ export class SearchEngine {
                 name: p.title || 'Empresa',
                 company: p.title,
                 role: 'Propietario / Manager',
-                snippet: `Negocio encontrado en ${p.address}`
+                snippet: `Negocio encontrado en ${p.address}`,
+                query: query
             });
+
+            // STRICT FILTERING: Score must be >= 70
+            if (analysis.symmetry_score < 70) {
+                onLog(`[FILTER] 📉 Lead ${p.title} descartado (Score: ${analysis.symmetry_score}%)`);
+                continue;
+            }
 
             candidates.push({
                 id: crypto.randomUUID(),
                 full_name: p.title || 'Sin Nombre',
                 email: email,
                 linkedin_url: p.website || null,
+                avatar_url: p.imageUrl || p.image || null, // Try to get image from Maps
                 job_title: 'Propietario',
                 current_company: p.title,
                 location: p.address,
                 experience_years: 0,
-                skills: ['Negocio Local'],
-                ai_analysis: analysis,
-                symmetry_score: 80,
+                skills: analysis.skills || ['Negocio Local'],
+                ai_analysis: JSON.stringify(analysis),
+                symmetry_score: analysis.symmetry_score,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             } as Candidate);
@@ -233,8 +249,16 @@ export class SearchEngine {
         return candidates;
     }
 
-    private async generateAIAnalysis(context: any): Promise<string> {
-        if (!this.openaiKey) return "Análisis no disponible (Sin API Key)";
+    private async generateAIAnalysis(context: any): Promise<any> {
+        if (!this.openaiKey) return {
+            summary: "Análisis no disponible (Sin API Key)",
+            psychological_profile: "N/A",
+            business_moment: "Desconocido",
+            sales_angle: "Genérico",
+            bottleneck: "No detectado",
+            skills: [],
+            symmetry_score: 50
+        };
 
         try {
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -246,16 +270,39 @@ export class SearchEngine {
                 body: JSON.stringify({
                     model: 'gpt-4o-mini',
                     messages: [
-                        { role: 'system', content: 'Eres un experto reclutador. Analiza brevemente este perfil en Español en max 2 lineas.' },
+                        {
+                            role: 'system',
+                            content: `Eres un experto reclutador y analista de negocios. 
+                            Analiza el siguiente perfil y devuelve UNICAMENTE un objeto JSON con este formato:
+                            {
+                                "psychological_profile": "Perfil psicológico en 1 frase",
+                                "business_moment": "Momento empresarial actual en 1 frase",
+                                "sales_angle": "Mejor ángulo de venta/acercamiento en 1 frase",
+                                "bottleneck": "Posible cuello de botella o dolor principal",
+                                "summary": "Resumen ejecutivo en 1 frase",
+                                "skills": ["Habilidad 1", "Habilidad 2", "Habilidad 3"],
+                                "symmetry_score": (numero del 0 al 100 indicando ajuste al perfil ideal)
+                            }`
+                        },
                         { role: 'user', content: JSON.stringify(context) }
                     ],
-                    max_tokens: 150
+                    temperature: 0.7,
+                    max_tokens: 300
                 })
             });
             const data = await response.json();
-            return data.choices?.[0]?.message?.content || "Sin análisis";
+            const content = data.choices?.[0]?.message?.content;
+
+            // Clean up markdown code blocks if present
+            const cleanContent = content?.replace(/```json/g, '').replace(/```/g, '').trim();
+
+            return JSON.parse(cleanContent || '{}');
         } catch (e) {
-            return "Error en análisis de IA";
+            console.error("Error parsing AI analysis:", e);
+            return {
+                summary: "Error en análisis",
+                symmetry_score: 0
+            };
         }
     }
 }
