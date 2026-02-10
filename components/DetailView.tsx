@@ -220,9 +220,9 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
       </div>
 
       {/* Main Table */}
-      <div className=\"flex-1 bg-slate-900/40 border border-slate-800 rounded-lg overflow-hidden flex flex-col min-h-[400px]\">
-        <div className=\"px-3 py-2 border-b border-slate-800 flex justify-between items-center bg-slate-900/60\">
-          <h3 className=\"font-semibold text-sm text-white\">Pipeline de Candidatos ({candidates.length})</h3>
+      <div className="flex-1 bg-slate-900/40 border border-slate-800 rounded-lg overflow-hidden flex flex-col min-h-[400px]">
+        <div className="px-3 py-2 border-b border-slate-800 flex justify-between items-center bg-slate-900/60">
+          <h3 className="font-semibold text-sm text-white">Pipeline de Candidatos ({candidates.length})</h3>
           <button
             onClick={() => {
               const headers = ['Name', 'Role', 'Company', 'Email', 'LinkedIn', 'Score', 'Message', 'Analysis'];
