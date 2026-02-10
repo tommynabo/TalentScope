@@ -88,6 +88,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ currentName, onNameChange }
                         <span className="ml-auto text-xs font-mono bg-slate-800 text-slate-500 px-2 py-1 rounded border border-slate-700">COMING SOON</span>
                     </div>
                 </div>
+
+
             </div>
         </div>
     );

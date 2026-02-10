@@ -46,6 +46,14 @@ export const CandidateService = {
 
         if (error) throw error;
         return data as Candidate;
+    },
+
+    async deleteAll() {
+        const { error } = await supabase
+            .from('candidates')
+            .delete()
+            .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all rows
+        if (error) throw error;
     }
 };
 
@@ -104,7 +112,11 @@ export const CampaignService = {
     async addCandidateToCampaign(campaignId: string, candidateId: string) {
         const { data, error } = await supabase
             .from('campaign_candidates')
-            .insert([{ campaign_id: campaignId, candidate_id: candidateId }])
+            .insert([{
+                campaign_id: campaignId,
+                candidate_id: candidateId,
+                status: 'Pool'
+            }])
             .select()
             .single();
 
