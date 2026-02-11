@@ -51,16 +51,23 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
     setShowLogs(true);
 
     try {
-      const source = campaign.platform === 'Communities' || campaign.platform === 'Freelance' ? 'gmail' : 'linkedin';
+      // Determine source based on platform. 
+      // 'LinkedIn' -> Standard LinkedIn Search
+      // 'GitHub' -> GitHub Cross-Ref Strategy
+      // 'Communities' -> Community Scouting Strategy
+      const source = campaign.platform === 'Communities' || campaign.platform === 'Freelance' ? 'communities' :
+        campaign.platform === 'GitHub' ? 'github' : 'linkedin';
 
       const searchOptions = {
         language: campaign.settings?.language || 'Spanish',
-        maxAge: campaign.settings?.max_age || 30
+        maxAge: campaign.settings?.max_age || 30,
+        platform: campaign.platform,
+        factors: campaign.settings?.factors || {}
       };
 
       await searchEngine.startSearch(
         campaign.target_role || 'Developer',
-        source,
+        source as any,
         leadCount,
         searchOptions,
         (msg) => setLogs(prev => [...prev, msg]),
