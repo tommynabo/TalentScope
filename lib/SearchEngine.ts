@@ -6,7 +6,6 @@ import { SearchService } from './search';
 export type LogCallback = (message: string) => void;
 
 // Apify Actor IDs
-const GOOGLE_MAPS_SCRAPER = 'nwua9Gu5YrADL7ZDj';
 const GOOGLE_SEARCH_SCRAPER = 'nFJndFXA5zjCTuudP';
 
 export class SearchEngine {
@@ -20,7 +19,7 @@ export class SearchEngine {
 
     public async startSearch(
         query: string,
-        source: 'gmail' | 'linkedin',
+        source: 'linkedin',
         maxResults: number,
         options: { language: string; maxAge: number },
         onLog: LogCallback,
@@ -43,12 +42,7 @@ export class SearchEngine {
             onLog(`[DEDUP] ✅ ${existingEmails.size} emails y ${existingLinkedin.size} perfiles conocidos ignorados.`);
 
             // Search Logic
-            let rawCandidates: Candidate[] = [];
-            if (source === 'linkedin') {
-                rawCandidates = await this.searchLinkedIn(query, maxResults, options, onLog);
-            } else {
-                rawCandidates = await this.searchGmail(query, maxResults, onLog);
-            }
+            const rawCandidates = await this.searchLinkedIn(query, maxResults, options, onLog);
 
             // Deduplicate
             onLog(`[DEDUP] 🧹 Filtrando duplicados...`);
@@ -223,7 +217,7 @@ export class SearchEngine {
         const searchInput = {
             queries: `${siteOperator} ${query} ${langKeywords}`,
             maxPagesPerQuery: 2,
-            resultsPerPage: Math.ceil(maxResults * 1.5),
+            resultsPerPage: Math.ceil(maxResults * 4),
             languageCode: options.language === 'Spanish' ? 'es' : 'en',
             countryCode: options.language === 'Spanish' ? 'es' : 'us',
         };
@@ -237,120 +231,87 @@ export class SearchEngine {
 
         const profiles = allResults
             .filter((r: any) => r.url && r.url.includes('linkedin.com/in/'))
-            .slice(0, maxResults);
+            .slice(0, maxResults * 4);
 
-        onLog(`[LINKEDIN] 📋 ${profiles.length} perfiles detectados. Analizando con foco en Top Talent Joven...`);
+        onLog(`[LINKEDIN] 📋 ${profiles.length} perfiles detectados. Analizando con buffer 4x y early stopping...`);
 
-        // OPTIMIZED: Parallelize AI analysis instead of sequential
-        const candidatePromises = profiles.map(async (p) => {
-            if (!this.isRunning) return null;
+        // BATCHED PROCESSING: Process in small batches with early stopping
+        const BATCH_SIZE = 5; // Process 5 profiles at a time
+        const acceptedCandidates: Candidate[] = [];
+        let processedCount = 0;
 
-            const name = p.title.split('-')[0].trim() || 'Candidato';
-            const role = p.title.split('-')[1]?.trim() || query;
+        for (let i = 0; i < profiles.length && acceptedCandidates.length < maxResults; i += BATCH_SIZE) {
+            if (!this.isRunning) break;
 
-            // Generate AI Analysis for this candidate
-            const analysis = await this.generateAIAnalysis({
-                name,
-                company: 'Linkedin Search',
-                role,
-                snippet: p.description,
-                query: query,
-                maxAge: options.maxAge
+            const batch = profiles.slice(i, i + BATCH_SIZE);
+            onLog(`[BATCH] 🔄 Procesando lote ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} perfiles)...`);
+
+            const batchPromises = batch.map(async (p) => {
+                if (!this.isRunning) return null;
+
+                const name = p.title.split('-')[0].trim() || 'Candidato';
+                const role = p.title.split('-')[1]?.trim() || query;
+
+                // Generate AI Analysis for this candidate
+                const analysis = await this.generateAIAnalysis({
+                    name,
+                    company: 'Linkedin Search',
+                    role,
+                    snippet: p.description,
+                    query: query,
+                    maxAge: options.maxAge
+                });
+
+                processedCount++;
+
+                // STRICT FILTERING: Score must be >= 70
+                if (analysis.symmetry_score < 70) {
+                    onLog(`[FILTER] 📉 ${name} descartado (Score: ${analysis.symmetry_score}) [${processedCount}/${profiles.length}]`);
+                    return null;
+                }
+
+                onLog(`[MATCH] ✅ ${name} aceptado (Score: ${analysis.symmetry_score}) [${acceptedCandidates.length + 1}/${maxResults}]`);
+
+                return {
+                    id: crypto.randomUUID(),
+                    full_name: name,
+                    email: null,
+                    linkedin_url: p.url,
+                    avatar_url: p.pagemap?.cse_image?.[0]?.src || null,
+                    job_title: role,
+                    current_company: 'Ver Perfil',
+                    location: options.language === 'Spanish' ? 'España/Latam' : 'Global',
+                    experience_years: 0,
+                    skills: analysis.skills || [],
+                    ai_analysis: JSON.stringify(analysis),
+                    symmetry_score: analysis.symmetry_score,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                } as Candidate;
             });
 
-            // STRICT FILTERING: Score must be >= 70
-            if (analysis.symmetry_score < 70) {
-                onLog(`[FILTER] 📉 Candidato ${name} descartado (Score: ${analysis.symmetry_score}/70)`);
-                return null;
+            const batchResults = (await Promise.all(batchPromises)).filter(c => c !== null) as Candidate[];
+            acceptedCandidates.push(...batchResults);
+
+            // Early stopping: if we have enough candidates, stop processing
+            if (acceptedCandidates.length >= maxResults) {
+                onLog(`[EARLY STOP] 🎯 ${maxResults} candidatos encontrados después de procesar ${processedCount}/${profiles.length} perfiles`);
+                break;
             }
 
-            return {
-                id: crypto.randomUUID(),
-                full_name: name,
-                email: null,
-                linkedin_url: p.url,
-                avatar_url: p.pagemap?.cse_image?.[0]?.src || null,
-                job_title: role,
-                current_company: 'Ver Perfil',
-                location: options.language === 'Spanish' ? 'España/Latam' : 'Global',
-                experience_years: 0,
-                skills: analysis.skills || [],
-                ai_analysis: JSON.stringify(analysis),
-                symmetry_score: analysis.symmetry_score,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            } as Candidate;
-        });
-
-        const candidates = (await Promise.all(candidatePromises)).filter(c => c !== null) as Candidate[];
-        onLog(`[LINKEDIN] ✅ ${candidates.length} candidatos seleccionados`);
-
-        return candidates;
-    }
-
-    // ------------------------------------------------------------------
-    // GMAIL STRATEGY (OPTIMIZED)
-    // ------------------------------------------------------------------
-    private async searchGmail(query: string, maxResults: number, onLog: LogCallback): Promise<Candidate[]> {
-        // 1. Google Maps Search
-        const mapsInput = {
-            searchStringsArray: [query],
-            maxCrawledPlacesPerSearch: Math.ceil(maxResults * 2),
-            language: 'es',
-            includeWebsiteEmail: true,
-        };
-
-        const places = await this.callApifyActor(GOOGLE_MAPS_SCRAPER, mapsInput, onLog);
-
-        // Filter those with website or email
-        const potential = places.filter((p: any) => p.email || p.website).slice(0, maxResults);
-
-        onLog(`[GMAIL] 📍 ${potential.length} negocios encontrados en Maps.`);
-
-        // OPTIMIZED: Parallelize analysis
-        const candidatePromises = potential.map(async (p) => {
-            if (!this.isRunning) return null;
-
-            let email = p.email;
-            if (!email || email === '') return null;
-
-            const analysis = await this.generateAIAnalysis({
-                name: p.title || 'Empresa',
-                company: p.title,
-                role: 'Propietario / Manager',
-                snippet: `Negocio encontrado en ${p.address}`,
-                query: query
-            });
-
-            // STRICT FILTERING: Score must be >= 70
-            if (analysis.symmetry_score < 70) {
-                onLog(`[FILTER] 📉 Negocio ${p.title} descartado (Score: ${analysis.symmetry_score}/70)`);
-                return null;
+            // Add small delay between batches to avoid rate limits
+            if (i + BATCH_SIZE < profiles.length && acceptedCandidates.length < maxResults) {
+                await new Promise(r => setTimeout(r, 500));
             }
+        }
 
-            return {
-                id: crypto.randomUUID(),
-                full_name: p.title || 'Sin Nombre',
-                email: email,
-                linkedin_url: p.website || null,
-                avatar_url: p.imageUrl || p.image || null,
-                job_title: 'Propietario',
-                current_company: p.title,
-                location: p.address,
-                experience_years: 0,
-                skills: analysis.skills || ['Negocio Local'],
-                ai_analysis: JSON.stringify(analysis),
-                symmetry_score: analysis.symmetry_score,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            } as Candidate;
-        });
+        // Return exactly maxResults (or fewer if couldn't find enough)
+        const finalCandidates = acceptedCandidates.slice(0, maxResults);
+        onLog(`[LINKEDIN] ✅ ${finalCandidates.length} candidatos seleccionados de ${processedCount} procesados`);
 
-        const candidates = (await Promise.all(candidatePromises)).filter(c => c !== null) as Candidate[];
-        onLog(`[GMAIL] ✅ ${candidates.length} candidatos seleccionados`);
-
-        return candidates;
+        return finalCandidates;
     }
+
 
     private async generateAIAnalysis(context: any): Promise<any> {
         if (!this.openaiKey) return {
