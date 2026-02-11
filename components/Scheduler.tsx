@@ -31,7 +31,7 @@ const Scheduler: React.FC<SchedulerProps> = ({
     return (
         <div
             className={`
-                relative overflow-hidden rounded-lg lg:rounded-lg p-3 lg:p-4 transition-all duration-500 border
+                relative overflow-hidden rounded-lg lg:rounded-lg p-2 lg:p-3 transition-all duration-500 border
                 ${enabled
                     ? 'bg-gradient-to-br from-indigo-900/40 to-cyan-900/40 border-cyan-500/50 shadow-[0_0_30px_rgba(6,182,212,0.15)]'
                     : 'bg-slate-900/40 border-slate-800'
@@ -48,14 +48,14 @@ const Scheduler: React.FC<SchedulerProps> = ({
             )}
 
             <div className="relative z-10 w-full">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 mb-6">
-                    <div className="flex items-center gap-3">
-                        <div className={`p-3 rounded-xl transition-colors ${enabled ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30' : 'bg-slate-800 text-slate-400'}`}>
-                            <Clock className={`h-6 w-6 ${enabled ? 'animate-pulse' : ''}`} />
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 mb-4 lg:mb-6">
+                    <div className="flex items-center gap-2 lg:gap-3">
+                        <div className={`p-2 lg:p-3 rounded-xl transition-colors ${enabled ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30' : 'bg-slate-800 text-slate-400'}`}>
+                            <Clock className={`h-5 w-5 lg:h-6 lg:w-6 ${enabled ? 'animate-pulse' : ''}`} />
                         </div>
                         <div>
-                            <h3 className={`text-lg font-bold ${enabled ? 'text-white' : 'text-slate-400'}`}>Piloto Auto</h3>
-                            <p className="text-xs text-slate-500">Búsqueda Diaria</p>
+                            <h3 className={`text-base lg:text-lg font-bold ${enabled ? 'text-white' : 'text-slate-400'}`}>Piloto Auto</h3>
+                            <p className="text-[10px] lg:text-xs text-slate-500">Búsqueda Diaria</p>
                         </div>
                     </div>
 
@@ -63,13 +63,13 @@ const Scheduler: React.FC<SchedulerProps> = ({
                         <button
                             onClick={() => setEnabled(!enabled)}
                             className={`
-                                relative w-14 h-8 rounded-full transition-colors duration-300 focus:outline-none ring-2 ring-offset-2 ring-offset-slate-950
+                                relative w-12 h-7 lg:w-14 lg:h-8 rounded-full transition-colors duration-300 focus:outline-none ring-2 ring-offset-2 ring-offset-slate-950
                                 ${enabled ? 'bg-cyan-500 ring-cyan-500/50' : 'bg-slate-700 ring-transparent'}
                             `}
                         >
                             <div className={`
-                                absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow transition-transform duration-300 flex items-center justify-center
-                                ${enabled ? 'translate-x-6' : 'translate-x-0'}
+                                absolute top-1 left-1 w-5 h-5 lg:w-6 lg:h-6 rounded-full bg-white shadow transition-transform duration-300 flex items-center justify-center
+                                ${enabled ? 'translate-x-5 lg:translate-x-6' : 'translate-x-0'}
                             `}>
                                 {enabled ? <Check className="h-3 w-3 text-cyan-600" /> : <Power className="h-3 w-3 text-slate-400" />}
                             </div>
@@ -77,30 +77,30 @@ const Scheduler: React.FC<SchedulerProps> = ({
                     </div>
                 </div>
 
-                <div className={`space-y-4 transition-all duration-300 ${enabled ? 'opacity-100' : 'opacity-50 grayscale'}`}>
+                <div className={`space-y-3 lg:space-y-4 transition-all duration-300 ${enabled ? 'opacity-100' : 'opacity-50 grayscale'}`}>
                     {/* Time Picker */}
-                    <div className="bg-slate-950/50 rounded-2xl p-4 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 group-hover:border-slate-700 transition-colors shadow-inner">
+                    <div className="bg-slate-950/50 rounded-xl lg:rounded-2xl p-3 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2 group-hover:border-slate-700 transition-colors shadow-inner">
                         <div className="flex items-center gap-2 text-slate-400 w-full sm:w-auto">
-                            <Clock className="h-4 w-4" />
-                            <span className="text-sm font-semibold">Ejecutar a las</span>
+                            <Clock className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
+                            <span className="text-xs lg:text-sm font-semibold">Ejecutar a las</span>
                         </div>
                         <input
                             type="time"
                             value={time}
                             onChange={(e) => setTime(e.target.value)}
                             disabled={!enabled}
-                            className="bg-transparent text-white font-bold text-xl focus:outline-none text-center sm:text-right w-auto sm:w-32 cursor-pointer"
+                            className="bg-transparent text-white font-bold text-lg lg:text-xl focus:outline-none text-center sm:text-right w-full sm:w-auto cursor-pointer"
                         />
                     </div>
 
                     {/* Leads Slider */}
-                    <div className="bg-slate-950/50 rounded-2xl p-4 border border-slate-800 group-hover:border-slate-700 transition-colors shadow-inner">
-                        <div className="flex flex-row justify-between items-center gap-2 mb-3">
+                    <div className="bg-slate-950/50 rounded-xl lg:rounded-2xl p-3 border border-slate-800 group-hover:border-slate-700 transition-colors shadow-inner">
+                        <div className="flex flex-row justify-between items-center gap-2 mb-2 lg:mb-3">
                             <div className="flex items-center gap-2 text-slate-400">
-                                <Calendar className="h-4 w-4" />
-                                <span className="text-sm font-semibold">Candidatos/día</span>
+                                <Calendar className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
+                                <span className="text-xs lg:text-sm font-semibold">Candidatos/día</span>
                             </div>
-                            <span className="text-cyan-400 font-bold text-xl">{leads}</span>
+                            <span className="text-cyan-400 font-bold text-lg lg:text-xl">{leads}</span>
                         </div>
                         <input
                             type="range"
@@ -109,9 +109,9 @@ const Scheduler: React.FC<SchedulerProps> = ({
                             value={leads}
                             onChange={(e) => setLeads(parseInt(e.target.value))}
                             disabled={!enabled}
-                            className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500 hover:accent-cyan-400 transition-all"
+                            className="w-full h-1.5 lg:h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500 hover:accent-cyan-400 transition-all"
                         />
-                        <div className="flex justify-between text-[10px] text-slate-600 mt-2 px-1">
+                        <div className="flex justify-between text-[10px] text-slate-600 mt-1.5 px-1">
                             <span>1</span>
                             <span>25</span>
                             <span>50</span>
