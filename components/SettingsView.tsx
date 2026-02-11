@@ -89,40 +89,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ currentName, onNameChange }
                     </div>
                 </div>
 
-                {/* Danger Zone */}
-                <div className="bg-red-900/10 border border-red-900/30 rounded-2xl p-6">
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2 bg-red-900/30 rounded-lg text-red-400">
-                            <CreditCard className="h-6 w-6" />
-                        </div>
-                        <div>
-                            <h3 className="text-xl font-bold text-red-400">Zona de Peligro</h3>
-                            <p className="text-sm text-red-400/70">Acciones destructivas e irreversibles.</p>
-                        </div>
-                    </div>
 
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h4 className="text-white font-medium">Resetear Sistema</h4>
-                            <p className="text-sm text-slate-400">Elimina todas las campañas y candidatos, y restaura la Campaña 1.</p>
-                        </div>
-                        <button
-                            onClick={() => {
-                                if (window.confirm('¿Estás seguro? Esto borrará TODOS los datos.')) {
-                                    import('../lib/services').then(({ CampaignService }) => {
-                                        CampaignService.resetAndSeed().then(() => {
-                                            alert('Sistema reseteado.');
-                                            window.location.reload();
-                                        });
-                                    });
-                                }
-                            }}
-                            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                        >
-                            Resetear Datos
-                        </button>
-                    </div>
-                </div>
             </div>
         </div>
     );
