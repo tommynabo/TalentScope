@@ -260,6 +260,7 @@ export class SearchEngine {
 
             // STRICT FILTERING: Score must be >= 70
             if (analysis.symmetry_score < 70) {
+                onLog(`[FILTER] 📉 Candidato ${name} descartado (Score: ${analysis.symmetry_score}/70)`);
                 return null;
             }
 
@@ -323,6 +324,7 @@ export class SearchEngine {
 
             // STRICT FILTERING: Score must be >= 70
             if (analysis.symmetry_score < 70) {
+                onLog(`[FILTER] 📉 Negocio ${p.title} descartado (Score: ${analysis.symmetry_score}/70)`);
                 return null;
             }
 
