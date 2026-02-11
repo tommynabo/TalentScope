@@ -89,14 +89,14 @@ const Scheduler: React.FC<SchedulerProps> = ({
                             value={time}
                             onChange={(e) => setTime(e.target.value)}
                             disabled={!enabled}
-                            className="bg-transparent text-white font-bold text-xl focus:outline-none text-center sm:text-right w-full sm:w-32 cursor-pointer"
+                            className="bg-transparent text-white font-bold text-xl focus:outline-none text-center sm:text-right w-auto sm:w-32 cursor-pointer"
                         />
                     </div>
 
                     {/* Leads Slider */}
                     <div className="bg-slate-950/50 rounded-2xl p-4 border border-slate-800 group-hover:border-slate-700 transition-colors shadow-inner">
-                        <div className="flex flex-col sm:flex-row justify-between items-center gap-2 mb-3">
-                            <div className="flex items-center gap-2 text-slate-400 w-full sm:w-auto">
+                        <div className="flex flex-row justify-between items-center gap-2 mb-3">
+                            <div className="flex items-center gap-2 text-slate-400">
                                 <Calendar className="h-4 w-4" />
                                 <span className="text-sm font-semibold">Candidatos/día</span>
                             </div>
