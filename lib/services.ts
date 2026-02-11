@@ -146,5 +146,4 @@ export const CampaignService = {
         })) as (Candidate & { status_in_campaign: string })[];
     },
 
-}
 };
