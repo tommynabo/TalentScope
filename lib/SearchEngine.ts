@@ -41,19 +41,15 @@ export class SearchEngine {
             const { existingEmails, existingLinkedin } = await deduplicationService.fetchExistingCandidates();
             onLog(`[DEDUP] ✅ ${existingEmails.size} emails y ${existingLinkedin.size} perfiles conocidos ignorados.`);
 
-            // Search Logic
-            const rawCandidates = await this.searchLinkedIn(query, maxResults, options, onLog);
-
-            // Deduplicate
-            onLog(`[DEDUP] 🧹 Filtrando duplicados...`);
-            const uniqueCandidates = rawCandidates.filter(c =>
-                !deduplicationService.isDuplicate(c, existingEmails, existingLinkedin)
+            // Search Logic - pass dedup info to avoid duplicates during search
+            const uniqueCandidates = await this.searchLinkedIn(
+                query,
+                maxResults,
+                options,
+                onLog,
+                existingEmails,
+                existingLinkedin
             );
-
-            const dupCount = rawCandidates.length - uniqueCandidates.length;
-            if (dupCount > 0) {
-                onLog(`[DEDUP] 🗑️ ${dupCount} candidatos descartados por ser duplicados.`);
-            }
 
             onLog(`[FIN] ✅ ${uniqueCandidates.length} candidatos nuevos encontrados.`);
             onComplete(uniqueCandidates);
@@ -202,7 +198,14 @@ export class SearchEngine {
     // ------------------------------------------------------------------
     // LINKEDIN STRATEGY (OPTIMIZED)
     // ------------------------------------------------------------------
-    private async searchLinkedIn(query: string, maxResults: number, options: { language: string; maxAge: number }, onLog: LogCallback): Promise<Candidate[]> {
+    private async searchLinkedIn(
+        query: string,
+        maxResults: number,
+        options: { language: string; maxAge: number },
+        onLog: LogCallback,
+        existingEmails: Set<string>,
+        existingLinkedin: Set<string>
+    ): Promise<Candidate[]> {
         // 1. Google Search for LinkedIn Profiles (site:linkedin.com/in)
         let siteOperator = 'site:linkedin.com/in';
         if (options.language === 'Spanish') {
@@ -270,27 +273,52 @@ export class SearchEngine {
                     return null;
                 }
 
-                onLog(`[MATCH] ✅ ${name} aceptado (Score: ${analysis.symmetry_score}) [${acceptedCandidates.length + 1}/${maxResults}]`);
-
-                return {
+                // Create candidate object
+                const candidate: Candidate = {
                     id: crypto.randomUUID(),
                     full_name: name,
                     email: null,
                     linkedin_url: p.url,
+                    github_url: null,
                     avatar_url: p.pagemap?.cse_image?.[0]?.src || null,
                     job_title: role,
                     current_company: 'Ver Perfil',
                     location: options.language === 'Spanish' ? 'España/Latam' : 'Global',
                     experience_years: 0,
+                    education: null,
                     skills: analysis.skills || [],
                     ai_analysis: JSON.stringify(analysis),
                     symmetry_score: analysis.symmetry_score,
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
-                } as Candidate;
+                };
+
+                // Check for duplicates BEFORE accepting
+                if (deduplicationService.isDuplicate(candidate, existingEmails, existingLinkedin)) {
+                    onLog(`[DEDUP] 🗑️ ${name} descartado (duplicado) [${processedCount}/${profiles.length}]`);
+                    return null;
+                }
+
+                onLog(`[MATCH] ✅ ${name} aceptado (Score: ${analysis.symmetry_score}) [${acceptedCandidates.length + 1}/${maxResults}]`);
+                return candidate;
             });
 
             const batchResults = (await Promise.all(batchPromises)).filter(c => c !== null) as Candidate[];
+
+            // Add newly accepted candidates to dedup sets to prevent duplicates within the same search
+            batchResults.forEach(c => {
+                if (c.email) existingEmails.add(c.email.toLowerCase().trim());
+                if (c.linkedin_url) {
+                    const normalizedUrl = c.linkedin_url
+                        .toLowerCase()
+                        .replace(/^https?:\/\//i, '')
+                        .replace(/^www\./, '')
+                        .replace(/\/$/, '')
+                        .trim();
+                    existingLinkedin.add(normalizedUrl);
+                }
+            });
+
             acceptedCandidates.push(...batchResults);
 
             // Early stopping: if we have enough candidates, stop processing
