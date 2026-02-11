@@ -74,6 +74,17 @@ export const CampaignService = {
         return data as Campaign[];
     },
 
+    async getById(id: string) {
+        const { data, error } = await supabase
+            .from('campaigns')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error) throw error;
+        return data as Campaign;
+    },
+
     async deleteAll() {
         const { error } = await supabase
             .from('campaigns')
@@ -100,7 +111,7 @@ export const CampaignService = {
             .insert([{
                 ...campaignData,
                 user_id: user.id,
-                stats: { sent: 0, responseRate: 0, leads: 0 }
+                stats: { sent: 0, addedToday: 0, responseRate: 0, leads: 0 }
             }])
             .select()
             .single();
@@ -122,6 +133,57 @@ export const CampaignService = {
 
         if (error) throw error;
         return data as CampaignCandidate;
+    },
+
+    async updateStats(campaignId: string) {
+        // Get all candidates for this campaign
+        const { data: relations, error: relError } = await supabase
+            .from('campaign_candidates')
+            .select('created_at')
+            .eq('campaign_id', campaignId);
+
+        if (relError) throw relError;
+
+        const totalCandidates = relations?.length || 0;
+
+        // Count candidates added today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const addedToday = relations?.filter(r => {
+            const createdDate = new Date(r.created_at);
+            createdDate.setHours(0, 0, 0, 0);
+            return createdDate.getTime() === today.getTime();
+        }).length || 0;
+
+        // Get current campaign to preserve other settings
+        const { data: campaign, error: fetchError } = await supabase
+            .from('campaigns')
+            .select('settings')
+            .eq('id', campaignId)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        // Update campaign stats
+        const { data, error } = await supabase
+            .from('campaigns')
+            .update({
+                settings: {
+                    ...campaign.settings,
+                    stats: {
+                        sent: totalCandidates,
+                        addedToday: addedToday,
+                        responseRate: campaign.settings?.stats?.responseRate || 0,
+                        leads: campaign.settings?.stats?.leads || 0
+                    }
+                }
+            })
+            .eq('id', campaignId)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data as Campaign;
     },
 
     async getCandidatesByCampaign(campaignId: string) {

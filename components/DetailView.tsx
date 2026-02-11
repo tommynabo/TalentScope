@@ -11,7 +11,8 @@ interface DetailViewProps {
   onBack: () => void;
 }
 
-const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
+const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBack }) => {
+  const [campaign, setCampaign] = useState(initialCampaign);
   const [candidates, setCandidates] = useState<(Candidate & { status_in_campaign?: string })[]>([]);
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -21,6 +22,11 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [toast, setToast] = useState({ show: false, message: '' });
   const logsEndRef = useRef<HTMLDivElement>(null);
+
+  // Update local campaign state when prop changes
+  useEffect(() => {
+    setCampaign(initialCampaign);
+  }, [initialCampaign]);
 
   // Load existing candidates
   useEffect(() => {
@@ -42,6 +48,15 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
       console.error("Error loading candidates:", e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const reloadCampaign = async () => {
+    try {
+      const updated = await CampaignService.getById(campaign.id);
+      setCampaign(updated);
+    } catch (e) {
+      console.error("Error reloading campaign:", e);
     }
   };
 
@@ -82,6 +97,15 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
           });
 
           await Promise.all(savePromises);
+
+          // Update campaign stats after adding candidates
+          try {
+            await CampaignService.updateStats(campaign.id);
+            await reloadCampaign(); // Reload campaign to get updated stats
+          } catch (err) {
+            console.error("Failed to update campaign stats", err);
+          }
+
           await loadCandidates();
 
           setSearching(false);
@@ -221,10 +245,10 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
           <div className="bg-slate-900/50 border border-cyan-500/20 p-2.5 lg:p-3 rounded-lg backdrop-blur-sm relative overflow-hidden">
             <div className="absolute top-0 right-0 w-16 h-16 bg-cyan-500/10 rounded-full blur-2xl -mr-8 -mt-8"></div>
             <div className="flex justify-between items-start mb-1.5">
-              <p className="text-cyan-100 text-xs font-medium">Interesados (Hot)</p>
+              <p className="text-cyan-100 text-xs font-medium">Añadidos Hoy</p>
               <Calendar className="h-3 lg:h-3.5 w-3 lg:w-3.5 text-cyan-400" />
             </div>
-            <p className="text-xl lg:text-2xl font-bold text-cyan-400">{campaign.settings?.stats?.leads || 0}</p>
+            <p className="text-xl lg:text-2xl font-bold text-cyan-400">{campaign.settings?.stats?.addedToday || 0}</p>
             <div className="w-full bg-slate-800 h-0.5 rounded-full mt-1.5 lg:mt-2 overflow-hidden">
               <div className="bg-gradient-to-r from-cyan-400 to-white h-full w-[45%]"></div>
             </div>
