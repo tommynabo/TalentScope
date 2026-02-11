@@ -53,10 +53,13 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
 
   const reloadCampaign = async () => {
     try {
+      console.log('[reloadCampaign] Fetching updated campaign data...');
       const updated = await CampaignService.getById(campaign.id);
+      console.log('[reloadCampaign] Received updated campaign:', updated.settings?.stats);
       setCampaign(updated);
+      console.log('[reloadCampaign] Campaign state updated');
     } catch (e) {
-      console.error("Error reloading campaign:", e);
+      console.error("[reloadCampaign] Error:", e);
     }
   };
 
@@ -97,13 +100,17 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
           });
 
           await Promise.all(savePromises);
+          console.log(`[DetailView] Saved ${newCandidates.length} candidates to database`);
 
           // Update campaign stats after adding candidates
           try {
+            console.log('[DetailView] Updating campaign stats...');
             await CampaignService.updateStats(campaign.id);
+            console.log('[DetailView] Stats updated, reloading campaign...');
             await reloadCampaign(); // Reload campaign to get updated stats
+            console.log('[DetailView] Campaign reloaded with new stats:', campaign.settings?.stats);
           } catch (err) {
-            console.error("Failed to update campaign stats", err);
+            console.error("[DetailView] Failed to update campaign stats", err);
           }
 
           await loadCandidates();

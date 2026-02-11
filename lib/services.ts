@@ -111,7 +111,10 @@ export const CampaignService = {
             .insert([{
                 ...campaignData,
                 user_id: user.id,
-                stats: { sent: 0, addedToday: 0, responseRate: 0, leads: 0 }
+                settings: {
+                    ...(campaignData.settings || {}),
+                    stats: { sent: 0, addedToday: 0, responseRate: 0, leads: 0 }
+                }
             }])
             .select()
             .single();
@@ -136,24 +139,31 @@ export const CampaignService = {
     },
 
     async updateStats(campaignId: string) {
+        console.log('[updateStats] Starting stats update for campaign:', campaignId);
+
         // Get all candidates for this campaign
         const { data: relations, error: relError } = await supabase
             .from('campaign_candidates')
-            .select('created_at')
+            .select('added_at')
             .eq('campaign_id', campaignId);
 
-        if (relError) throw relError;
+        if (relError) {
+            console.error('[updateStats] Error fetching campaign_candidates:', relError);
+            throw relError;
+        }
 
         const totalCandidates = relations?.length || 0;
+        console.log('[updateStats] Total candidates in campaign:', totalCandidates);
 
         // Count candidates added today
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const addedToday = relations?.filter(r => {
-            const createdDate = new Date(r.created_at);
-            createdDate.setHours(0, 0, 0, 0);
-            return createdDate.getTime() === today.getTime();
+            const addedDate = new Date(r.added_at);
+            addedDate.setHours(0, 0, 0, 0);
+            return addedDate.getTime() === today.getTime();
         }).length || 0;
+        console.log('[updateStats] Candidates added today:', addedToday);
 
         // Get current campaign to preserve other settings
         const { data: campaign, error: fetchError } = await supabase
@@ -162,7 +172,21 @@ export const CampaignService = {
             .eq('id', campaignId)
             .single();
 
-        if (fetchError) throw fetchError;
+        if (fetchError) {
+            console.error('[updateStats] Error fetching campaign:', fetchError);
+            throw fetchError;
+        }
+
+        console.log('[updateStats] Current campaign settings:', campaign.settings);
+
+        const updatedStats = {
+            sent: totalCandidates,
+            addedToday: addedToday,
+            responseRate: campaign.settings?.stats?.responseRate || 0,
+            leads: campaign.settings?.stats?.leads || 0
+        };
+
+        console.log('[updateStats] Updating with stats:', updatedStats);
 
         // Update campaign stats
         const { data, error } = await supabase
@@ -170,19 +194,19 @@ export const CampaignService = {
             .update({
                 settings: {
                     ...campaign.settings,
-                    stats: {
-                        sent: totalCandidates,
-                        addedToday: addedToday,
-                        responseRate: campaign.settings?.stats?.responseRate || 0,
-                        leads: campaign.settings?.stats?.leads || 0
-                    }
+                    stats: updatedStats
                 }
             })
             .eq('id', campaignId)
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error('[updateStats] Error updating campaign:', error);
+            throw error;
+        }
+
+        console.log('[updateStats] Successfully updated campaign stats:', data.settings.stats);
         return data as Campaign;
     },
 
