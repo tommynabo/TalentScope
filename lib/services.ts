@@ -144,5 +144,7 @@ export const CampaignService = {
             // We'll attach the campaign_candidate status to the candidate object for display.
             status_in_campaign: item.status
         })) as (Candidate & { status_in_campaign: string })[];
-    }
+    },
+
+}
 };

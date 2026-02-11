@@ -120,70 +120,70 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto overflow-x-hidden w-full">
           <div className="w-full min-h-full px-2 sm:px-3 md:px-5 lg:px-6 xl:px-10 2xl:px-20 py-3 md:py-4">
             <Routes>
-            <Route path="/" element={!user ? <LoginView onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/dashboard" replace />} />
+              <Route path="/" element={!user ? <LoginView onLoginSuccess={handleLoginSuccess} /> : <Navigate to="/dashboard" replace />} />
 
-            <Route path="/dashboard" element={
-              <ProtectedRoute>
-                <DashboardView
-                  userName={user?.name.split(' ')[0] || 'User'}
-                  onOpenLinkedin={() => navigate('/tablero/linkedin')}
-                  onLockedClick={handleLockedClick}
-                />
-              </ProtectedRoute>
-            } />
+              <Route path="/dashboard" element={
+                <ProtectedRoute>
+                  <DashboardView
+                    userName={user?.name.split(' ')[0] || 'User'}
+                    onOpenLinkedin={() => navigate('/tablero/linkedin')}
+                    onLockedClick={handleLockedClick}
+                  />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/tablero/:platform" element={
-              <ProtectedRoute>
-                <CampaignListWrapper navigate={navigate} />
-              </ProtectedRoute>
-            } />
+              <Route path="/tablero/:platform" element={
+                <ProtectedRoute>
+                  <CampaignListWrapper navigate={navigate} />
+                </ProtectedRoute>
+              } />
 
-            {/* Specific Campaign Detail Route */}
-            <Route path="/tablero/:platform/:campaignId" element={
-              <ProtectedRoute>
-                <CampaignDetailWrapper onBack={() => navigate(-1)} />
-              </ProtectedRoute>
-            } />
+              {/* Specific Campaign Detail Route */}
+              <Route path="/tablero/:platform/:campaignId" element={
+                <ProtectedRoute>
+                  <CampaignDetailWrapper onBack={() => navigate(-1)} />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/new-campaign" element={
-              <ProtectedRoute>
-                <CampaignCreationView
-                  onBack={() => navigate(-1)}
-                  onCampaignCreated={() => navigate('/tablero/linkedin')}
-                />
-              </ProtectedRoute>
-            } />
+              <Route path="/new-campaign" element={
+                <ProtectedRoute>
+                  <CampaignCreationView
+                    onBack={() => navigate(-1)}
+                    onCampaignCreated={() => navigate('/tablero/linkedin')}
+                  />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/talento" element={
-              <ProtectedRoute>
-                <TalentPoolView />
-              </ProtectedRoute>
-            } />
+              <Route path="/talento" element={
+                <ProtectedRoute>
+                  <TalentPoolView />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/analytics" element={
-              <ProtectedRoute>
-                <AnalyticsView />
-              </ProtectedRoute>
-            } />
+              <Route path="/analytics" element={
+                <ProtectedRoute>
+                  <AnalyticsView />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/settings" element={
-              <ProtectedRoute>
-                <SettingsView
-                  currentName={user?.name || ''}
-                  onNameChange={(newName) => {
-                    if (user) {
-                      setUser({ ...user, name: newName });
-                      setToastMessage('Name updated successfully!');
-                      setShowToast(true);
-                      supabase.auth.updateUser({ data: { full_name: newName } });
-                    }
-                  }}
-                />
-              </ProtectedRoute>
-            } />
+              <Route path="/settings" element={
+                <ProtectedRoute>
+                  <SettingsView
+                    currentName={user?.name || ''}
+                    onNameChange={(newName) => {
+                      if (user) {
+                        setUser({ ...user, name: newName });
+                        setToastMessage('Name updated successfully!');
+                        setShowToast(true);
+                        supabase.auth.updateUser({ data: { full_name: newName } });
+                      }
+                    }}
+                  />
+                </ProtectedRoute>
+              } />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
         </div>
