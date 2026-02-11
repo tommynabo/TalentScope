@@ -47,38 +47,40 @@ const Scheduler: React.FC<SchedulerProps> = ({
                 </div>
             )}
 
-            <div className="relative z-10">
-                <div className="flex justify-between items-start mb-6">
+            <div className="relative z-10 w-full">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 mb-6">
                     <div className="flex items-center gap-3">
                         <div className={`p-3 rounded-xl transition-colors ${enabled ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30' : 'bg-slate-800 text-slate-400'}`}>
                             <Clock className={`h-6 w-6 ${enabled ? 'animate-pulse' : ''}`} />
                         </div>
                         <div>
-                            <h3 className={`text-lg font-bold ${enabled ? 'text-white' : 'text-slate-400'}`}>Piloto Automático</h3>
-                            <p className="text-xs text-slate-500">Búsqueda Diaria de Candidatos</p>
+                            <h3 className={`text-lg font-bold ${enabled ? 'text-white' : 'text-slate-400'}`}>Piloto Auto</h3>
+                            <p className="text-xs text-slate-500">Búsqueda Diaria</p>
                         </div>
                     </div>
 
-                    <button
-                        onClick={() => setEnabled(!enabled)}
-                        className={`
-                            relative w-14 h-8 rounded-full transition-colors duration-300 focus:outline-none ring-2 ring-offset-2 ring-offset-slate-950
-                            ${enabled ? 'bg-cyan-500 ring-cyan-500/50' : 'bg-slate-700 ring-transparent'}
-                        `}
-                    >
-                        <div className={`
-                            absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow transition-transform duration-300 flex items-center justify-center
-                            ${enabled ? 'translate-x-6' : 'translate-x-0'}
-                        `}>
-                            {enabled ? <Check className="h-3 w-3 text-cyan-600" /> : <Power className="h-3 w-3 text-slate-400" />}
-                        </div>
-                    </button>
+                    <div className="self-end sm:self-auto">
+                        <button
+                            onClick={() => setEnabled(!enabled)}
+                            className={`
+                                relative w-14 h-8 rounded-full transition-colors duration-300 focus:outline-none ring-2 ring-offset-2 ring-offset-slate-950
+                                ${enabled ? 'bg-cyan-500 ring-cyan-500/50' : 'bg-slate-700 ring-transparent'}
+                            `}
+                        >
+                            <div className={`
+                                absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow transition-transform duration-300 flex items-center justify-center
+                                ${enabled ? 'translate-x-6' : 'translate-x-0'}
+                            `}>
+                                {enabled ? <Check className="h-3 w-3 text-cyan-600" /> : <Power className="h-3 w-3 text-slate-400" />}
+                            </div>
+                        </button>
+                    </div>
                 </div>
 
                 <div className={`space-y-4 transition-all duration-300 ${enabled ? 'opacity-100' : 'opacity-50 grayscale'}`}>
                     {/* Time Picker */}
-                    <div className="bg-slate-950/50 rounded-full p-4 border border-slate-800 flex items-center justify-between group-hover:border-slate-700 transition-colors shadow-inner">
-                        <div className="flex items-center gap-2 text-slate-400 pl-2">
+                    <div className="bg-slate-950/50 rounded-2xl p-4 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 group-hover:border-slate-700 transition-colors shadow-inner">
+                        <div className="flex items-center gap-2 text-slate-400 w-full sm:w-auto">
                             <Clock className="h-4 w-4" />
                             <span className="text-sm font-semibold">Ejecutar a las</span>
                         </div>
@@ -87,18 +89,18 @@ const Scheduler: React.FC<SchedulerProps> = ({
                             value={time}
                             onChange={(e) => setTime(e.target.value)}
                             disabled={!enabled}
-                            className="bg-transparent text-white font-bold text-xl focus:outline-none text-right w-32 cursor-pointer pr-2"
+                            className="bg-transparent text-white font-bold text-xl focus:outline-none text-center sm:text-right w-full sm:w-32 cursor-pointer"
                         />
                     </div>
 
                     {/* Leads Slider */}
-                    <div className="bg-slate-950/50 rounded-[2rem] p-5 border border-slate-800 group-hover:border-slate-700 transition-colors shadow-inner">
-                        <div className="flex justify-between items-center mb-3">
-                            <div className="flex items-center gap-2 text-slate-400 px-2">
+                    <div className="bg-slate-950/50 rounded-2xl p-4 border border-slate-800 group-hover:border-slate-700 transition-colors shadow-inner">
+                        <div className="flex flex-col sm:flex-row justify-between items-center gap-2 mb-3">
+                            <div className="flex items-center gap-2 text-slate-400 w-full sm:w-auto">
                                 <Calendar className="h-4 w-4" />
-                                <span className="text-sm font-semibold">Candidatos por día</span>
+                                <span className="text-sm font-semibold">Candidatos/día</span>
                             </div>
-                            <span className="text-cyan-400 font-bold text-xl px-2">{leads}</span>
+                            <span className="text-cyan-400 font-bold text-xl">{leads}</span>
                         </div>
                         <input
                             type="range"
