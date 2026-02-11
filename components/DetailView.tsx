@@ -53,10 +53,16 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign, onBack }) => {
     try {
       const source = campaign.platform === 'Communities' || campaign.platform === 'Freelance' ? 'gmail' : 'linkedin';
 
+      const searchOptions = {
+        language: campaign.settings?.language || 'Spanish',
+        maxAge: campaign.settings?.max_age || 30
+      };
+
       await searchEngine.startSearch(
         campaign.target_role || 'Developer',
         source,
         leadCount,
+        searchOptions,
         (msg) => setLogs(prev => [...prev, msg]),
         async (newCandidates) => {
           const savePromises = newCandidates.map(async (c) => {

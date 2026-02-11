@@ -21,6 +21,8 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
         skills: '', // Comma separated
         experienceLevel: 'Senior',
         keywords: '',
+        language: 'Spanish',
+        maxAge: 30,
         // "Factor Mauro" Toggles
         factorStartup: false,
         factorFounder: false,
@@ -41,6 +43,8 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
                 skills: formData.skills.split(',').map(s => s.trim()),
                 experience_level: formData.experienceLevel,
                 keywords: formData.keywords,
+                language: formData.language,
+                max_age: formData.maxAge,
                 factors: {
                     startup_exp: formData.factorStartup,
                     founder_mindset: formData.factorFounder,
@@ -145,6 +149,36 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
                                         <option value="Mid">Mid Level</option>
                                         <option value="Junior">Junior (Excluded)</option>
                                     </select>
+                                </div>
+                            </div>
+
+                            {/* New Demographics Filter */}
+                            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-800/50">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-400 mb-1">Language / Region</label>
+                                    <select
+                                        value={formData.language}
+                                        onChange={e => setFormData({ ...formData, language: e.target.value })}
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none"
+                                    >
+                                        <option value="Spanish">Spanish (Latin America & Spain)</option>
+                                        <option value="English">English (Global)</option>
+                                        <option value="Portuguese">Portuguese (Brazil)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-400 mb-1">
+                                        Max Age (Estimate) <span className="text-xs text-slate-500 ml-1" title="Used to infer max experience years (~Age - 22)">Why?</span>
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="18"
+                                        max="65"
+                                        value={formData.maxAge}
+                                        onChange={e => setFormData({ ...formData, maxAge: parseInt(e.target.value) || 30 })}
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none"
+                                        placeholder="30"
+                                    />
                                 </div>
                             </div>
                         </div>

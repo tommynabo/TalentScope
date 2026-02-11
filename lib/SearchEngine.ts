@@ -22,6 +22,7 @@ export class SearchEngine {
         query: string,
         source: 'gmail' | 'linkedin',
         maxResults: number,
+        options: { language: string; maxAge: number },
         onLog: LogCallback,
         onComplete: (candidates: Candidate[]) => void
     ) {
@@ -44,7 +45,7 @@ export class SearchEngine {
             // Search Logic
             let rawCandidates: Candidate[] = [];
             if (source === 'linkedin') {
-                rawCandidates = await this.searchLinkedIn(query, maxResults, onLog);
+                rawCandidates = await this.searchLinkedIn(query, maxResults, options, onLog);
             } else {
                 rawCandidates = await this.searchGmail(query, maxResults, onLog);
             }
@@ -77,13 +78,14 @@ export class SearchEngine {
         onLog: LogCallback,
         onComplete: (candidates: Candidate[]) => void
     ) {
+        // ... (Fast search implementation remains similar, potentially simulate filters)
         try {
             onLog(`[DEDUP] 🔍 Cargando base de datos para evitar duplicados...`);
             const { existingEmails, existingLinkedin } = await deduplicationService.fetchExistingCandidates();
             onLog(`[DEDUP] ✅ ${existingEmails.size} emails y ${existingLinkedin.size} perfiles conocidos ignorados.`);
 
             onLog(`[SEARCH] 🎯 Buscando candidatos con "${query}"...`);
-            
+
             // Use fast search service (returns real-looking data with personalized DMs)
             const startTime = performance.now();
             const rawCandidates = await SearchService.searchCandidates(query, maxResults);
@@ -97,14 +99,8 @@ export class SearchEngine {
                 !deduplicationService.isDuplicate(c, existingEmails, existingLinkedin)
             );
 
-            const dupCount = rawCandidates.length - uniqueCandidates.length;
-            if (dupCount > 0) {
-                onLog(`[DEDUP] 🗑️ ${dupCount} candidatos descartados por ser duplicados.`);
-            }
+            onLog(`[ANALYSIS] 🧠 Generando análisis personalizado...`);
 
-            onLog(`[ANALYSIS] 🧠 Generando análisis personalizado para ${uniqueCandidates.length} candidatos...`);
-            
-            // Parallelize AI analysis for faster results
             const analyzedCandidates = await Promise.all(
                 uniqueCandidates.map(c => this.enrichCandidateWithAnalysis(c))
             );
@@ -121,18 +117,15 @@ export class SearchEngine {
     }
 
     private async enrichCandidateWithAnalysis(candidate: Candidate): Promise<Candidate> {
-        // If candidate already has AI analysis, return as-is
-        if (candidate.ai_analysis) {
-            return candidate;
-        }
+        if (candidate.ai_analysis) return candidate;
 
-        // Generate lightweight AI analysis
         const analysis = await this.generateAIAnalysis({
             name: candidate.full_name,
             company: candidate.current_company,
             role: candidate.job_title,
             snippet: `${candidate.job_title} at ${candidate.current_company}`,
-            query: ''
+            query: '',
+            maxAge: 30 // Default for fast search
         });
 
         return {
@@ -143,6 +136,7 @@ export class SearchEngine {
     }
 
     private async callApifyActor(actorId: string, input: any, onLog: LogCallback): Promise<any[]> {
+        // ... (remains unchanged)
         if (!this.apiKey) {
             throw new Error("Falta API Key de Apify configuration");
         }
@@ -169,11 +163,11 @@ export class SearchEngine {
         let finished = false;
         let checks = 0;
         let lastStatus = '';
-        
+
         while (!finished && this.isRunning && checks < 30) {
             await new Promise(r => setTimeout(r, 5000));
             checks++;
-            
+
             try {
                 const statusRes = await fetch(`https://api.apify.com/v2/acts/${actorId}/runs/${runId}?token=${this.apiKey}`);
                 const statusData = await statusRes.json();
@@ -214,14 +208,24 @@ export class SearchEngine {
     // ------------------------------------------------------------------
     // LINKEDIN STRATEGY (OPTIMIZED)
     // ------------------------------------------------------------------
-    private async searchLinkedIn(query: string, maxResults: number, onLog: LogCallback): Promise<Candidate[]> {
+    private async searchLinkedIn(query: string, maxResults: number, options: { language: string; maxAge: number }, onLog: LogCallback): Promise<Candidate[]> {
         // 1. Google Search for LinkedIn Profiles (site:linkedin.com/in)
+        let siteOperator = 'site:linkedin.com/in';
+        if (options.language === 'Spanish') {
+            siteOperator = 'site:es.linkedin.com/in';
+        } else if (options.language === 'Portuguese') {
+            siteOperator = 'site:br.linkedin.com/in';
+        }
+
+        // Add language keywords
+        const langKeywords = options.language === 'Spanish' ? '(Español OR Spanish)' : '';
+
         const searchInput = {
-            queries: `site:linkedin.com/in ${query}`,
+            queries: `${siteOperator} ${query} ${langKeywords}`,
             maxPagesPerQuery: 2,
             resultsPerPage: Math.ceil(maxResults * 1.5),
-            languageCode: 'es',
-            countryCode: 'es',
+            languageCode: options.language === 'Spanish' ? 'es' : 'en',
+            countryCode: options.language === 'Spanish' ? 'es' : 'us',
         };
 
         const results = await this.callApifyActor(GOOGLE_SEARCH_SCRAPER, searchInput, onLog);
@@ -235,7 +239,7 @@ export class SearchEngine {
             .filter((r: any) => r.url && r.url.includes('linkedin.com/in/'))
             .slice(0, maxResults);
 
-        onLog(`[LINKEDIN] 📋 ${profiles.length} perfiles detectados. Analizando...`);
+        onLog(`[LINKEDIN] 📋 ${profiles.length} perfiles detectados. Analizando con foco en Top Talent Joven...`);
 
         // OPTIMIZED: Parallelize AI analysis instead of sequential
         const candidatePromises = profiles.map(async (p) => {
@@ -250,7 +254,8 @@ export class SearchEngine {
                 company: 'Linkedin Search',
                 role,
                 snippet: p.description,
-                query: query
+                query: query,
+                maxAge: options.maxAge
             });
 
             // STRICT FILTERING: Score must be >= 70
@@ -266,7 +271,7 @@ export class SearchEngine {
                 avatar_url: p.pagemap?.cse_image?.[0]?.src || null,
                 job_title: role,
                 current_company: 'Ver Perfil',
-                location: 'España',
+                location: options.language === 'Spanish' ? 'España/Latam' : 'Global',
                 experience_years: 0,
                 skills: analysis.skills || [],
                 ai_analysis: JSON.stringify(analysis),
@@ -278,7 +283,7 @@ export class SearchEngine {
 
         const candidates = (await Promise.all(candidatePromises)).filter(c => c !== null) as Candidate[];
         onLog(`[LINKEDIN] ✅ ${candidates.length} candidatos seleccionados`);
-        
+
         return candidates;
     }
 
@@ -341,7 +346,7 @@ export class SearchEngine {
 
         const candidates = (await Promise.all(candidatePromises)).filter(c => c !== null) as Candidate[];
         onLog(`[GMAIL] ✅ ${candidates.length} candidatos seleccionados`);
-        
+
         return candidates;
     }
 
@@ -382,7 +387,7 @@ export class SearchEngine {
                                 "summary": "Resumen ejecutivo en 1 frase",
                                 "outreach_message": "Mensaje personalizado (<280 chars) directo y creativo",
                                 "skills": ["Habilidad 1", "Habilidad 2"],
-                                "symmetry_score": 75
+                                "symmetry_score": 75  // 0-100. IMPORTANT: If snippet implies user is > ${context.maxAge || 40} years old (e.g. 15+ years exp), PENALIZE SCORE heavily (<50).
                             }`
                         },
                         { role: 'user', content: JSON.stringify(context) }
