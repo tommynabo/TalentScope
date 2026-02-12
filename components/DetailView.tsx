@@ -1,10 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Candidate, Campaign } from '../types/database';
 import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Search, Play, Loader2, ExternalLink, Terminal, ChevronDown, ChevronUp, X, Target, TrendingUp, AlertTriangle } from 'lucide-react';
 import { searchEngine } from '../lib/SearchEngine';
 import { CampaignService, CandidateService } from '../lib/services';
 import Scheduler from './Scheduler';
 import Toast from './Toast';
+
+type SortField = 'added_at' | 'symmetry_score' | 'full_name';
+type SortDirection = 'asc' | 'desc';
+type CandidateWithMeta = Candidate & { status_in_campaign?: string; added_at?: string };
 
 interface DetailViewProps {
   campaign: Campaign;
@@ -13,7 +17,7 @@ interface DetailViewProps {
 
 const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBack }) => {
   const [campaign, setCampaign] = useState(initialCampaign);
-  const [candidates, setCandidates] = useState<(Candidate & { status_in_campaign?: string })[]>([]);
+  const [candidates, setCandidates] = useState<CandidateWithMeta[]>([]);
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [leadCount, setLeadCount] = useState(10);
@@ -21,6 +25,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
   const [showLogs, setShowLogs] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [toast, setToast] = useState({ show: false, message: '' });
+  const [sortField, setSortField] = useState<SortField>('added_at');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Update local campaign state when prop changes
@@ -62,6 +68,71 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
       console.error("[reloadCampaign] Error:", e);
     }
   };
+
+  // Toggle sort - if same field, flip direction; otherwise set new field descending
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  // Format a date string into a human-readable label
+  const formatDateLabel = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.round((today.getTime() - target.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Hoy';
+    if (diffDays === 1) return 'Ayer';
+
+    return target.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+  };
+
+  // Sort candidates
+  const sortedCandidates = useMemo(() => {
+    const sorted = [...candidates].sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'added_at') {
+        const dateA = new Date(a.added_at || a.created_at).getTime();
+        const dateB = new Date(b.added_at || b.created_at).getTime();
+        cmp = dateA - dateB;
+      } else if (sortField === 'symmetry_score') {
+        cmp = (a.symmetry_score || 0) - (b.symmetry_score || 0);
+      } else if (sortField === 'full_name') {
+        cmp = a.full_name.localeCompare(b.full_name);
+      }
+      return sortDirection === 'desc' ? -cmp : cmp;
+    });
+    return sorted;
+  }, [candidates, sortField, sortDirection]);
+
+  // Group sorted candidates by date for divider rows
+  const groupedCandidates = useMemo(() => {
+    const groups: { label: string; count: number; candidates: CandidateWithMeta[] }[] = [];
+    let currentKey = '';
+
+    for (const c of sortedCandidates) {
+      const dateStr = c.added_at || c.created_at;
+      const date = new Date(dateStr);
+      const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+
+      if (dayKey !== currentKey) {
+        currentKey = dayKey;
+        groups.push({ label: formatDateLabel(dateStr), count: 0, candidates: [] });
+      }
+
+      const group = groups[groups.length - 1];
+      group.candidates.push(c);
+      group.count++;
+    }
+
+    return groups;
+  }, [sortedCandidates]);
 
   const handleRunSearch = async () => {
     setSearching(true);
@@ -272,7 +343,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
               const headers = ['Name', 'Role', 'Company', 'Email', 'LinkedIn', 'Score', 'Message', 'Analysis'];
               const csvContent = [
                 headers.join(','),
-                ...candidates.map(c => {
+                ...sortedCandidates.map(c => {
                   const analysis = parseAnalysis(c.ai_analysis);
                   const message = analysis?.outreach_message || '';
                   const summary = analysis?.summary || '';
@@ -323,99 +394,135 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="text-xs font-semibold text-slate-500 uppercase tracking-widest border-b border-slate-800">
-                  <th className="px-3 lg:px-4 py-2">Candidato</th>
+                  <th
+                    className="px-3 lg:px-4 py-2 cursor-pointer hover:text-slate-300 transition-colors select-none"
+                    onClick={() => toggleSort('full_name')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Candidato
+                      {sortField === 'full_name' && (
+                        sortDirection === 'desc' ? <ChevronDown className="h-3 w-3 text-cyan-400" /> : <ChevronUp className="h-3 w-3 text-cyan-400" />
+                      )}
+                    </div>
+                  </th>
                   <th className="px-3 lg:px-4 py-2">Rol Actual</th>
                   <th className="px-3 lg:px-4 py-2">Estado</th>
                   <th className="px-3 lg:px-4 py-2">Mensaje</th>
-                  <th className="px-3 lg:px-4 py-2">
+                  <th
+                    className="px-3 lg:px-4 py-2 cursor-pointer hover:text-slate-300 transition-colors select-none"
+                    onClick={() => toggleSort('symmetry_score')}
+                  >
                     <div className="flex items-center gap-1">
                       <BrainCircuit className="h-3 w-3" /> Score
+                      {sortField === 'symmetry_score' && (
+                        sortDirection === 'desc' ? <ChevronDown className="h-3 w-3 text-cyan-400" /> : <ChevronUp className="h-3 w-3 text-cyan-400" />
+                      )}
                     </div>
                   </th>
                   <th className="px-3 lg:px-4 py-2 text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
-                {candidates.map((candidate) => (
-                  <tr key={candidate.id} className="hover:bg-slate-800/30 transition-colors group">
-                    <td className="px-3 lg:px-4 py-2">
-                      <div className="flex items-center gap-2">
-                        <img
-                          src={candidate.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.full_name)}&background=0F172A&color=94A3B8`}
-                          alt={candidate.full_name}
-                          className="h-8 w-8 rounded-full object-cover ring-2 ring-slate-800"
-                        />
-                        <div className="min-w-0">
-                          <p className="font-medium text-white text-xs lg:text-sm truncate">{candidate.full_name}</p>
-                          <p className="text-xs text-slate-500 hidden sm:block">{candidate.location}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 lg:px-4 py-2">
-                      <p className="text-xs lg:text-sm text-slate-300">{candidate.job_title}</p>
-                      <p className="text-xs text-slate-500 hidden md:block">@ {candidate.current_company}</p>
-                    </td>
-                    <td className="px-3 lg:px-4 py-2">
-                      <StatusBadge status={candidate.status_in_campaign || 'Pool'} />
-                    </td>
-                    <td className="px-3 lg:px-4 py-2">
-                      {(() => {
-                        const analysis = parseAnalysis(candidate.ai_analysis);
-                        const message = analysis?.outreach_message || '';
-                        return message ? (
-                          <div className="max-w-xs">
-                            <p className="text-xs text-slate-300 line-clamp-2" title={message}>
-                              {message}
-                            </p>
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(message);
-                                setToast({ show: true, message: '✅ Mensaje copiado!' });
-                              }}
-                              className="text-xs text-cyan-400 hover:text-cyan-300 mt-0.5"
-                            >
-                              Copiar
-                            </button>
+              <tbody>
+                {groupedCandidates.map((group) => (
+                  <React.Fragment key={group.label}>
+                    {/* Date Divider Row */}
+                    <tr>
+                      <td colSpan={6} className="px-0 py-0">
+                        <div className="flex items-center gap-3 px-3 lg:px-4 py-1.5 bg-slate-800/40 border-y border-slate-700/50 backdrop-blur-sm">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar className="h-3 w-3 text-cyan-400/70" />
+                            <span className="text-xs font-semibold text-slate-300">{group.label}</span>
                           </div>
-                        ) : (
-                          <span className="text-slate-500 text-xs">No disponible</span>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-3 lg:px-4 py-2">
-                      {candidate.symmetry_score !== undefined && (
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 w-16 bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${candidate.symmetry_score > 90 ? 'bg-gradient-to-r from-emerald-400 to-cyan-400' : candidate.symmetry_score > 80 ? 'bg-cyan-500' : 'bg-slate-500'}`}
-                              style={{ width: `${candidate.symmetry_score}%` }}
-                            ></div>
-                          </div>
-                          <span className={`text-xs font-bold ${candidate.symmetry_score > 90 ? 'text-emerald-400' : 'text-slate-400'}`}>
-                            {candidate.symmetry_score}%
+                          <div className="flex-1 h-px bg-slate-700/50"></div>
+                          <span className="text-[10px] font-medium text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700/50">
+                            {group.count} {group.count === 1 ? 'lead' : 'leads'}
                           </span>
                         </div>
-                      )}
-                    </td>
-                    <td className="px-3 lg:px-4 py-2 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => setSelectedCandidate(candidate)}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-cyan-400 hover:bg-slate-700 px-1.5 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
-                        >
-                          <BrainCircuit className="h-3 w-3" /> <span className="hidden sm:inline">Ver</span>
-                        </button>
-                        <a
-                          href={candidate.linkedin_url || '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-700 px-1.5 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                    </tr>
+                    {/* Candidate Rows for this group */}
+                    {group.candidates.map((candidate) => (
+                      <tr key={candidate.id} className="hover:bg-slate-800/30 transition-colors group border-b border-slate-800/50">
+                        <td className="px-3 lg:px-4 py-2">
+                          <div className="flex items-center gap-2">
+                            <img
+                              src={candidate.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.full_name)}&background=0F172A&color=94A3B8`}
+                              alt={candidate.full_name}
+                              className="h-8 w-8 rounded-full object-cover ring-2 ring-slate-800"
+                            />
+                            <div className="min-w-0">
+                              <p className="font-medium text-white text-xs lg:text-sm truncate">{candidate.full_name}</p>
+                              <p className="text-xs text-slate-500 hidden sm:block">{candidate.location}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 lg:px-4 py-2">
+                          <p className="text-xs lg:text-sm text-slate-300">{candidate.job_title}</p>
+                          <p className="text-xs text-slate-500 hidden md:block">@ {candidate.current_company}</p>
+                        </td>
+                        <td className="px-3 lg:px-4 py-2">
+                          <StatusBadge status={candidate.status_in_campaign || 'Pool'} />
+                        </td>
+                        <td className="px-3 lg:px-4 py-2">
+                          {(() => {
+                            const analysis = parseAnalysis(candidate.ai_analysis);
+                            const message = analysis?.outreach_message || '';
+                            return message ? (
+                              <div className="max-w-xs">
+                                <p className="text-xs text-slate-300 line-clamp-2" title={message}>
+                                  {message}
+                                </p>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(message);
+                                    setToast({ show: true, message: '✅ Mensaje copiado!' });
+                                  }}
+                                  className="text-xs text-cyan-400 hover:text-cyan-300 mt-0.5"
+                                >
+                                  Copiar
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-slate-500 text-xs">No disponible</span>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2">
+                          {candidate.symmetry_score !== undefined && (
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 w-16 bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${candidate.symmetry_score > 90 ? 'bg-gradient-to-r from-emerald-400 to-cyan-400' : candidate.symmetry_score > 80 ? 'bg-cyan-500' : 'bg-slate-500'}`}
+                                  style={{ width: `${candidate.symmetry_score}%` }}
+                                ></div>
+                              </div>
+                              <span className={`text-xs font-bold ${candidate.symmetry_score > 90 ? 'text-emerald-400' : 'text-slate-400'}`}>
+                                {candidate.symmetry_score}%
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 lg:px-4 py-2 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => setSelectedCandidate(candidate)}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-cyan-400 hover:bg-slate-700 px-1.5 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                            >
+                              <BrainCircuit className="h-3 w-3" /> <span className="hidden sm:inline">Ver</span>
+                            </button>
+                            <a
+                              href={candidate.linkedin_url || '#'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-700 px-1.5 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

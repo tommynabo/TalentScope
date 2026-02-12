@@ -222,14 +222,12 @@ export const CampaignService = {
 
         if (error) throw error;
 
-        // Flatten structure for the UI
+        // Flatten structure for the UI, include added_at for date grouping
         return data.map((item: any) => ({
             ...item.candidate,
-            // Overwrite candidate status with campaign-specific status if needed, 
-            // but UI currently uses a generic status. 
-            // We'll attach the campaign_candidate status to the candidate object for display.
-            status_in_campaign: item.status
-        })) as (Candidate & { status_in_campaign: string })[];
+            status_in_campaign: item.status,
+            added_at: item.added_at
+        })) as (Candidate & { status_in_campaign: string; added_at: string })[];
     },
 
 };
