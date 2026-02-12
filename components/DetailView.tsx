@@ -25,8 +25,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
   const [showLogs, setShowLogs] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [toast, setToast] = useState({ show: false, message: '' });
-  const [sortField, setSortField] = useState<SortField>('added_at');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [sortConfig, setSortConfig] = useState<{ field: SortField; direction: SortDirection }>({ field: 'added_at', direction: 'desc' });
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Update local campaign state when prop changes
@@ -69,14 +68,14 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
     }
   };
 
-  // Toggle sort - if same field, flip direction; otherwise set new field descending
+  // Toggle sort - atomic update so repeated clicks always work
   const toggleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(prev => prev === 'desc' ? 'asc' : 'desc');
-    } else {
-      setSortField(field);
-      setSortDirection('desc');
-    }
+    setSortConfig(prev => {
+      if (prev.field === field) {
+        return { field, direction: prev.direction === 'desc' ? 'asc' : 'desc' };
+      }
+      return { field, direction: 'desc' };
+    });
   };
 
   // Format a date string into a human-readable label
@@ -97,19 +96,19 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
   const sortedCandidates = useMemo(() => {
     const sorted = [...candidates].sort((a, b) => {
       let cmp = 0;
-      if (sortField === 'added_at') {
+      if (sortConfig.field === 'added_at') {
         const dateA = new Date(a.added_at || a.created_at).getTime();
         const dateB = new Date(b.added_at || b.created_at).getTime();
         cmp = dateA - dateB;
-      } else if (sortField === 'symmetry_score') {
+      } else if (sortConfig.field === 'symmetry_score') {
         cmp = (a.symmetry_score || 0) - (b.symmetry_score || 0);
-      } else if (sortField === 'full_name') {
+      } else if (sortConfig.field === 'full_name') {
         cmp = a.full_name.localeCompare(b.full_name);
       }
-      return sortDirection === 'desc' ? -cmp : cmp;
+      return sortConfig.direction === 'desc' ? -cmp : cmp;
     });
     return sorted;
-  }, [candidates, sortField, sortDirection]);
+  }, [candidates, sortConfig]);
 
   // Group sorted candidates by date for divider rows
   const groupedCandidates = useMemo(() => {
@@ -400,8 +399,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                   >
                     <div className="flex items-center gap-1">
                       Candidato
-                      {sortField === 'full_name' && (
-                        sortDirection === 'desc' ? <ChevronDown className="h-3 w-3 text-cyan-400" /> : <ChevronUp className="h-3 w-3 text-cyan-400" />
+                      {sortConfig.field === 'full_name' && (
+                        sortConfig.direction === 'desc' ? <ChevronDown className="h-3 w-3 text-cyan-400" /> : <ChevronUp className="h-3 w-3 text-cyan-400" />
                       )}
                     </div>
                   </th>
@@ -414,8 +413,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                   >
                     <div className="flex items-center gap-1">
                       <BrainCircuit className="h-3 w-3" /> Score
-                      {sortField === 'symmetry_score' && (
-                        sortDirection === 'desc' ? <ChevronDown className="h-3 w-3 text-cyan-400" /> : <ChevronUp className="h-3 w-3 text-cyan-400" />
+                      {sortConfig.field === 'symmetry_score' && (
+                        sortConfig.direction === 'desc' ? <ChevronDown className="h-3 w-3 text-cyan-400" /> : <ChevronUp className="h-3 w-3 text-cyan-400" />
                       )}
                     </div>
                   </th>
@@ -428,13 +427,13 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                     {/* Date Divider Row */}
                     <tr>
                       <td colSpan={6} className="px-0 py-0">
-                        <div className="flex items-center gap-3 px-3 lg:px-4 py-1.5 bg-slate-800/40 border-y border-slate-700/50 backdrop-blur-sm">
+                        <div className="flex items-center gap-3 px-3 lg:px-4 py-1.5 bg-blue-950/20 border-y border-blue-500/15 backdrop-blur-sm">
                           <div className="flex items-center gap-1.5">
-                            <Calendar className="h-3 w-3 text-cyan-400/70" />
+                            <Calendar className="h-3 w-3 text-blue-400/70" />
                             <span className="text-xs font-semibold text-slate-300">{group.label}</span>
                           </div>
-                          <div className="flex-1 h-px bg-slate-700/50"></div>
-                          <span className="text-[10px] font-medium text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700/50">
+                          <div className="flex-1 h-px bg-gradient-to-r from-blue-500/30 via-blue-400/20 to-transparent"></div>
+                          <span className="text-[10px] font-medium text-blue-300/70 bg-blue-950/40 px-2 py-0.5 rounded-full border border-blue-500/20">
                             {group.count} {group.count === 1 ? 'lead' : 'leads'}
                           </span>
                         </div>
