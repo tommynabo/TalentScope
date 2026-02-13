@@ -350,13 +350,12 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                 return candidateDate === today;
               });
 
-              const headers = ['Name', 'Role', 'Company', 'Email', 'LinkedIn', 'Score', 'ICEBREAKER', 'FOLLOWUP', 'Message', 'Analysis'];
+              const headers = ['NOMBRE', 'ROL', 'EMPRESA', 'EMAIL', 'LINKEDIN', 'SCORE', 'ICEBREAKER', 'MENSAJE', 'ANÁLISIS'];
               const csvContent = [
                 headers.join(','),
                 ...todaysCandidates.map(c => {
                   const analysis = parseAnalysis(c.ai_analysis);
                   const icebreaker = analysis?.icebreaker || '';
-                  const followup = analysis?.followup_message || '';
                   const message = analysis?.outreach_message || '';
                   const summary = analysis?.summary || '';
 
@@ -368,7 +367,6 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                     `"${c.linkedin_url || ''}"`,
                     `"${c.symmetry_score || 0}"`,
                     `"${icebreaker.replace(/"/g, '""')}"`, // Escape quotes
-                    `"${followup.replace(/"/g, '""')}"`, // Escape quotes
                     `"${message.replace(/"/g, '""')}"`, // Escape quotes
                     `"${summary.replace(/"/g, '""')}"`
                   ].join(',');
