@@ -111,14 +111,21 @@ const App: React.FC = () => {
       )}
 
       <main className="flex-1 relative z-10 flex flex-col h-screen overflow-hidden bg-gradient-to-br from-slate-950 via-slate-950 to-blue-950/20">
-        {!user && (
-           <div className="absolute inset-0 z-50 bg-slate-950">
-             <LoginView onLoginSuccess={handleLoginSuccess} />
-           </div>
-        )}
-        
-        {user && (
-          <>
+        {loading ? (
+            <div className="flex items-center justify-center h-screen bg-slate-950 text-slate-500">
+                <div className="w-8 h-8 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin"></div>
+            </div>
+        ) : (
+            <>
+                {!user && (
+                <div className="absolute inset-0 z-50 bg-slate-950 flex items-center justify-center">
+                    <LoginView onLoginSuccess={handleLoginSuccess} />
+                </div>
+                )}
+                
+                {user && (
+                <>
+
             {/* Top Header / Status Bar (Mobile Only) */}
             <header className="h-14 border-b border-slate-800/50 bg-slate-950/50 backdrop-blur-md flex items-center justify-between px-4 sticky top-0 md:hidden">
               <span className="font-bold text-base text-white tracking-tight">TalentScope</span>
