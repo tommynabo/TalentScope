@@ -85,49 +85,92 @@ export class SearchEngine {
             const { existingEmails, existingLinkedin } = await deduplicationService.fetchExistingCandidates();
             onLog(`[DEDUP] ✅ ${existingEmails.size} emails y ${existingLinkedin.size} perfiles conocidos ignorados.`);
 
-            onLog(`[SEARCH] 🎯 Buscando candidatos con "${query}"...`);
+            const acceptedCandidates: Candidate[] = [];
+            const MAX_RETRIES = 5;
+            let attempt = 0;
 
-            // Use fast search service (returns real-looking data with personalized DMs)
-            const startTime = performance.now();
-            const rawCandidates = await SearchService.searchCandidates(query, maxResults);
-            const duration = performance.now() - startTime;
+            // RETRY LOOP: Continue searching until we have enough candidates or hit max retries
+            while (acceptedCandidates.length < maxResults && attempt < MAX_RETRIES && this.isRunning) {
+                attempt++;
+                const currentQuery = this.getQueryVariation(query, attempt);
+                onLog(`[SEARCH] 🎯 Intento ${attempt}/${MAX_RETRIES}: Buscando con "${currentQuery}"...`);
 
-            onLog(`[SEARCH] ✅ ${rawCandidates.length} candidatos encontrados en ${Math.round(duration / 1000)}s`);
+                // Use fast search service (returns real-looking data with personalized DMs)
+                const startTime = performance.now();
+                const rawCandidates = await SearchService.searchCandidates(currentQuery, maxResults * 4);
+                const duration = performance.now() - startTime;
 
-            // Deduplicate
-            onLog(`[DEDUP] 🧹 Filtrando duplicados...`);
-            const uniqueCandidates = rawCandidates.filter(c =>
-                !deduplicationService.isDuplicate(c, existingEmails, existingLinkedin)
-            );
+                onLog(`[SEARCH] ✅ ${rawCandidates.length} candidatos encontrados en ${Math.round(duration / 1000)}s`);
 
-            onLog(`[ANALYSIS] 🧠 Generando análisis personalizado...`);
+                // Deduplicate (against DB + current batch)
+                onLog(`[DEDUP] 🧹 Filtrando duplicados...`);
+                const uniqueCandidates = rawCandidates.filter(c => {
+                    // Check against DB
+                    if (deduplicationService.isDuplicate(c, existingEmails, existingLinkedin)) return false;
+                    // Check against already accepted in this search
+                    if (acceptedCandidates.some(ac => ac.email === c.email || ac.linkedin_url === c.linkedin_url)) return false;
+                    return true;
+                });
 
-            const analyzedCandidates = await Promise.all(
-                uniqueCandidates.map(c => this.enrichCandidateWithAnalysis(c))
-            );
+                if (uniqueCandidates.length === 0) {
+                    onLog(`[DEDUP] ⚠️ No candidatos nuevos en este intento. Reintentando...`);
+                    // Small delay before retry
+                    await new Promise(r => setTimeout(r, 500));
+                    continue;
+                }
 
-            // NEW: Apply Flutter Developer scoring if filter criteria provided
-            let scoredCandidates = analyzedCandidates;
-            if (options.filters) {
-                onLog(`[SCORING] 📊 Aplicando filtro Flutter Developer con 11-punto scoring system...`);
-                
-                scoredCandidates = analyzedCandidates
-                    .map(candidate => {
-                        const scoring = calculateFlutterDeveloperScore(candidate, options.filters!);
-                        return {
-                            ...candidate,
-                            symmetry_score: scoring.breakdown.normalized,
-                            score_breakdown: scoring.breakdown
-                        };
-                    })
-                    .filter(c => c.symmetry_score >= (options.scoreThreshold || 70))
-                    .sort((a, b) => (b.symmetry_score || 0) - (a.symmetry_score || 0));
-                
-                onLog(`[SCORING] ✅ ${scoredCandidates.length} candidatos cumplen threshold de ${options.scoreThreshold || 70}/100`);
+                onLog(`[ANALYSIS] 🧠 Generando análisis personalizado (${uniqueCandidates.length} candidatos)...`);
+
+                const analyzedCandidates = await Promise.all(
+                    uniqueCandidates.map(c => this.enrichCandidateWithAnalysis(c))
+                );
+
+                // Apply Flutter Developer scoring if filter criteria provided
+                let scoredCandidates = analyzedCandidates;
+                if (options.filters) {
+                    onLog(`[SCORING] 📊 Aplicando filtro Flutter Developer...`);
+                    
+                    scoredCandidates = analyzedCandidates
+                        .map(candidate => {
+                            const scoring = calculateFlutterDeveloperScore(candidate, options.filters!);
+                            return {
+                                ...candidate,
+                                symmetry_score: scoring.breakdown.normalized,
+                                score_breakdown: scoring.breakdown
+                            };
+                        })
+                        .filter(c => c.symmetry_score >= (options.scoreThreshold || 70))
+                        .sort((a, b) => (b.symmetry_score || 0) - (a.symmetry_score || 0));
+                    
+                    onLog(`[SCORING] ✅ ${scoredCandidates.length} candidatos cumplen threshold de ${options.scoreThreshold || 70}/100`);
+                }
+
+                // Add new candidates to accepted list (but only up to maxResults total)
+                const candidatesToAdd = scoredCandidates.slice(0, Math.max(0, maxResults - acceptedCandidates.length));
+                acceptedCandidates.push(...candidatesToAdd);
+
+                onLog(`[PROGRESS] 📊 ${acceptedCandidates.length}/${maxResults} candidatos encontrados`);
+
+                // If we reached the goal, break out of loop
+                if (acceptedCandidates.length >= maxResults) {
+                    onLog(`[SUCCESS] 🎉 Meta alcanzada en intento ${attempt}`);
+                    break;
+                }
+
+                // Small delay before next retry
+                if (attempt < MAX_RETRIES) {
+                    await new Promise(r => setTimeout(r, 500));
+                }
             }
 
-            onLog(`[FIN] ✅ ${scoredCandidates.length} candidatos procesados y listos.`);
-            onComplete(scoredCandidates.slice(0, maxResults));
+            if (acceptedCandidates.length === 0) {
+                onLog(`[WARNING] ⚠️ No se encontraron candidatos nuevos después de ${attempt} intentos`);
+            } else if (acceptedCandidates.length < maxResults) {
+                onLog(`[INFO] ℹ️ Se encontraron ${acceptedCandidates.length}/${maxResults} candidatos (menos que el objetivo)`);
+            }
+
+            onLog(`[FIN] ✅ ${acceptedCandidates.length} candidatos procesados y listos.`);
+            onComplete(acceptedCandidates.slice(0, maxResults));
 
         } catch (error: any) {
             onLog(`[ERROR] ❌ ${error.message}`);
@@ -135,6 +178,19 @@ export class SearchEngine {
         } finally {
             this.isRunning = false;
         }
+    }
+
+    private getQueryVariation(baseQuery: string, attempt: number): string {
+        // Generate query variations to find different candidates
+        const variations = [
+            baseQuery, // Original
+            `${baseQuery} senior`, // Add seniority
+            `${baseQuery} developer`, // Add role
+            `${baseQuery} engineer`, // Alternative role
+            `${baseQuery} lead` // Leadership role
+        ];
+
+        return variations[Math.min(attempt - 1, variations.length - 1)];
     }
 
     private async enrichCandidateWithAnalysis(candidate: Candidate): Promise<Candidate> {
@@ -227,7 +283,7 @@ export class SearchEngine {
     }
 
     // ------------------------------------------------------------------
-    // LINKEDIN STRATEGY (OPTIMIZED)
+    // LINKEDIN STRATEGY (OPTIMIZED WITH RETRY LOGIC)
     // ------------------------------------------------------------------
     private async searchLinkedIn(
         query: string,
@@ -237,136 +293,181 @@ export class SearchEngine {
         existingEmails: Set<string>,
         existingLinkedin: Set<string>
     ): Promise<Candidate[]> {
-        // 1. Google Search for LinkedIn Profiles (site:linkedin.com/in)
-        let siteOperator = 'site:linkedin.com/in';
-        if (options.language === 'Spanish') {
-            siteOperator = 'site:es.linkedin.com/in';
-        } else if (options.language === 'Portuguese') {
-            siteOperator = 'site:br.linkedin.com/in';
-        }
-
-        // Add language keywords
-        const langKeywords = options.language === 'Spanish' ? '(Español OR Spanish)' : '';
-
-        const searchInput = {
-            queries: `${siteOperator} ${query} ${langKeywords}`,
-            maxPagesPerQuery: 2,
-            resultsPerPage: Math.ceil(maxResults * 4),
-            languageCode: options.language === 'Spanish' ? 'es' : 'en',
-            countryCode: options.language === 'Spanish' ? 'es' : 'us',
-        };
-
-        const results = await this.callApifyActor(GOOGLE_SEARCH_SCRAPER, searchInput, onLog);
-
-        let allResults: any[] = [];
-        results.forEach(r => {
-            if (r.organicResults) allResults = allResults.concat(r.organicResults);
-        });
-
-        const profiles = allResults
-            .filter((r: any) => r.url && r.url.includes('linkedin.com/in/'))
-            .slice(0, maxResults * 4);
-
-        onLog(`[LINKEDIN] 📋 ${profiles.length} perfiles detectados. Analizando con buffer 4x y early stopping...`);
-
-        // BATCHED PROCESSING: Process in small batches with early stopping
-        const BATCH_SIZE = 5; // Process 5 profiles at a time
         const acceptedCandidates: Candidate[] = [];
-        let processedCount = 0;
+        const MAX_RETRIES = 3;
+        let attempt = 0;
 
-        for (let i = 0; i < profiles.length && acceptedCandidates.length < maxResults; i += BATCH_SIZE) {
-            if (!this.isRunning) break;
+        // RETRY LOOP: Continue searching until we have enough candidates or hit max retries
+        while (acceptedCandidates.length < maxResults && attempt < MAX_RETRIES && this.isRunning) {
+            attempt++;
+            const currentQuery = this.getQueryVariation(query, attempt);
+            onLog(`[LINKEDIN] 🎯 Intento ${attempt}/${MAX_RETRIES}: Buscando con "${currentQuery}"...`);
 
-            const batch = profiles.slice(i, i + BATCH_SIZE);
-            onLog(`[BATCH] 🔄 Procesando lote ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} perfiles)...`);
-
-            const batchPromises = batch.map(async (p) => {
-                if (!this.isRunning) return null;
-
-                const name = p.title.split('-')[0].trim() || 'Candidato';
-                const role = p.title.split('-')[1]?.trim() || query;
-
-                // Generate AI Analysis for this candidate
-                const analysis = await this.generateAIAnalysis({
-                    name,
-                    company: 'Linkedin Search',
-                    role,
-                    snippet: p.description,
-                    query: query,
-                    maxAge: options.maxAge
-                });
-
-                processedCount++;
-
-                // STRICT FILTERING: Score must be >= 70
-                if (analysis.symmetry_score < 70) {
-                    onLog(`[FILTER] 📉 ${name} descartado (Score: ${analysis.symmetry_score}) [${processedCount}/${profiles.length}]`);
-                    return null;
+            try {
+                // 1. Google Search for LinkedIn Profiles (site:linkedin.com/in)
+                let siteOperator = 'site:linkedin.com/in';
+                if (options.language === 'Spanish') {
+                    siteOperator = 'site:es.linkedin.com/in';
+                } else if (options.language === 'Portuguese') {
+                    siteOperator = 'site:br.linkedin.com/in';
                 }
 
-                // Create candidate object
-                const candidate: Candidate = {
-                    id: crypto.randomUUID(),
-                    full_name: name,
-                    email: null,
-                    linkedin_url: p.url,
-                    github_url: null,
-                    avatar_url: p.pagemap?.cse_image?.[0]?.src || null,
-                    job_title: role,
-                    current_company: 'Ver Perfil',
-                    location: options.language === 'Spanish' ? 'España/Latam' : 'Global',
-                    experience_years: 0,
-                    education: null,
-                    skills: analysis.skills || [],
-                    ai_analysis: JSON.stringify(analysis),
-                    symmetry_score: analysis.symmetry_score,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
+                // Add language keywords
+                const langKeywords = options.language === 'Spanish' ? '(Español OR Spanish)' : '';
+
+                const searchInput = {
+                    queries: `${siteOperator} ${currentQuery} ${langKeywords}`,
+                    maxPagesPerQuery: 2,
+                    resultsPerPage: Math.ceil(maxResults * 4),
+                    languageCode: options.language === 'Spanish' ? 'es' : 'en',
+                    countryCode: options.language === 'Spanish' ? 'es' : 'us',
                 };
 
-                // Check for duplicates BEFORE accepting
-                if (deduplicationService.isDuplicate(candidate, existingEmails, existingLinkedin)) {
-                    onLog(`[DEDUP] 🗑️ ${name} descartado (duplicado) [${processedCount}/${profiles.length}]`);
-                    return null;
+                const results = await this.callApifyActor(GOOGLE_SEARCH_SCRAPER, searchInput, onLog);
+
+                let allResults: any[] = [];
+                results.forEach(r => {
+                    if (r.organicResults) allResults = allResults.concat(r.organicResults);
+                });
+
+                const profiles = allResults
+                    .filter((r: any) => r.url && r.url.includes('linkedin.com/in/'))
+                    .slice(0, maxResults * 4);
+
+                if (profiles.length === 0) {
+                    onLog(`[LINKEDIN] ⚠️ No perfiles encontrados en intento ${attempt}. Reintentando...`);
+                    await new Promise(r => setTimeout(r, 500));
+                    continue;
                 }
 
-                onLog(`[MATCH] ✅ ${name} aceptado (Score: ${analysis.symmetry_score}) [${acceptedCandidates.length + 1}/${maxResults}]`);
-                return candidate;
-            });
+                onLog(`[LINKEDIN] 📋 ${profiles.length} perfiles detectados. Procesando con buffer 4x...`);
 
-            const batchResults = (await Promise.all(batchPromises)).filter(c => c !== null) as Candidate[];
+                // BATCHED PROCESSING: Process in small batches
+                const BATCH_SIZE = 5; // Process 5 profiles at a time
+                let processedCount = 0;
 
-            // Add newly accepted candidates to dedup sets to prevent duplicates within the same search
-            batchResults.forEach(c => {
-                if (c.email) existingEmails.add(c.email.toLowerCase().trim());
-                if (c.linkedin_url) {
-                    const normalizedUrl = c.linkedin_url
-                        .toLowerCase()
-                        .replace(/^https?:\/\//i, '')
-                        .replace(/^www\./, '')
-                        .replace(/\/$/, '')
-                        .trim();
-                    existingLinkedin.add(normalizedUrl);
+                for (let i = 0; i < profiles.length && acceptedCandidates.length < maxResults; i += BATCH_SIZE) {
+                    if (!this.isRunning) break;
+
+                    const batch = profiles.slice(i, i + BATCH_SIZE);
+                    onLog(`[BATCH] 🔄 Procesando lote ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} perfiles)...`);
+
+                    const batchPromises = batch.map(async (p) => {
+                        if (!this.isRunning) return null;
+
+                        const name = p.title.split('-')[0].trim() || 'Candidato';
+                        const role = p.title.split('-')[1]?.trim() || currentQuery;
+
+                        // Generate AI Analysis for this candidate
+                        const analysis = await this.generateAIAnalysis({
+                            name,
+                            company: 'Linkedin Search',
+                            role,
+                            snippet: p.description,
+                            query: currentQuery,
+                            maxAge: options.maxAge
+                        });
+
+                        processedCount++;
+
+                        // STRICT FILTERING: Score must be >= 70
+                        if (analysis.symmetry_score < 70) {
+                            onLog(`[FILTER] 📉 ${name} descartado (Score: ${analysis.symmetry_score}) [${processedCount}/${profiles.length}]`);
+                            return null;
+                        }
+
+                        // Create candidate object
+                        const candidate: Candidate = {
+                            id: crypto.randomUUID(),
+                            full_name: name,
+                            email: null,
+                            linkedin_url: p.url,
+                            github_url: null,
+                            avatar_url: p.pagemap?.cse_image?.[0]?.src || null,
+                            job_title: role,
+                            current_company: 'Ver Perfil',
+                            location: options.language === 'Spanish' ? 'España/Latam' : 'Global',
+                            experience_years: 0,
+                            education: null,
+                            skills: analysis.skills || [],
+                            ai_analysis: JSON.stringify(analysis),
+                            symmetry_score: analysis.symmetry_score,
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        };
+
+                        // Check for duplicates against DB and current batch
+                        if (deduplicationService.isDuplicate(candidate, existingEmails, existingLinkedin)) {
+                            onLog(`[DEDUP] 🗑️ ${name} descartado (duplicado) [${processedCount}/${profiles.length}]`);
+                            return null;
+                        }
+
+                        // Check against already accepted in this search
+                        if (acceptedCandidates.some(ac => ac.email === candidate.email || ac.linkedin_url === candidate.linkedin_url)) {
+                            return null;
+                        }
+
+                        onLog(`[MATCH] ✅ ${name} aceptado (Score: ${analysis.symmetry_score}) [${acceptedCandidates.length + 1}/${maxResults}]`);
+                        return candidate;
+                    });
+
+                    const batchResults = (await Promise.all(batchPromises)).filter(c => c !== null) as Candidate[];
+
+                    // Add newly accepted candidates to dedup sets
+                    batchResults.forEach(c => {
+                        if (c.email) existingEmails.add(c.email.toLowerCase().trim());
+                        if (c.linkedin_url) {
+                            const normalizedUrl = c.linkedin_url
+                                .toLowerCase()
+                                .replace(/^https?:\/\//i, '')
+                                .replace(/^www\./, '')
+                                .replace(/\/$/, '')
+                                .trim();
+                            existingLinkedin.add(normalizedUrl);
+                        }
+                    });
+
+                    acceptedCandidates.push(...batchResults);
+
+                    // Check if we've reached the goal
+                    if (acceptedCandidates.length >= maxResults) {
+                        onLog(`[PROGRESS] 📊 ${acceptedCandidates.length}/${maxResults} candidatos encontrados - Meta alcanzada`);
+                        break;
+                    }
+
+                    onLog(`[PROGRESS] 📊 ${acceptedCandidates.length}/${maxResults} candidatos encontrados`);
+
+                    // Add small delay between batches
+                    if (i + BATCH_SIZE < profiles.length && acceptedCandidates.length < maxResults) {
+                        await new Promise(r => setTimeout(r, 500));
+                    }
                 }
-            });
 
-            acceptedCandidates.push(...batchResults);
+                // If we got enough candidates, break the retry loop
+                if (acceptedCandidates.length >= maxResults) {
+                    onLog(`[SUCCESS] 🎉 Meta alcanzada en intento ${attempt}`);
+                    break;
+                }
 
-            // Early stopping: if we have enough candidates, stop processing
-            if (acceptedCandidates.length >= maxResults) {
-                onLog(`[EARLY STOP] 🎯 ${maxResults} candidatos encontrados después de procesar ${processedCount}/${profiles.length} perfiles`);
-                break;
+            } catch (error: any) {
+                onLog(`[LINKEDIN] ⚠️ Error en intento ${attempt}: ${error.message}`);
             }
 
-            // Add small delay between batches to avoid rate limits
-            if (i + BATCH_SIZE < profiles.length && acceptedCandidates.length < maxResults) {
+            // Small delay before next retry
+            if (attempt < MAX_RETRIES && acceptedCandidates.length < maxResults) {
                 await new Promise(r => setTimeout(r, 500));
             }
         }
 
+        if (acceptedCandidates.length === 0) {
+            onLog(`[WARNING] ⚠️ No se encontraron candidatos nuevos después de ${attempt} intentos`);
+        } else if (acceptedCandidates.length < maxResults) {
+            onLog(`[INFO] ℹ️ Se encontraron ${acceptedCandidates.length}/${maxResults} candidatos (menos que el objetivo)`);
+        }
+
         // Return exactly maxResults (or fewer if couldn't find enough)
         const finalCandidates = acceptedCandidates.slice(0, maxResults);
-        onLog(`[LINKEDIN] ✅ ${finalCandidates.length} candidatos seleccionados de ${processedCount} procesados`);
+        onLog(`[LINKEDIN] ✅ ${finalCandidates.length} candidatos seleccionados`);
 
         return finalCandidates;
     }
