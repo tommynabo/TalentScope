@@ -350,23 +350,31 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                 return candidateDate === today;
               });
 
-              const headers = ['NOMBRE', 'ROL', 'EMPRESA', 'EMAIL', 'LINKEDIN', 'SCORE', 'ICEBREAKER', 'MENSAJE', 'ANÁLISIS'];
+              const headers = ['FIRST_NAME', 'LAST_NAME', 'ROL', 'EMPRESA', 'EMAIL', 'LINKEDIN', 'SCORE', 'ICEBREAKER', 'FOLLOWUP', 'MENSAJE', 'ANÁLISIS'];
               const csvContent = [
                 headers.join(','),
                 ...todaysCandidates.map(c => {
                   const analysis = parseAnalysis(c.ai_analysis);
                   const icebreaker = analysis?.icebreaker || '';
+                  const followup = analysis?.followup_message || '';
                   const message = analysis?.outreach_message || '';
                   const summary = analysis?.summary || '';
 
+                  // Split full name into first and last name
+                  const nameParts = c.full_name.split(' ');
+                  const firstName = nameParts[0] || '';
+                  const lastName = nameParts.slice(1).join(' ') || '';
+
                   return [
-                    `"${c.full_name}"`,
+                    `"${firstName}"`,
+                    `"${lastName}"`,
                     `"${c.job_title}"`,
                     `"${c.current_company}"`,
                     `"${c.email || ''}"`,
                     `"${c.linkedin_url || ''}"`,
                     `"${c.symmetry_score || 0}"`,
                     `"${icebreaker.replace(/"/g, '""')}"`, // Escape quotes
+                    `"${followup.replace(/"/g, '""')}"`, // Escape quotes
                     `"${message.replace(/"/g, '""')}"`, // Escape quotes
                     `"${summary.replace(/"/g, '""')}"`
                   ].join(',');
