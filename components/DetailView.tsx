@@ -663,24 +663,48 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                       </div>
                     </div>
 
-                    <div className="col-span-1 md:col-span-2 mt-4 p-4 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30">
-                      <div className="flex items-center gap-2 mb-2 text-purple-400 font-semibold text-sm">
-                        <Send className="h-4 w-4" />
-                        MENSAJE PERSONALIZADO (DM)
+                    <div className="col-span-1 md:col-span-2 mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* ICEBREAKER Column */}
+                      <div className="p-4 rounded-xl bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/30">
+                        <div className="flex items-center gap-2 mb-2 text-blue-400 font-semibold text-sm">
+                          <Send className="h-4 w-4" />
+                          ICEBREAKER (LinkedIn)
+                        </div>
+                        <p className="text-slate-200 text-sm leading-relaxed italic mb-3">
+                          "{analysis.icebreaker || `Hola ${selectedCandidate.full_name}, me encantaría conectar contigo.`}"
+                        </p>
+                        <button
+                          onClick={() => {
+                            const msg = analysis.icebreaker || `Hola ${selectedCandidate.full_name}, me encantaría conectar contigo.`;
+                            navigator.clipboard.writeText(msg);
+                            setToast({ show: true, message: '✅ ICEBREAKER copiado!' });
+                          }}
+                          className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium transition-all"
+                        >
+                          📋 Copiar
+                        </button>
                       </div>
-                      <p className="text-slate-200 text-sm leading-relaxed italic">
-                        "{analysis.outreach_message || `¡Hola ${selectedCandidate.full_name}! Tenemos roles perfectos para ti.`}"
-                      </p>
-                      <button
-                        onClick={() => {
-                          const msg = analysis.outreach_message || `¡Hola ${selectedCandidate.full_name}! Tenemos roles perfectos para ti.`;
-                          navigator.clipboard.writeText(msg);
-                          setToast({ show: true, message: '✅ Mensaje copiado al portapapeles!' });
-                        }}
-                        className="mt-3 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-medium transition-all"
-                      >
-                        📋 Copiar Mensaje
-                      </button>
+
+                      {/* FOLLOWUP Column */}
+                      <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/30">
+                        <div className="flex items-center gap-2 mb-2 text-emerald-400 font-semibold text-sm">
+                          <MessageSquare className="h-4 w-4" />
+                          FOLLOWUP (Completo)
+                        </div>
+                        <p className="text-slate-200 text-sm leading-relaxed italic mb-3">
+                          "{analysis.followup_message || `${selectedCandidate.full_name}, tras revisar tu perfil sabemos que eres el candidato ideal.`}"
+                        </p>
+                        <button
+                          onClick={() => {
+                            const msg = analysis.followup_message || `${selectedCandidate.full_name}, tras revisar tu perfil sabemos que eres el candidato ideal.`;
+                            navigator.clipboard.writeText(msg);
+                            setToast({ show: true, message: '✅ FOLLOWUP copiado!' });
+                          }}
+                          className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition-all"
+                        >
+                          📋 Copiar
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
