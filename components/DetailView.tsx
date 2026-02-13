@@ -341,11 +341,22 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
           <h3 className="font-semibold text-sm text-white">Pipeline de Candidatos ({candidates.length})</h3>
           <button
             onClick={() => {
-              const headers = ['Name', 'Role', 'Company', 'Email', 'LinkedIn', 'Score', 'Message', 'Analysis'];
+              // Get today's date in YYYY-MM-DD format
+              const today = new Date().toISOString().split('T')[0];
+              
+              // Filter candidates to only include those from today
+              const todaysCandidates = sortedCandidates.filter(c => {
+                const candidateDate = c.created_at?.split('T')[0];
+                return candidateDate === today;
+              });
+
+              const headers = ['Name', 'Role', 'Company', 'Email', 'LinkedIn', 'Score', 'ICEBREAKER', 'FOLLOWUP', 'Message', 'Analysis'];
               const csvContent = [
                 headers.join(','),
-                ...sortedCandidates.map(c => {
+                ...todaysCandidates.map(c => {
                   const analysis = parseAnalysis(c.ai_analysis);
+                  const icebreaker = analysis?.icebreaker || '';
+                  const followup = analysis?.followup_message || '';
                   const message = analysis?.outreach_message || '';
                   const summary = analysis?.summary || '';
 
@@ -356,6 +367,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                     `"${c.email || ''}"`,
                     `"${c.linkedin_url || ''}"`,
                     `"${c.symmetry_score || 0}"`,
+                    `"${icebreaker.replace(/"/g, '""')}"`, // Escape quotes
+                    `"${followup.replace(/"/g, '""')}"`, // Escape quotes
                     `"${message.replace(/"/g, '""')}"`, // Escape quotes
                     `"${summary.replace(/"/g, '""')}"`
                   ].join(',');
@@ -367,11 +380,20 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
               if (link.download !== undefined) {
                 const url = URL.createObjectURL(blob);
                 link.setAttribute('href', url);
-                link.setAttribute('download', `talentscope_export_${campaign.id}.csv`);
+                link.setAttribute('download', `talentscope_export_${campaign.id}_${today}.csv`);
                 link.style.visibility = 'hidden';
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
+                
+                // Show feedback
+                const count = todaysCandidates.length;
+                setToast({ 
+                  show: true, 
+                  message: count > 0 
+                    ? `✅ CSV exportado con ${count} prospectos de hoy`
+                    : `⚠️ No hay prospectos para exportar de hoy`
+                });
               }
             }}
             className="px-2.5 py-1 text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors"

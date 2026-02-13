@@ -380,6 +380,8 @@ export class SearchEngine {
             sales_angle: "Genérico",
             bottleneck: "No detectado",
             outreach_message: `¡Hola ${context.name}! Nos encantaría conectar contigo. https://symmetry.club/roles/product-engineer`,
+            icebreaker: `Hola ${context.name}, me encantaría conectar. Tenemos roles top para ti.`,
+            followup_message: `Vimos tu perfil y creemos que eres exactamente lo que buscamos. ¿Podríamos charlar?`,
             skills: [],
             symmetry_score: 75 // Default decent score
         };
@@ -400,22 +402,30 @@ export class SearchEngine {
                     messages: [
                         {
                             role: 'system',
-                            content: `Eres un experto reclutador. Analiza el perfil y devuelve UNICAMENTE JSON:
+                            content: `Eres un experto reclutador specializado en talento tech. Analiza el perfil y devuelve UNICAMENTE JSON con este formato:
                             {
-                                "psychological_profile": "Perfil en 1 frase",
+                                "psychological_profile": "Perfil psicológico en 1 frase",
                                 "business_moment": "Momento actual en 1 frase",
                                 "sales_angle": "Mejor acercamiento en 1 frase",
                                 "bottleneck": "Principal dolor o cuello de botella",
                                 "summary": "Resumen ejecutivo en 1 frase",
-                                "outreach_message": "Mensaje personalizado (<280 chars) directo y creativo",
+                                "outreach_message": "Mensaje personalizado (<280 chars) directo y creativo para primer contacto",
+                                "icebreaker": "ICEBREAKER: Mensaje de invitación LINKEDIN máximo 200 caracteres, super personalizado, menciona algo específico del perfil",
+                                "followup_message": "FOLLOWUP: Mensaje más completo (300-400 chars) para enviar después de aceptar la conexión. Profesional y genuino",
                                 "skills": ["Habilidad 1", "Habilidad 2"],
-                                "symmetry_score": 75  // 0-100. IMPORTANT: If snippet implies user is > ${context.maxAge || 40} years old (e.g. 15+ years exp), PENALIZE SCORE heavily (<50).
-                            }`
+                                "symmetry_score": 75
+                            }
+                            
+                            IMPORTANTE:
+                            - ICEBREAKER debe ser casual, corto (máx 200 chars), pedir conexión en LinkedIn
+                            - FOLLOWUP debe ser más profesional y completo, describe oportunidad sin vender directamente
+                            - Ambos mensajes deben ser super personalizados basados en el perfil
+                            - If snippet implies user is > ${context.maxAge || 40} years old, PENALIZE SCORE (<50)`
                         },
                         { role: 'user', content: JSON.stringify(context) }
                     ],
                     temperature: 0.7,
-                    max_tokens: 250
+                    max_tokens: 350
                 }),
                 signal: controller.signal
             });
@@ -442,6 +452,8 @@ export class SearchEngine {
                 sales_angle: "Roles de alto impacto",
                 bottleneck: "Oportunidades personalizadas",
                 outreach_message: `¡Hola ${context.name}! Tenemos roles de alto nivel. https://symmetry.club/roles/product-engineer`,
+                icebreaker: `Hola ${context.name}, me encantaría conectar contigo. Tenemos roles exclusivos para profesionales como vos.`,
+                followup_message: `${context.name}, tras revisar tu perfil sabemos que eres el perfil ideal. ¿Podríamos agendar una llamada?`,
                 skills: context.skills || ['N/A'],
                 symmetry_score: 65
             };
