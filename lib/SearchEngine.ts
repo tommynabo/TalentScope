@@ -1,5 +1,6 @@
 
-import { Candidate } from '../types/database';
+import { Candidate, SearchFilterCriteria } from '../types/database';
+import { calculateFlutterDeveloperScore } from './scoring';
 import { deduplicationService } from './deduplication';
 import { SearchService } from './search';
 
@@ -21,7 +22,12 @@ export class SearchEngine {
         query: string,
         source: 'linkedin',
         maxResults: number,
-        options: { language: string; maxAge: number },
+        options: { 
+            language: string; 
+            maxAge: number;
+            filters?: SearchFilterCriteria;
+            scoreThreshold?: number;
+        },
         onLog: LogCallback,
         onComplete: (candidates: Candidate[]) => void
     ) {
@@ -32,7 +38,7 @@ export class SearchEngine {
         // OPTIMIZED: Use fast fallback for demo/production without API keys
         if (!this.apiKey || !this.openaiKey) {
             onLog("🚀 Iniciando búsqueda en modo RÁPIDO (Sin APIs externas)...");
-            this.startFastSearch(query, maxResults, onLog, onComplete);
+            this.startFastSearch(query, maxResults, options, onLog, onComplete);
             return;
         }
 
@@ -65,10 +71,15 @@ export class SearchEngine {
     private async startFastSearch(
         query: string,
         maxResults: number,
+        options: { 
+            language: string; 
+            maxAge: number;
+            filters?: SearchFilterCriteria;
+            scoreThreshold?: number;
+        },
         onLog: LogCallback,
         onComplete: (candidates: Candidate[]) => void
     ) {
-        // ... (Fast search implementation remains similar, potentially simulate filters)
         try {
             onLog(`[DEDUP] 🔍 Cargando base de datos para evitar duplicados...`);
             const { existingEmails, existingLinkedin } = await deduplicationService.fetchExistingCandidates();
@@ -95,8 +106,28 @@ export class SearchEngine {
                 uniqueCandidates.map(c => this.enrichCandidateWithAnalysis(c))
             );
 
-            onLog(`[FIN] ✅ ${analyzedCandidates.length} candidatos procesados y listos.`);
-            onComplete(analyzedCandidates);
+            // NEW: Apply Flutter Developer scoring if filter criteria provided
+            let scoredCandidates = analyzedCandidates;
+            if (options.filters) {
+                onLog(`[SCORING] 📊 Aplicando filtro Flutter Developer con 11-punto scoring system...`);
+                
+                scoredCandidates = analyzedCandidates
+                    .map(candidate => {
+                        const scoring = calculateFlutterDeveloperScore(candidate, options.filters!);
+                        return {
+                            ...candidate,
+                            symmetry_score: scoring.breakdown.normalized,
+                            score_breakdown: scoring.breakdown
+                        };
+                    })
+                    .filter(c => c.symmetry_score >= (options.scoreThreshold || 70))
+                    .sort((a, b) => (b.symmetry_score || 0) - (a.symmetry_score || 0));
+                
+                onLog(`[SCORING] ✅ ${scoredCandidates.length} candidatos cumplen threshold de ${options.scoreThreshold || 70}/100`);
+            }
+
+            onLog(`[FIN] ✅ ${scoredCandidates.length} candidatos procesados y listos.`);
+            onComplete(scoredCandidates.slice(0, maxResults));
 
         } catch (error: any) {
             onLog(`[ERROR] ❌ ${error.message}`);

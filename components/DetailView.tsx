@@ -3,6 +3,7 @@ import { Candidate, Campaign } from '../types/database';
 import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Search, Play, Loader2, ExternalLink, Terminal, ChevronDown, ChevronUp, X, Target, TrendingUp, AlertTriangle } from 'lucide-react';
 import { searchEngine } from '../lib/SearchEngine';
 import { CampaignService, CandidateService } from '../lib/services';
+import ScoreBreakdownCard from './ScoreBreakdownCard';
 import Scheduler from './Scheduler';
 import Toast from './Toast';
 
@@ -150,7 +151,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
         language: campaign.settings?.language || 'Spanish',
         maxAge: campaign.settings?.max_age || 30,
         platform: campaign.platform,
-        factors: campaign.settings?.factors || {}
+        filters: campaign.settings?.search_filters,
+        scoreThreshold: campaign.settings?.score_threshold
       };
 
       await searchEngine.startSearch(
@@ -561,6 +563,17 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                   </div>
                 </div>
               </div>
+
+              {/* NEW: Score Breakdown Card */}
+              {selectedCandidate.score_breakdown && (
+                <div className="mb-4">
+                  <ScoreBreakdownCard
+                    score={selectedCandidate.symmetry_score || 0}
+                    breakdown={selectedCandidate.score_breakdown}
+                    candidateName={selectedCandidate.full_name}
+                  />
+                </div>
+              )}
 
               {(() => {
                 const analysis = parseAnalysis(selectedCandidate.ai_analysis);
