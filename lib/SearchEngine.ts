@@ -14,9 +14,14 @@ export class SearchEngine {
     private isRunning = false;
     private apiKey = '';
     private openaiKey = '';
+    private abortController: AbortController | null = null;
 
     public stop() {
         this.isRunning = false;
+        if (this.abortController) {
+            this.abortController.abort();
+            this.abortController = null;
+        }
     }
 
     public async startSearch(
@@ -33,6 +38,7 @@ export class SearchEngine {
         onComplete: (candidates: Candidate[]) => void
     ) {
         this.isRunning = true;
+        this.abortController = new AbortController();
         this.apiKey = import.meta.env.VITE_APIFY_API_KEY || '';
         this.openaiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
 
@@ -241,18 +247,19 @@ export class SearchEngine {
     }
 
     private async callApifyActor(actorId: string, input: any, onLog: LogCallback): Promise<any[]> {
-        // ... (remains unchanged)
         if (!this.apiKey) {
             throw new Error("Falta API Key de Apify configuration");
         }
 
+        const signal = this.abortController?.signal;
         onLog(`[APIFY] 🚀 Ejecutando actor ${actorId}...`);
 
         // START
         const startRes = await fetch(`https://api.apify.com/v2/acts/${actorId}/runs?token=${this.apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(input)
+            body: JSON.stringify(input),
+            signal
         });
 
         if (!startRes.ok) {
@@ -264,17 +271,18 @@ export class SearchEngine {
         const runId = runData.data.id;
         const datasetId = runData.data.defaultDatasetId;
 
-        // OPTIMIZED POLL: Reduced from 60 checks (5 min) to 30 checks (2.5 min)
+        // POLL with timeout: 30 checks x 5s = 2.5 min max
         let finished = false;
         let checks = 0;
         let lastStatus = '';
 
         while (!finished && this.isRunning && checks < 30) {
             await new Promise(r => setTimeout(r, 5000));
+            if (!this.isRunning) break; // Check again after sleep
             checks++;
 
             try {
-                const statusRes = await fetch(`https://api.apify.com/v2/acts/${actorId}/runs/${runId}?token=${this.apiKey}`);
+                const statusRes = await fetch(`https://api.apify.com/v2/acts/${actorId}/runs/${runId}?token=${this.apiKey}`, { signal });
                 const statusData = await statusRes.json();
                 const status = statusData.data.status;
 
@@ -284,27 +292,37 @@ export class SearchEngine {
                 }
 
                 if (status === 'SUCCEEDED') finished = true;
-                else if (status === 'FAILED' || status === 'ABORTED') throw new Error(`Actor falló: ${status}`);
+                else if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') throw new Error(`Actor falló: ${status}`);
             } catch (err: any) {
+                if (err.name === 'AbortError') {
+                    onLog(`[APIFY] ⏹️ Búsqueda cancelada por el usuario`);
+                    return [];
+                }
                 onLog(`[APIFY] ⚠️ Error checking status: ${err.message}`);
             }
         }
 
         if (!this.isRunning) {
-            onLog(`[APIFY] ⏸️ Búsqueda cancelada por el usuario`);
+            onLog(`[APIFY] ⏹️ Búsqueda cancelada por el usuario`);
+            // Try to abort the Apify run
+            try {
+                await fetch(`https://api.apify.com/v2/acts/${actorId}/runs/${runId}/abort?token=${this.apiKey}`, { method: 'POST' });
+                onLog(`[APIFY] 🛑 Actor abortado en Apify`);
+            } catch (e) { /* ignore */ }
             return [];
         }
 
         if (!finished) {
-            onLog(`[APIFY] ⚠️ Timeout: Usando resultados parciales`);
-            // Continue anyway with partial results
+            onLog(`[APIFY] ⚠️ Timeout tras ${checks * 5}s: Intentando obtener resultados parciales...`);
+        }
         }
 
         // FETCH ITEMS
         try {
-            const itemsRes = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${this.apiKey}`);
+            const itemsRes = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${this.apiKey}`, { signal });
             return await itemsRes.json();
         } catch (err: any) {
+            if (err.name === 'AbortError') return [];
             onLog(`[APIFY] ❌ Error fetching results: ${err.message}`);
             return [];
         }

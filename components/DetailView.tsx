@@ -9,6 +9,7 @@ import Scheduler from './Scheduler';
 import Toast from './Toast';
 import { saveSearchSnapshot, loadSearchSnapshot, clearSearchSnapshot } from '../lib/useSessionState';
 import { TabGuard } from '../lib/TabGuard';
+import { Square } from 'lucide-react';
 
 type SortField = 'added_at' | 'symmetry_score' | 'full_name';
 type SortDirection = 'asc' | 'desc';
@@ -258,6 +259,14 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
     }
   };
 
+  const handleStopSearch = () => {
+    searchEngine.stop();
+    setSearching(false);
+    setLogs(prev => [...prev, '⏹️ Búsqueda detenida por el usuario.']);
+    setToast({ show: true, message: 'Búsqueda detenida.' });
+    TabGuard.setSearchActive(false);
+  };
+
   const handleScheduleChange = async (enabled: boolean, time: string, leads: number) => {
     // console.log("Horario actualizado:", { enabled, time, leads });
     // TODO: Save to DB
@@ -306,13 +315,13 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
             />
           </div>
           <button
-            onClick={handleRunSearch}
-            disabled={searching}
-            className="px-2.5 lg:px-5 py-1 lg:py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-lg text-xs shadow-lg shadow-cyan-900/20 transition-all flex items-center gap-1 disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
+            onClick={searching ? handleStopSearch : handleRunSearch}
+            disabled={false}
+            className={`px-2.5 lg:px-5 py-1 lg:py-2 ${searching ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500' : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500'} text-white rounded-lg text-xs shadow-lg ${searching ? 'shadow-red-900/20' : 'shadow-cyan-900/20'} transition-all flex items-center gap-1 flex-shrink-0 whitespace-nowrap`}
           >
-            {searching ? <Loader2 className="h-3 lg:h-4 w-3 lg:w-4 animate-spin" /> : <Play className="h-3 lg:h-4 w-3 lg:w-4" />}
-            <span className="hidden sm:inline text-xs">{searching ? 'Buscando...' : 'Buscar'}</span>
-            <span className="sm:hidden">{searching ? '...' : '🔍'}</span>
+            {searching ? <Square className="h-3 lg:h-4 w-3 lg:w-4" /> : <Play className="h-3 lg:h-4 w-3 lg:w-4" />}
+            <span className="hidden sm:inline text-xs">{searching ? 'Detener' : 'Buscar'}</span>
+            <span className="sm:hidden">{searching ? '⏹' : '🔍'}</span>
           </button>
         </div>
       </div>
