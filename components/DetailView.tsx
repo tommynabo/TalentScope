@@ -7,6 +7,8 @@ import { normalizeLinkedInUrl } from '../lib/normalization';
 import ScoreBreakdownCard from './ScoreBreakdownCard';
 import Scheduler from './Scheduler';
 import Toast from './Toast';
+import { saveSearchSnapshot, loadSearchSnapshot, clearSearchSnapshot } from '../lib/useSessionState';
+import { TabGuard } from '../lib/TabGuard';
 
 type SortField = 'added_at' | 'symmetry_score' | 'full_name';
 type SortDirection = 'asc' | 'desc';
@@ -18,28 +20,52 @@ interface DetailViewProps {
 }
 
 const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBack }) => {
+  // ─── Restore snapshot if available (survives page reloads) ─────────
+  const snapshot = loadSearchSnapshot(initialCampaign.id);
+
   const [campaign, setCampaign] = useState(initialCampaign);
   const [candidates, setCandidates] = useState<CandidateWithMeta[]>([]);
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [leadCount, setLeadCount] = useState(10);
-  const [logs, setLogs] = useState<string[]>([]);
-  const [showLogs, setShowLogs] = useState(false);
+  const [leadCount, setLeadCount] = useState(snapshot?.leadCount ?? 10);
+  const [logs, setLogs] = useState<string[]>(snapshot?.logs ?? []);
+  const [showLogs, setShowLogs] = useState(snapshot?.logs ? snapshot.logs.length > 0 : false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [toast, setToast] = useState({ show: false, message: '' });
   const [sortConfig, setSortConfig] = useState<{ field: SortField; direction: SortDirection }>({ field: 'added_at', direction: 'desc' });
   const logsEndRef = useRef<HTMLDivElement>(null);
 
+  // Show recovery toast if we restored from a snapshot
+  useEffect(() => {
+    if (snapshot && snapshot.logs.length > 0) {
+      setToast({ show: true, message: '🔄 Estado de búsqueda anterior restaurado.' });
+      // Clear the snapshot after restoring
+      clearSearchSnapshot(initialCampaign.id);
+    }
+  }, []); // Only on mount
+
+  // ─── Persist search state to sessionStorage periodically ──────────
+  useEffect(() => {
+    // Save snapshot every time logs or candidates change during search
+    if (logs.length > 0 || candidates.length > 0) {
+      saveSearchSnapshot(initialCampaign.id, {
+        candidates: [], // Don't duplicate candidate data, they're in DB
+        logs,
+        searching,
+        leadCount
+      });
+    }
+  }, [logs, searching, leadCount, initialCampaign.id]);
+
+  // Mark search as active/inactive for TabGuard beforeunload protection
+  useEffect(() => {
+    TabGuard.setSearchActive(searching);
+    return () => TabGuard.setSearchActive(false);
+  }, [searching]);
+
   // Prevent tab from being discarded/frozen while search is running
   useEffect(() => {
     if (!searching) return;
-
-    // Warn user before leaving/closing tab
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      return (e.returnValue = 'Búsqueda en progreso. ¿Seguro que quieres salir?');
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
 
     // Web Lock API: prevents browser from discarding the tab in background
     let lockResolver: (() => void) | null = null;
@@ -58,7 +84,6 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
     }, 5000);
 
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
       if (lockResolver) lockResolver();
       clearInterval(keepAlive);
     };

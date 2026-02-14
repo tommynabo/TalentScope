@@ -14,6 +14,7 @@ import SettingsView from './components/SettingsView';
 import { User, Campaign } from './types';
 import { supabase } from './lib/supabase';
 import { CampaignService } from './lib/services'; // Ensure this import exists
+import { TabGuard } from './lib/TabGuard';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -22,19 +23,12 @@ const App: React.FC = () => {
   const [showToast, setShowToast] = useState<boolean>(false);
   const navigate = useNavigate();
 
-  // Prevent page reload when tab loses/regains focus
+  // ─── TabGuard: Sistema anti-recarga automática ─────────────────────
+  // Previene recargas cuando cambias de pestaña/ventana
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      // Don't do anything - let the app persist its state
-      if (document.hidden) {
-        // Tab hidden
-      } else {
-        // Tab visible again - don't reload
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    const guard = new TabGuard();
+    guard.activate();
+    return () => guard.deactivate();
   }, []);
 
   useEffect(() => {
