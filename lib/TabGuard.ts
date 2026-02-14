@@ -83,6 +83,12 @@ export class TabGuard {
    * pero bloquea recargas programáticas automáticas.
    */
   private interceptReload() {
+    // Skip if already intercepted by early-boot script in index.html
+    if ((window as any).__tabguard_reload_intercepted) {
+      console.log('[TabGuard] reload ya interceptado por script temprano, omitiendo');
+      return;
+    }
+
     const self = this;
     const originalReload = this.originalLocationReload;
 
@@ -102,19 +108,22 @@ export class TabGuard {
     };
     window.addEventListener('keydown', handleKeyDown, true);
 
-    // Override location.reload
-    Object.defineProperty(location, 'reload', {
-      configurable: true,
-      value: function(...args: any[]) {
-        if (userInitiated) {
-          console.log('[TabGuard] Recarga manual del usuario permitida');
-          return originalReload.apply(location, args);
+    // Override location.reload - wrapped in try-catch for safety
+    try {
+      Object.defineProperty(location, 'reload', {
+        configurable: true,
+        value: function(...args: any[]) {
+          if (userInitiated) {
+            console.log('[TabGuard] Recarga manual del usuario permitida');
+            return originalReload.apply(location, args);
+          }
+          console.warn('[TabGuard] ⛔ Recarga automática bloqueada');
+          self.reloadBlocked = true;
         }
-        console.warn('[TabGuard] ⛔ Recarga automática bloqueada');
-        self.reloadBlocked = true;
-        // Don't actually reload - just log it
-      }
-    });
+      });
+    } catch (e) {
+      console.warn('[TabGuard] No se pudo redefinir location.reload (ya protegido)');
+    }
   }
 
   /**
