@@ -315,7 +315,6 @@ export class SearchEngine {
         if (!finished) {
             onLog(`[APIFY] ⚠️ Timeout tras ${checks * 5}s: Intentando obtener resultados parciales...`);
         }
-        }
 
         // FETCH ITEMS
         try {
