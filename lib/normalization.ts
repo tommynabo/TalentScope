@@ -18,7 +18,8 @@
  */
 
 // Known LinkedIn regional/special subdomains that must be replaced with 'www'
-const LINKEDIN_SUBDOMAINS_REGEX = /^(https?:\/\/)?(([a-z]{2,3})\.)?linkedin\.com/i;
+// Matches: es, fr, de (2-letter country), m (mobile), www, or no subdomain
+const LINKEDIN_SUBDOMAINS_REGEX = /^(https?:\/\/)?(([a-z]{1,3})\.)?linkedin\.com/i;
 
 /**
  * Normalizes a LinkedIn profile URL to the canonical global format.
@@ -65,6 +66,11 @@ export function normalizeLinkedInUrl(url: string | null | undefined): string {
     // If it's a company page or other LinkedIn URL, return as-is (still normalized domain)
     return cleaned;
   }
+
+  // 8. Remove language suffix after username (e.g., /in/username/en, /in/username/es)
+  //    LinkedIn appends 2-letter language codes as a trailing path segment
+  //    Must be done AFTER trailing slash removal
+  cleaned = cleaned.replace(/(\/in\/[\w-]+)\/[a-z]{2}$/i, '$1');
 
   return cleaned;
 }

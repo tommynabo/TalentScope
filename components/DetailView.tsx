@@ -351,7 +351,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                 return candidateDate === today;
               });
 
-              const headers = ['FIRST_NAME', 'LAST_NAME', 'ROL', 'EMPRESA', 'EMAIL', 'LINKEDIN', 'SCORE', 'ICEBREAKER', 'FOLLOWUP', 'MENSAJE', 'ANÁLISIS'];
+              const headers = ['FIRST_NAME', 'LAST_NAME', 'ROL', 'EMPRESA', 'EMAIL', 'LINKEDIN', 'SCORE', 'ICEBREAKER', 'FOLLOWUP', 'MENSAJE', 'ANALISIS'];
               const csvContent = [
                 headers.join(','),
                 ...todaysCandidates.map(c => {
@@ -382,7 +382,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                 })
               ].join('\n');
 
-              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
               const link = document.createElement('a');
               if (link.download !== undefined) {
                 const url = URL.createObjectURL(blob);

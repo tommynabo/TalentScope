@@ -87,10 +87,10 @@ export class SearchEngine {
             onLog(`[DEDUP] ✅ ${existingEmails.size} emails y ${existingLinkedin.size} perfiles conocidos ignorados.`);
 
             const acceptedCandidates: Candidate[] = [];
-            const MAX_RETRIES = 5;
+            const MAX_RETRIES = 10;
             let attempt = 0;
 
-            // RETRY LOOP: Continue searching until we have enough candidates or hit max retries
+            // PERSISTENT RETRY LOOP: Continue searching until we have enough candidates
             while (acceptedCandidates.length < maxResults && attempt < MAX_RETRIES && this.isRunning) {
                 attempt++;
                 const currentQuery = this.getQueryVariation(query, attempt);
@@ -182,13 +182,23 @@ export class SearchEngine {
     }
 
     private getQueryVariation(baseQuery: string, attempt: number): string {
-        // Generate query variations to find different candidates
+        // Generate diverse query variations to maximize unique candidates across retries
         const variations = [
-            baseQuery, // Original
-            `${baseQuery} senior`, // Add seniority
-            `${baseQuery} developer`, // Add role
+            baseQuery, // Original query
+            `${baseQuery} senior`, // Seniority
+            `${baseQuery} developer`, // Generic role
             `${baseQuery} engineer`, // Alternative role
-            `${baseQuery} lead` // Leadership role
+            `${baseQuery} lead`, // Leadership
+            `${baseQuery} architect`, // Architecture roles
+            `${baseQuery} freelance`, // Freelancers
+            `${baseQuery} startup`, // Startup ecosystem
+            `${baseQuery} consultant`, // Consultants
+            `${baseQuery} head`, // Head of department
+            `${baseQuery} CTO`, // C-level
+            `${baseQuery} tech lead`, // Tech lead
+            `${baseQuery} founder`, // Founders
+            `${baseQuery} manager`, // Engineering managers
+            `${baseQuery} principal` // Principal engineers
         ];
 
         return variations[Math.min(attempt - 1, variations.length - 1)];
@@ -295,7 +305,7 @@ export class SearchEngine {
         existingLinkedin: Set<string>
     ): Promise<Candidate[]> {
         const acceptedCandidates: Candidate[] = [];
-        const MAX_RETRIES = 3;
+        const MAX_RETRIES = 10;
         let attempt = 0;
 
         // RETRY LOOP: Continue searching until we have enough candidates or hit max retries
@@ -318,8 +328,8 @@ export class SearchEngine {
 
                 const searchInput = {
                     queries: `${siteOperator} ${currentQuery} ${langKeywords}`,
-                    maxPagesPerQuery: 2,
-                    resultsPerPage: Math.ceil(maxResults * 4),
+                    maxPagesPerQuery: 3,
+                    resultsPerPage: Math.ceil(maxResults * 6),
                     languageCode: options.language === 'Spanish' ? 'es' : 'en',
                     countryCode: options.language === 'Spanish' ? 'es' : 'us',
                 };
