@@ -77,49 +77,16 @@
   <!-- TabGuard: Keep-alive marker for preventing tab discard -->
   <div id="tabguard-keepalive" style="display:none" data-ping="0"></div>
   
-  <!-- Early-boot anti-reload protection (runs before React) -->
+  <!-- TabGuard: prevent browser from discarding tab -->
   <script>
     (function() {
       'use strict';
-      
-      // 1. Intercept Vite HMR full-reload before React even loads
-      //    Vite injects /@vite/client which can call location.reload()
-      var _origReload = location.reload;
-      var _userReload = false;
-      
-      document.addEventListener('keydown', function(e) {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'r') _userReload = true;
-        if (e.key === 'F5') _userReload = true;
-        setTimeout(function() { _userReload = false; }, 200);
-      }, true);
-      
-      // Only block programmatic reloads (Vite HMR), allow user-initiated
-      try {
-        Object.defineProperty(location, 'reload', {
-          configurable: true,
-          writable: true,
-          value: function() {
-            if (_userReload) {
-              console.log('[TabGuard:early] User reload allowed');
-              return _origReload.apply(location, arguments);
-            }
-            console.warn('[TabGuard:early] ⛔ Auto-reload blocked (likely Vite HMR)');
-          }
-        });
-        // Mark as intercepted so TabGuard.ts doesn't try again
-        window.__tabguard_reload_intercepted = true;
-      } catch(e) {
-        // Some browsers don't allow redefining location.reload
-      }
-      
-      // 2. Prevent tab discard via Web Lock (early)
       if (navigator.locks) {
         navigator.locks.request('talentscope-early-guard', function() {
-          return new Promise(function() {}); // Never resolves = lock held forever
+          return new Promise(function() {});
         });
       }
-      
-      console.log('[TabGuard:early] ✅ Pre-React protection active');
+      console.log('[TabGuard:early] Tab protection active');
     })();
   </script>
   
