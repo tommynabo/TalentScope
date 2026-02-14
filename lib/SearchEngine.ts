@@ -428,12 +428,13 @@ export class SearchEngine {
 
                 const searchInput = {
                     queries: `${siteOperator} ${currentQuery} ${langKeywords}`,
-                    maxPagesPerQuery: 3,
-                    resultsPerPage: Math.ceil(maxResults * 6),
+                    maxPagesPerQuery: 2,
+                    resultsPerPage: Math.min(Math.ceil(maxResults * 3), 20),
                     languageCode: options.language === 'Spanish' ? 'es' : 'en',
                     countryCode: options.language === 'Spanish' ? 'es' : 'us',
                 };
 
+                onLog(`[LINKEDIN] 📊 Pidiendo ${searchInput.resultsPerPage} resultados x ${searchInput.maxPagesPerQuery} páginas a Google...`);
                 const results = await this.callApifyActor(GOOGLE_SEARCH_SCRAPER, searchInput, onLog);
 
                 let allResults: any[] = [];
