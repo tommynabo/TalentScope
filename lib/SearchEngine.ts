@@ -89,11 +89,12 @@ export class SearchEngine {
             const acceptedCandidates: Candidate[] = [];
             const MAX_RETRIES = 10;
             let attempt = 0;
+            const seenProfileNames: string[] = []; // Track seen names for exclusion
 
             // PERSISTENT RETRY LOOP: Continue searching until we have enough candidates
             while (acceptedCandidates.length < maxResults && attempt < MAX_RETRIES && this.isRunning) {
                 attempt++;
-                const currentQuery = this.getQueryVariation(query, attempt);
+                const currentQuery = this.getQueryVariation(query, attempt, seenProfileNames);
                 onLog(`[SEARCH] 🎯 Intento ${attempt}/${MAX_RETRIES}: Buscando con "${currentQuery}"...`);
 
                 // Use fast search service (returns real-looking data with personalized DMs)
@@ -181,27 +182,43 @@ export class SearchEngine {
         }
     }
 
-    private getQueryVariation(baseQuery: string, attempt: number): string {
-        // Generate diverse query variations to maximize unique candidates across retries
+    private getQueryVariation(baseQuery: string, attempt: number, seenNames: string[]): string {
+        // Extract core keywords from the query for remixing
+        const coreTerms = baseQuery.replace(/[()]/g, ' ').split(/\s+/).filter(w => w.length > 2);
+        const core = coreTerms.slice(0, 3).join(' ');
+
+        // Build exclusion string from previously seen profiles (limit to avoid Google query max length)
+        const exclusions = seenNames
+            .slice(-12)
+            .map(name => {
+                const parts = name.replace(/[^a-zA-ZÀ-ÿ\s]/g, '').trim().split(/\s+/);
+                // Use first name only (shorter, avoids special chars issues)
+                return parts[0] && parts[0].length > 2 ? `-"${parts[0]}"` : '';
+            })
+            .filter(Boolean)
+            .join(' ');
+
+        // Truly diverse query variations that access different parts of Google's index
         const variations = [
-            baseQuery, // Original query
-            `${baseQuery} senior`, // Seniority
-            `${baseQuery} developer`, // Generic role
-            `${baseQuery} engineer`, // Alternative role
-            `${baseQuery} lead`, // Leadership
-            `${baseQuery} architect`, // Architecture roles
-            `${baseQuery} freelance`, // Freelancers
-            `${baseQuery} startup`, // Startup ecosystem
-            `${baseQuery} consultant`, // Consultants
-            `${baseQuery} head`, // Head of department
-            `${baseQuery} CTO`, // C-level
-            `${baseQuery} tech lead`, // Tech lead
-            `${baseQuery} founder`, // Founders
-            `${baseQuery} manager`, // Engineering managers
-            `${baseQuery} principal` // Principal engineers
+            baseQuery, // Original
+            `"${core}" Spain OR España`, // Quoted match + geography
+            `${core} startup OR scaleup`, // Startup ecosystem
+            `${core} freelance OR contractor OR autónomo`, // Freelancers 
+            `${core} remote OR remoto`, // Remote workers
+            `"senior" ${core}`, // Senior prefix (different ranking)
+            `"head" OR "lead" OR "principal" ${coreTerms[0] || core}`, // Leadership
+            `"CTO" OR "VP" OR "director" ${coreTerms[0] || core}`, // C-level
+            `${coreTerms[0] || core} "full stack" OR "backend" OR "frontend"`, // Stack angles
+            `${core} Barcelona OR Madrid OR Valencia OR Sevilla`, // City-specific
         ];
 
-        return variations[Math.min(attempt - 1, variations.length - 1)];
+        const variation = variations[Math.min(attempt - 1, variations.length - 1)];
+        
+        // Append exclusions for attempts > 1
+        if (attempt > 1 && exclusions) {
+            return `${variation} ${exclusions}`;
+        }
+        return variation;
     }
 
     private async enrichCandidateWithAnalysis(candidate: Candidate): Promise<Candidate> {
@@ -307,24 +324,22 @@ export class SearchEngine {
         const acceptedCandidates: Candidate[] = [];
         const MAX_RETRIES = 10;
         let attempt = 0;
+        const seenProfileNames: string[] = []; // Track ALL seen profile names across retries
 
         // RETRY LOOP: Continue searching until we have enough candidates or hit max retries
         while (acceptedCandidates.length < maxResults && attempt < MAX_RETRIES && this.isRunning) {
             attempt++;
-            const currentQuery = this.getQueryVariation(query, attempt);
-            onLog(`[LINKEDIN] 🎯 Intento ${attempt}/${MAX_RETRIES}: Buscando con "${currentQuery}"...`);
+            const currentQuery = this.getQueryVariation(query, attempt, seenProfileNames);
+            onLog(`[LINKEDIN] 🎯 Intento ${attempt}/${MAX_RETRIES}: Buscando con query diversificada...`);
+            onLog(`[LINKEDIN] 🔎 Query: ${currentQuery.substring(0, 120)}${currentQuery.length > 120 ? '...' : ''}`);
 
             try {
-                // 1. Google Search for LinkedIn Profiles (site:linkedin.com/in)
-                let siteOperator = 'site:linkedin.com/in';
-                if (options.language === 'Spanish') {
-                    siteOperator = 'site:es.linkedin.com/in';
-                } else if (options.language === 'Portuguese') {
-                    siteOperator = 'site:br.linkedin.com/in';
-                }
+                // Use global site:linkedin.com/in - regional subdomains miss many profiles
+                // Geographic targeting is handled by countryCode + language keywords
+                const siteOperator = 'site:linkedin.com/in';
 
                 // Add language keywords
-                const langKeywords = options.language === 'Spanish' ? '(Español OR Spanish)' : '';
+                const langKeywords = options.language === 'Spanish' ? '(España OR Spanish OR Español)' : '';
 
                 const searchInput = {
                     queries: `${siteOperator} ${currentQuery} ${langKeywords}`,
@@ -344,6 +359,14 @@ export class SearchEngine {
                 const profiles = allResults
                     .filter((r: any) => r.url && r.url.includes('linkedin.com/in/'))
                     .slice(0, maxResults * 4);
+
+                // Track ALL profile names from this attempt (for future exclusions)
+                profiles.forEach((p: any) => {
+                    const name = (p.title || '').split('-')[0].replace(/[^a-zA-ZÀ-ÿ\s]/g, '').trim();
+                    if (name && name.length > 2 && !seenProfileNames.includes(name)) {
+                        seenProfileNames.push(name);
+                    }
+                });
 
                 if (profiles.length === 0) {
                     onLog(`[LINKEDIN] ⚠️ No perfiles encontrados en intento ${attempt}. Reintentando...`);

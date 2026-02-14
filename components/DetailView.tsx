@@ -30,6 +30,40 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
   const [sortConfig, setSortConfig] = useState<{ field: SortField; direction: SortDirection }>({ field: 'added_at', direction: 'desc' });
   const logsEndRef = useRef<HTMLDivElement>(null);
 
+  // Prevent tab from being discarded/frozen while search is running
+  useEffect(() => {
+    if (!searching) return;
+
+    // Warn user before leaving/closing tab
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      return (e.returnValue = 'Búsqueda en progreso. ¿Seguro que quieres salir?');
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Web Lock API: prevents browser from discarding the tab in background
+    let lockResolver: (() => void) | null = null;
+    if ('locks' in navigator) {
+      (navigator as any).locks.request('talentscope-search-lock', () => {
+        return new Promise<void>((resolve) => {
+          lockResolver = resolve;
+        });
+      });
+    }
+
+    // Keep-alive ping: prevents browser from throttling/suspending the tab
+    const keepAlive = setInterval(() => {
+      // Minimal work to keep JS event loop active
+      void document.hidden;
+    }, 5000);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (lockResolver) lockResolver();
+      clearInterval(keepAlive);
+    };
+  }, [searching]);
+
   // Update local campaign state when prop changes
   useEffect(() => {
     setCampaign(initialCampaign);
