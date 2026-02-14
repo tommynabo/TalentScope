@@ -3,6 +3,7 @@ import { Candidate, Campaign } from '../types/database';
 import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Search, Play, Loader2, ExternalLink, Terminal, ChevronDown, ChevronUp, X, Target, TrendingUp, AlertTriangle } from 'lucide-react';
 import { searchEngine } from '../lib/SearchEngine';
 import { CampaignService, CandidateService } from '../lib/services';
+import { normalizeLinkedInUrl } from '../lib/normalization';
 import ScoreBreakdownCard from './ScoreBreakdownCard';
 import Scheduler from './Scheduler';
 import Toast from './Toast';
@@ -371,7 +372,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                     `"${c.job_title}"`,
                     `"${c.current_company}"`,
                     `"${c.email || ''}"`,
-                    `"${c.linkedin_url || ''}"`,
+                    `"${normalizeLinkedInUrl(c.linkedin_url)}"`,
                     `"${c.symmetry_score || 0}"`,
                     `"${icebreaker.replace(/"/g, '""')}"`, // Escape quotes
                     `"${followup.replace(/"/g, '""')}"`, // Escape quotes

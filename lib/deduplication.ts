@@ -1,11 +1,15 @@
 
 import { supabase } from './supabase';
 import { Candidate } from '../types/database';
+import { normalizeLinkedInUrl } from './normalization';
 
 export class DeduplicationService {
     private normalizeUrl(url: string | null): string {
         if (!url) return '';
-        return url
+        // Use the shared normalization utility to handle regional subdomains
+        // (es.linkedin.com, fr.linkedin.com, etc.) before stripping for comparison
+        const canonical = normalizeLinkedInUrl(url);
+        return canonical
             .toLowerCase()
             .replace(/^https?:\/\//i, '')
             .replace(/^www\./, '')

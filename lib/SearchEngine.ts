@@ -3,6 +3,7 @@ import { Candidate, SearchFilterCriteria } from '../types/database';
 import { calculateFlutterDeveloperScore } from './scoring';
 import { deduplicationService } from './deduplication';
 import { SearchService } from './search';
+import { normalizeLinkedInUrl } from './normalization';
 
 export type LogCallback = (message: string) => void;
 
@@ -381,7 +382,7 @@ export class SearchEngine {
                             id: crypto.randomUUID(),
                             full_name: name,
                             email: null,
-                            linkedin_url: p.url,
+                            linkedin_url: normalizeLinkedInUrl(p.url),
                             github_url: null,
                             avatar_url: p.pagemap?.cse_image?.[0]?.src || null,
                             job_title: role,
@@ -417,6 +418,7 @@ export class SearchEngine {
                     batchResults.forEach(c => {
                         if (c.email) existingEmails.add(c.email.toLowerCase().trim());
                         if (c.linkedin_url) {
+                            // URL is already normalized via normalizeLinkedInUrl at creation time
                             const normalizedUrl = c.linkedin_url
                                 .toLowerCase()
                                 .replace(/^https?:\/\//i, '')
