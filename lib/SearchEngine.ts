@@ -6,6 +6,7 @@ import { SearchService } from './search';
 import { normalizeLinkedInUrl } from './normalization';
 import { githubService } from './githubService';
 import { ApifyCrossSearchService, CrossLinkedCandidate, performCrossSearch } from './apifyCrossSearchService';
+import { UnbreakableExecutor, initializeUnbreakableMarker } from './UnbreakableExecution';
 
 export type LogCallback = (message: string) => void;
 
@@ -13,16 +14,32 @@ export type LogCallback = (message: string) => void;
 const GOOGLE_SEARCH_SCRAPER = 'nFJndFXA5zjCTuudP';
 
 export class SearchEngine {
+    // UNBREAKABLE EXECUTION MODE
+    // isRunning = true means: "User wants this to complete, never stop until done"
+    // This is intent-based, NOT event-based. Browser pause/resume won't affect it.
     private isRunning = false;
+    private userIntentedStop = false; // Only true if user explicitly clicks STOP
+    
     private apiKey = '';
     private openaiKey = '';
     private abortController: AbortController | null = null;
+    private unbreakableExecutor: UnbreakableExecutor | null = null;
+
+    constructor() {
+        // Ensure heartbeat marker exists
+        initializeUnbreakableMarker();
+    }
 
     public stop() {
+        // ONLY stop if user explicitly requests it
+        this.userIntentedStop = true;
         this.isRunning = false;
         if (this.abortController) {
             this.abortController.abort();
             this.abortController = null;
+        }
+        if (this.unbreakableExecutor) {
+            this.unbreakableExecutor.stop('User clicked stop button');
         }
     }
 
@@ -36,14 +53,62 @@ export class SearchEngine {
             filters?: SearchFilterCriteria;
             githubFilters?: GitHubFilterCriteria;
             scoreThreshold?: number;
+            campaignId?: string; // For unbreakable execution tracking
         },
         onLog: LogCallback,
         onComplete: (candidates: Candidate[] | GitHubCandidate[] | CrossLinkedCandidate[]) => void
     ) {
         this.isRunning = true;
+        this.userIntentedStop = false;
         this.abortController = new AbortController();
         this.apiKey = import.meta.env.VITE_APIFY_API_KEY || '';
         this.openaiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
+
+        // UNBREAKABLE EXECUTION MODE: Wrap search in unbreakable executor
+        const campaignId = options.campaignId || `campaign_${Date.now()}`;
+        this.unbreakableExecutor = new UnbreakableExecutor(campaignId);
+
+        try {
+            // Launch the actual search inside unbreakable executor
+            this.unbreakableExecutor.run(
+                async () => {
+                    // Execute the core search logic
+                    await this.executeCoreSearch(
+                        query,
+                        source,
+                        maxResults,
+                        options,
+                        onLog,
+                        onComplete
+                    );
+                },
+                (state) => {
+                    onLog(`[EXECUTOR] Current state: ${state}`);
+                }
+            ).catch((err) => {
+                if (!this.userIntentedStop) {
+                    onLog(`[ERROR] ❌ ${err.message}`);
+                }
+                this.isRunning = false;
+            });
+        } catch (err: any) {
+            onLog(`[ERROR] ❌ ${err.message}`);
+            this.isRunning = false;
+        }
+    }
+
+    /**
+     * Core search logic - executed inside UnbreakableExecutor
+     * This ensures it continues even if tab is paused
+     */
+    private async executeCoreSearch(
+        query: string,
+        source: 'linkedin' | 'github' | 'github-linkedin',
+        maxResults: number,
+        options: any,
+        onLog: LogCallback,
+        onComplete: (candidates: Candidate[] | GitHubCandidate[] | CrossLinkedCandidate[]) => void
+    ): Promise<void> {
 
         // Handle GitHub source separately
         if (source === 'github') {
@@ -87,8 +152,6 @@ export class SearchEngine {
             } catch (error: any) {
                 onLog(`[ERROR] ❌ ${error.message}`);
                 onComplete([]);
-            } finally {
-                this.isRunning = false;
             }
             return;
         }
@@ -126,8 +189,6 @@ export class SearchEngine {
             } catch (error: any) {
                 onLog(`[ERROR] ❌ ${error.message}`);
                 onComplete([]);
-            } finally {
-                this.isRunning = false;
             }
             return;
         }
@@ -160,12 +221,8 @@ export class SearchEngine {
         } catch (error: any) {
             onLog(`[ERROR] ❌ ${error.message}`);
             onComplete([]);
-        } finally {
-            this.isRunning = false;
         }
-    }
-
-    private async startFastSearch(
+    }(
         query: string,
         maxResults: number,
         options: { 
@@ -268,8 +325,6 @@ export class SearchEngine {
         } catch (error: any) {
             onLog(`[ERROR] ❌ ${error.message}`);
             onComplete([]);
-        } finally {
-            this.isRunning = false;
         }
     }
 

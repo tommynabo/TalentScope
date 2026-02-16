@@ -224,7 +224,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
         maxAge: campaign.settings?.max_age || 30,
         platform: campaign.platform,
         filters: campaign.settings?.search_filters,
-        scoreThreshold: campaign.settings?.score_threshold
+        scoreThreshold: campaign.settings?.score_threshold,
+        campaignId: campaign.id // For Unbreakable Execution Mode tracking
       };
 
       await searchEngine.startSearch(

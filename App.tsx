@@ -20,6 +20,7 @@ import { User, Campaign } from './types';
 import { supabase } from './lib/supabase';
 import { CampaignService } from './lib/services'; // Ensure this import exists
 import { TabGuard } from './lib/TabGuard';
+import { initializeUnbreakableMarker } from './lib/UnbreakableExecution';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -33,6 +34,10 @@ const App: React.FC = () => {
   useEffect(() => {
     const guard = new TabGuard();
     guard.activate();
+    
+    // Initialize Unbreakable Execution Mode marker
+    initializeUnbreakableMarker();
+    
     return () => guard.deactivate();
   }, []);
 
