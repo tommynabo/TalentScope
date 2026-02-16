@@ -43,6 +43,12 @@ export interface Candidate {
     ai_analysis: string | null;
     symmetry_score: number;
     score_breakdown?: ScoreBreakdown; // NEW - Optional scoring details
+    walead_messages?: {
+        icebreaker?: string;
+        followup_message?: string;
+        second_followup?: string;
+        edited_at?: string;
+    };
     created_at: string;
     updated_at: string;
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Candidate, Campaign, CandidateStatus } from '../types/database';
-import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Search, Play, Loader2, ExternalLink, Terminal, ChevronDown, ChevronUp, X, Target, TrendingUp, AlertTriangle, Columns, List, Download } from 'lucide-react';
+import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Search, Play, Loader2, ExternalLink, Terminal, ChevronDown, ChevronUp, X, Target, TrendingUp, AlertTriangle, Columns, List, Download, Edit2 } from 'lucide-react';
 import { searchEngine } from '../lib/SearchEngine';
 import { CampaignService, CandidateService } from '../lib/services';
 import { normalizeLinkedInUrl } from '../lib/normalization';
@@ -9,6 +9,7 @@ import ScoreBreakdownCard from './ScoreBreakdownCard';
 import Scheduler from './Scheduler';
 import Toast from './Toast';
 import KanbanBoard from './KanbanBoard';
+import { WaleadMessagesEditor } from './WaleadMessagesEditor';
 import { saveSearchSnapshot, loadSearchSnapshot, clearSearchSnapshot } from '../lib/useSessionState';
 import { TabGuard } from '../lib/TabGuard';
 import { Square } from 'lucide-react';
@@ -42,6 +43,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
     end: new Date().toISOString().split('T')[0]
   });
   const [showExportOptions, setShowExportOptions] = useState(false);
+  const [isWaleadEditorOpen, setIsWaleadEditorOpen] = useState(false);
+  const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Show recovery toast if we restored from a snapshot
@@ -351,14 +354,15 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
       return;
     }
 
-    const headers = ['FIRST_NAME', 'LAST_NAME', 'ROL', 'EMPRESA', 'EMAIL', 'LINKEDIN', 'SCORE', 'ICEBREAKER', 'FOLLOWUP', 'MENSAJE', 'ANALISIS', 'STATUS', 'FECHA'];
+    const headers = ['FIRST_NAME', 'LAST_NAME', 'ROL', 'EMPRESA', 'EMAIL', 'LINKEDIN', 'SCORE', 'INVITACION_INICIAL', 'POST_ACEPTACION', 'SEGUIMIENTO', 'MENSAJE', 'ANALISIS', 'STATUS', 'FECHA'];
     
     const csvContent = [
       headers.join(','),
       ...filtered.map(c => {
         const analysis = parseAnalysis(c.ai_analysis);
-        const icebreaker = analysis?.icebreaker || '';
-        const followup = analysis?.followup_message || '';
+        const icebreaker = c.walead_messages?.icebreaker || analysis?.icebreaker || '';
+        const followup = c.walead_messages?.followup_message || analysis?.followup_message || '';
+        const secondFollowup = c.walead_messages?.second_followup || analysis?.second_followup || '';
         const message = analysis?.outreach_message || '';
         const summary = analysis?.summary || '';
         
@@ -376,6 +380,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
           `"${c.symmetry_score || 0}"`,
           `"${icebreaker.replace(/"/g, '""')}"`,
           `"${followup.replace(/"/g, '""')}"`,
+          `"${secondFollowup.replace(/"/g, '""')}"`,
           `"${message.replace(/"/g, '""')}"`,
           `"${summary.replace(/"/g, '""')}"`,
           `"${c.status_in_campaign || 'Pool'}"`,
@@ -863,21 +868,35 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                       </div>
                     </div>
 
-                    <div className="col-span-1 md:col-span-2 mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="col-span-1 md:col-span-2 mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Edit Messages Button */}
+                      <div className="md:col-span-3 flex justify-end mb-2">
+                        <button
+                          onClick={() => {
+                            setEditingCandidate(selectedCandidate);
+                            setIsWaleadEditorOpen(true);
+                          }}
+                          className="px-4 py-2 bg-blue-600/20 border border-blue-500/50 hover:bg-blue-600/30 text-blue-400 rounded-lg text-xs font-medium transition-all flex items-center gap-2"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                          Editar Mensajes
+                        </button>
+                      </div>
+
                       {/* ICEBREAKER Column */}
                       <div className="p-4 rounded-xl bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/30">
                         <div className="flex items-center gap-2 mb-2 text-blue-400 font-semibold text-sm">
                           <Send className="h-4 w-4" />
-                          ICEBREAKER (LinkedIn)
+                          1️⃣ INVITACIÓN INICIAL
                         </div>
-                        <p className="text-slate-200 text-sm leading-relaxed italic mb-3">
-                          "{analysis.icebreaker || `Hola ${selectedCandidate.full_name}, me encantaría conectar contigo.`}"
+                        <p className="text-slate-200 text-sm leading-relaxed italic mb-3 min-h-[60px]">
+                          "{selectedCandidate.walead_messages?.icebreaker || analysis.icebreaker || `Hola ${selectedCandidate.full_name}, me encantaría conectar contigo.`}"
                         </p>
                         <button
                           onClick={() => {
-                            const msg = analysis.icebreaker || `Hola ${selectedCandidate.full_name}, me encantaría conectar contigo.`;
+                            const msg = selectedCandidate.walead_messages?.icebreaker || analysis.icebreaker || `Hola ${selectedCandidate.full_name}, me encantaría conectar contigo.`;
                             navigator.clipboard.writeText(msg);
-                            setToast({ show: true, message: '✅ ICEBREAKER copiado!' });
+                            setToast({ show: true, message: '✅ INVITACIÓN copiada!' });
                           }}
                           className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium transition-all"
                         >
@@ -889,18 +908,39 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                       <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/30">
                         <div className="flex items-center gap-2 mb-2 text-emerald-400 font-semibold text-sm">
                           <MessageSquare className="h-4 w-4" />
-                          FOLLOWUP (Completo)
+                          2️⃣ POST-ACEPTACIÓN
                         </div>
-                        <p className="text-slate-200 text-sm leading-relaxed italic mb-3">
-                          "{analysis.followup_message || `${selectedCandidate.full_name}, tras revisar tu perfil sabemos que eres el candidato ideal.`}"
+                        <p className="text-slate-200 text-sm leading-relaxed italic mb-3 min-h-[60px]">
+                          "{selectedCandidate.walead_messages?.followup_message || analysis.followup_message || `${selectedCandidate.full_name}, tras revisar tu perfil sabemos que eres el candidato ideal.`}"
                         </p>
                         <button
                           onClick={() => {
-                            const msg = analysis.followup_message || `${selectedCandidate.full_name}, tras revisar tu perfil sabemos que eres el candidato ideal.`;
+                            const msg = selectedCandidate.walead_messages?.followup_message || analysis.followup_message || `${selectedCandidate.full_name}, tras revisar tu perfil sabemos que eres el candidato ideal.`;
                             navigator.clipboard.writeText(msg);
-                            setToast({ show: true, message: '✅ FOLLOWUP copiado!' });
+                            setToast({ show: true, message: '✅ POST-ACEPTACIÓN copiado!' });
                           }}
                           className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition-all"
+                        >
+                          📋 Copiar
+                        </button>
+                      </div>
+
+                      {/* SECOND FOLLOWUP Column */}
+                      <div className="p-4 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30">
+                        <div className="flex items-center gap-2 mb-2 text-purple-400 font-semibold text-sm">
+                          <MessageSquare className="h-4 w-4" />
+                          3️⃣ SEGUIMIENTO
+                        </div>
+                        <p className="text-slate-200 text-sm leading-relaxed italic mb-3 min-h-[60px]">
+                          "{selectedCandidate.walead_messages?.second_followup || analysis.second_followup || `${selectedCandidate.full_name}, te compartimos una oportunidad que creemos es perfect fit para ti.`}"
+                        </p>
+                        <button
+                          onClick={() => {
+                            const msg = selectedCandidate.walead_messages?.second_followup || analysis.second_followup || `${selectedCandidate.full_name}, te compartimos una oportunidad que creemos es perfect fit para ti.`;
+                            navigator.clipboard.writeText(msg);
+                            setToast({ show: true, message: '✅ SEGUIMIENTO copiado!' });
+                          }}
+                          className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-medium transition-all"
                         >
                           📋 Copiar
                         </button>
@@ -915,6 +955,43 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
       )}
 
       <Toast isVisible={toast.show} message={toast.message} onClose={() => setToast({ ...toast, show: false })} />
+
+      {editingCandidate && (
+        <WaleadMessagesEditor
+          isOpen={isWaleadEditorOpen}
+          candidate={editingCandidate}
+          onClose={() => {
+            setIsWaleadEditorOpen(false);
+          }}
+          onSave={(messages) => {
+            // Update the candidate with edited messages
+            const updatedCandidate = {
+              ...editingCandidate,
+              walead_messages: {
+                icebreaker: messages.icebreaker,
+                followup_message: messages.followup_message,
+                second_followup: messages.second_followup,
+                edited_at: new Date().toISOString()
+              }
+            };
+
+            // Save to database
+            CandidateService.update(editingCandidate.id, {
+              walead_messages: updatedCandidate.walead_messages
+            }).catch(err => {
+              console.error('Error updating candidate messages:', err);
+              setToast({ show: true, message: '❌ Error al guardar los mensajes' });
+            });
+
+            // Update local state
+            setCandidates(prev =>
+              prev.map(c => (c.id === editingCandidate.id ? updatedCandidate : c))
+            );
+            setSelectedCandidate(updatedCandidate);
+            setToast({ show: true, message: '✅ Mensajes guardados correctamente' });
+          }}
+        />
+      )}
     </div>
   );
 };
