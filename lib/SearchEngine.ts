@@ -222,7 +222,9 @@ export class SearchEngine {
             onLog(`[ERROR] ❌ ${error.message}`);
             onComplete([]);
         }
-    }(
+    }
+
+    private async startFastSearch(
         query: string,
         maxResults: number,
         options: { 
