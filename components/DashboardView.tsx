@@ -19,13 +19,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ userName, onOpenLinkedin,
   useEffect(() => {
     loadStats();
 
-    // Auto-refresh stats every 2 seconds while on dashboard
-    const refreshInterval = setInterval(() => {
-      console.log('[Dashboard] Auto-refreshing stats...');
-      loadStats();
-    }, 2000);
-
-    // Also refresh when tab becomes visible
+    // Only refresh when tab becomes visible, NOT auto-refresh every 2 seconds
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         console.log('[Dashboard] Tab visible, refreshing stats...');
@@ -36,7 +30,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({ userName, onOpenLinkedin,
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
-      clearInterval(refreshInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
@@ -194,9 +187,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({ userName, onOpenLinkedin,
 
           <div className="bg-slate-950/50 rounded-2xl p-4 mb-8 border border-slate-800/50 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-1 h-full bg-orange-500"></div>
-            <p className="text-xs text-slate-400 mb-1 uppercase tracking-wider">Método: Product Engineers</p>
+            <p className="text-xs text-slate-400 mb-1 uppercase tracking-wider">Estado</p>
             <div className="flex items-baseline gap-2">
-              <p className="text-3xl font-bold text-white font-mono">Flutter</p>
+              <p className="text-lg font-bold text-white">Conectado</p>
               <span className="text-xs font-medium text-emerald-400 flex items-center gap-1">
                 <Zap className="h-3 w-3" /> Ready
               </span>

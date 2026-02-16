@@ -78,10 +78,6 @@ export const GitHubScanManager: React.FC<GitHubScanManagerProps> = ({ onClose })
         </button>
         <GitHubCodeScan 
           campaignId={activeCampaign.id}
-          onCampaignCreated={() => {
-            setActiveCampaign(null);
-            setToast({ show: true, message: 'Búsqueda iniciada!' });
-          }}
         />
       </div>
     );
