@@ -11,6 +11,11 @@ import TalentPoolView from './components/TalentPoolView';
 import AnalyticsView from './components/AnalyticsView';
 import Toast from './components/Toast';
 import SettingsView from './components/SettingsView';
+import { GitHubCampaignList } from './components/GitHubCampaignList';
+import { GitHubCodeScan } from './components/GitHubCodeScan';
+import AnalyticsView from './components/AnalyticsView';
+import Toast from './components/Toast';
+import SettingsView from './components/SettingsView';
 import { User, Campaign } from './types';
 import { supabase } from './lib/supabase';
 import { CampaignService } from './lib/services'; // Ensure this import exists
@@ -205,7 +210,6 @@ const CampaignListWrapper = ({ navigate }: { navigate: any }) => {
   
   // For GitHub, show GitHub campaign list
   if (platform === 'github') {
-    const { GitHubCampaignList } = require('./components/GitHubCampaignList');
     return <GitHubCampaignList />;
   }
   
@@ -228,7 +232,6 @@ const CampaignDetailWrapper = ({ onBack }: { onBack: () => void }) => {
 
   // For GitHub campaigns, show GitHubCodeScan
   if (platform === 'github') {
-    const { GitHubCodeScan } = require('./components/GitHubCodeScan');
     return (
       <div>
         <button
