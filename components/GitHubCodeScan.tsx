@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus, Link2 } from 'lucide-react';
+import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus, Link2, List, Columns3, Grid3x3 } from 'lucide-react';
 import { GitHubMetrics, GitHubFilterCriteria } from '../types/database';
 import { githubService, GitHubLogCallback } from '../lib/githubService';
 import { GitHubFilterConfig } from './GitHubFilterConfig';
 import { ApifyCrossSearchService } from '../lib/apifyCrossSearchService';
 import { PRESET_PRODUCT_ENGINEERS } from '../lib/githubPresets';
+import { GitHubCandidatesCards } from './GitHubCandidatesCards';
+import { GitHubCandidatesPipeline } from './GitHubCandidatesPipeline';
+import { GitHubCandidatesKanban } from './GitHubCandidatesKanban';
 
 interface GitHubCodeScanProps {
     campaignId?: string;
 }
+
+type ViewMode = 'cards' | 'pipeline' | 'kanban';
 
 export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) => {
     const [candidates, setCandidates] = useState<GitHubMetrics[]>([]);
@@ -18,6 +23,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
     const [showLogs, setShowLogs] = useState(false);
     const [criteria, setCriteria] = useState<GitHubFilterCriteria | null>(null);
     const [maxResults, setMaxResults] = useState(30);
+    const [viewMode, setViewMode] = useState<ViewMode>('cards');
 
     // Load Product Engineers preset by default
     useEffect(() => {
@@ -213,34 +219,80 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                 </div>
             )}
 
-            {/* Results Grid */}
+            {/* Results Section */}
             {candidates.length > 0 && (
-                <div>
-                    <div className="flex items-center justify-between mb-4">
+                <div className="space-y-4">
+                    {/* Results Header with View Mode Toggle */}
+                    <div className="flex items-center justify-between">
                         <h2 className="text-2xl font-bold text-white">
                             Resultados: {candidates.length} Desarrolladores
                         </h2>
-                        <button
-                            onClick={() => {
-                                // TODO: Export to campaign or save search
-                                console.log('Export clicked', candidates);
-                            }}
-                            className="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-white font-semibold transition"
-                        >
-                            <Plus className="h-4 w-4 inline mr-2" />
-                            Agregar a Campaña
-                        </button>
+                        <div className="flex items-center gap-3">
+                            {/* View Mode Toggle */}
+                            <div className="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700/50">
+                                <button
+                                    onClick={() => setViewMode('cards')}
+                                    className={`p-2 rounded-md transition-all ${viewMode === 'cards' ? 'bg-slate-700 text-orange-400 shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                                    title="Vista de Cards"
+                                >
+                                    <Grid3x3 className="h-4 w-4" />
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('pipeline')}
+                                    className={`p-2 rounded-md transition-all ${viewMode === 'pipeline' ? 'bg-slate-700 text-orange-400 shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                                    title="Vista Pipeline"
+                                >
+                                    <List className="h-4 w-4" />
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('kanban')}
+                                    className={`p-2 rounded-md transition-all ${viewMode === 'kanban' ? 'bg-slate-700 text-orange-400 shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                                    title="Vista Kanban"
+                                >
+                                    <Columns3 className="h-4 w-4" />
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {candidates.map((candidate) => (
-                            <CandidateCard
-                                key={candidate.github_username}
-                                candidate={candidate}
-                                scoreColor={getScoreBadgeColor(candidate.github_score)}
-                                formatNumber={formatNumber}
-                            />
-                        ))}
+                    {/* Results Content */}
+                    <div className="bg-slate-900/40 border border-slate-800 rounded-xl overflow-hidden">
+                        {loading ? (
+                            <div className="flex items-center justify-center h-96 text-slate-500">
+                                <Loader className="h-6 w-6 animate-spin text-orange-500 mr-2" />
+                                Cargando candidatos...
+                            </div>
+                        ) : viewMode === 'cards' ? (
+                            <div className="p-6">
+                                <GitHubCandidatesCards
+                                    candidates={candidates}
+                                    formatNumber={formatNumber}
+                                    getScoreBadgeColor={getScoreBadgeColor}
+                                    onAddToCampaign={(candidate) => {
+                                        console.log('Add to campaign:', candidate);
+                                        // TODO: Implement add to campaign logic
+                                    }}
+                                />
+                            </div>
+                        ) : viewMode === 'pipeline' ? (
+                            <div className="overflow-x-auto">
+                                <GitHubCandidatesPipeline
+                                    candidates={candidates}
+                                    formatNumber={formatNumber}
+                                    getScoreBadgeColor={getScoreBadgeColor}
+                                />
+                            </div>
+                        ) : (
+                            <div className="min-h-96">
+                                <GitHubCandidatesKanban
+                                    candidates={candidates}
+                                    onStatusChange={(username, status) => {
+                                        console.log('Status changed:', username, status);
+                                        // TODO: Save status to database
+                                    }}
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -264,173 +316,3 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         </div>
     );
 };
-
-interface CandidateCardProps {
-    candidate: GitHubMetrics;
-    scoreColor: string;
-    formatNumber: (num: number) => string;
-}
-
-const CandidateCard: React.FC<CandidateCardProps> = ({ candidate, scoreColor, formatNumber }) => (
-    <a
-        href={candidate.github_url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="group bg-gradient-to-br from-slate-900 to-slate-800/50 border border-slate-700 hover:border-orange-500 rounded-xl p-6 transition-all hover:shadow-lg hover:shadow-orange-500/10"
-    >
-        {/* Header with Score */}
-        <div className="flex items-start justify-between mb-4">
-            <div>
-                <h3 className="text-lg font-bold text-white group-hover:text-orange-400 transition">
-                    @{candidate.github_username}
-                </h3>
-                {candidate.personal_website && (
-                    <a
-                        href={candidate.personal_website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-400 hover:text-blue-300 truncate max-w-xs"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {candidate.personal_website}
-                    </a>
-                )}
-            </div>
-            <div className={`px-3 py-1 rounded-lg text-lg font-bold ${scoreColor}`}>
-                {candidate.github_score}
-            </div>
-        </div>
-
-        {/* App Store Badge - THE CRITICAL SIGNAL */}
-        {candidate.has_app_store_link && (
-            <div className="mb-4 inline-block">
-                <div className="bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-purple-500/50 px-3 py-1 rounded-full text-xs font-semibold text-purple-200 flex items-center gap-2">
-                    <Trophy className="h-3 w-3" />
-                    App Published ⭐
-                </div>
-            </div>
-        )}
-
-        {/* Metrics Grid */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-            <MetricBadge
-                icon={<Star className="h-4 w-4" />}
-                label="Estrellas"
-                value={formatNumber(candidate.total_stars_received)}
-            />
-            <MetricBadge
-                icon={<Users className="h-4 w-4" />}
-                label="Seguidores"
-                value={formatNumber(candidate.followers)}
-            />
-            <MetricBadge
-                icon={<GitBranch className="h-4 w-4" />}
-                label="Originalidad"
-                value={`${Math.round(candidate.originality_ratio)}%`}
-            />
-            <MetricBadge
-                icon={<Code2 className="h-4 w-4" />}
-                label="Lenguaje"
-                value={candidate.most_used_language}
-            />
-        </div>
-
-        {/* Activity Info */}
-        <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-                <span className="text-slate-500">Repos Públicos:</span>
-                <span className="text-slate-300 font-semibold">{candidate.public_repos}</span>
-            </div>
-            <div className="flex justify-between">
-                <span className="text-slate-500">Originalidad:</span>
-                <span className="text-slate-300 font-semibold">{candidate.original_repos_count} / {candidate.original_repos_count + candidate.fork_repos_count}</span>
-            </div>
-            {candidate.last_commit_date && (
-                <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Último Commit:</span>
-                    <span className="text-slate-300">
-                        {new Date(candidate.last_commit_date).toLocaleDateString('es-ES')}
-                    </span>
-                </div>
-            )}
-            {candidate.mentioned_email && (
-                <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Email:</span>
-                    <span className="text-slate-300 truncate">{candidate.mentioned_email}</span>
-                </div>
-            )}
-        </div>
-
-        {/* Score Breakdown */}
-        <div className="mt-4 pt-4 border-t border-slate-700">
-            <p className="text-xs text-slate-500 mb-2 font-semibold">Desglose de Puntuación</p>
-            <div className="space-y-1">
-                <ScoreBar
-                    label="Repositorio"
-                    value={candidate.score_breakdown.repository_quality}
-                    max={25}
-                />
-                <ScoreBar
-                    label="Actividad"
-                    value={candidate.score_breakdown.code_activity}
-                    max={20}
-                />
-                <ScoreBar
-                    label="Comunidad"
-                    value={candidate.score_breakdown.community_presence}
-                    max={20}
-                />
-                <ScoreBar
-                    label="Apps Publicadas"
-                    value={candidate.score_breakdown.app_shipping}
-                    max={20}
-                    highlight={candidate.has_app_store_link}
-                />
-            </div>
-        </div>
-
-        {/* View on GitHub Button */}
-        <div className="mt-4 pt-4 border-t border-slate-700 flex items-center gap-2 text-orange-400 group-hover:text-orange-300">
-            <ExternalLink className="h-4 w-4" />
-            <span className="text-sm font-semibold">Ver en GitHub</span>
-        </div>
-    </a>
-);
-
-interface MetricBadgeProps {
-    icon: React.ReactNode;
-    label: string;
-    value: string;
-}
-
-const MetricBadge: React.FC<MetricBadgeProps> = ({ icon, label, value }) => (
-    <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-2 text-center">
-        <div className="text-slate-400 text-xs flex items-center justify-center gap-1 mb-1">
-            {icon}
-            {label}
-        </div>
-        <div className="text-orange-400 font-bold text-sm">{value}</div>
-    </div>
-);
-
-interface ScoreBarProps {
-    label: string;
-    value: number;
-    max: number;
-    highlight?: boolean;
-}
-
-const ScoreBar: React.FC<ScoreBarProps> = ({ label, value, max, highlight }) => (
-    <div className="flex items-center gap-2">
-        <span className="text-xs text-slate-500 w-12 truncate">{label}</span>
-        <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-            <div
-                className={`h-full rounded-full transition-all ${
-                    highlight ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gradient-to-r from-orange-500 to-orange-400'
-                }`}
-                style={{ width: `${(value / max) * 100}%` }}
-            />
-        </div>
-        <span className="text-xs text-slate-400 w-6 text-right">{value}</span>
-    </div>
-);
