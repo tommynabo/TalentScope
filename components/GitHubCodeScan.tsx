@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus } from 'lucide-react';
+import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus, Link2 } from 'lucide-react';
 import { GitHubMetrics, GitHubFilterCriteria } from '../types/database';
 import { githubService, GitHubLogCallback } from '../lib/githubService';
 import { GitHubFilterConfig } from './GitHubFilterConfig';
+import { ApifyCrossSearchService } from '../lib/apifyCrossSearchService';
 
 interface GitHubCodeScanProps {
     campaignId?: string;
+    onCampaignCreated?: (campaign: { id: string; title: string; created_at: string; source: string }) => void;
 }
 
-export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) => {
+export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, onCampaignCreated }) => {
     const [candidates, setCandidates] = useState<GitHubMetrics[]>([]);
     const [loading, setLoading] = useState(false);
     const [logs, setLogs] = useState<string[]>([]);
@@ -41,8 +43,60 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
 
             setCandidates(results);
             handleLogMessage(`✨ Search completed! Found ${results.length} qualified developers`);
+            
+            // Notify campaign creation
+            if (onCampaignCreated) {
+                onCampaignCreated({
+                    id: `campaign-${Date.now()}`,
+                    title: `GitHub Search - ${criteria.languages.join(', ')}`,
+                    created_at: new Date().toISOString(),
+                    source: 'github'
+                });
+            }
         } catch (error: any) {
             handleLogMessage(`❌ Error: ${error.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleStartCrossSearch = async () => {
+        if (!criteria || candidates.length === 0) {
+            alert('Please run a GitHub search first');
+            return;
+        }
+
+        setLoading(true);
+        setLogs(prev => [...prev, '🔗 Starting GitHub ↔ LinkedIn cross-search...']);
+
+        try {
+            const crossSearchService = new ApifyCrossSearchService();
+            handleLogMessage('🔗 Phase 1: Searching LinkedIn profiles for each developer...');
+
+            const linkedResults = await crossSearchService.batchSearchLinkedInProfiles(
+                candidates,
+                {
+                    search_email: true,
+                    search_username: true,
+                    search_name_fuzzy: true,
+                    min_confidence: 70
+                }
+            );
+
+            const linkedCount = linkedResults.filter(r => r.link_status === 'linked').length;
+            handleLogMessage(`✅ Cross-search completed! ${linkedCount}/${linkedResults.length} profiles linked`);
+
+            // Notify campaign creation
+            if (onCampaignCreated) {
+                onCampaignCreated({
+                    id: `campaign-${Date.now()}`,
+                    title: `Cross-Search - ${criteria.languages.join(', ')} (${linkedCount} linked)`,
+                    created_at: new Date().toISOString(),
+                    source: 'github-linkedin'
+                });
+            }
+        } catch (error: any) {
+            handleLogMessage(`❌ Cross-search error: ${error.message}`);
         } finally {
             setLoading(false);
         }
@@ -130,6 +184,25 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                                         </>
                                     )}
                                 </button>
+                                {candidates.length > 0 && (
+                                    <button
+                                        onClick={handleStartCrossSearch}
+                                        disabled={loading}
+                                        className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 rounded-lg text-white font-semibold transition flex items-center gap-2"
+                                        title="Link GitHub results with LinkedIn profiles"
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <Loader className="h-5 w-5 animate-spin" />
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Link2 className="h-5 w-5" />
+                                                Cross-Search
+                                            </>
+                                        )}
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => setShowFilterConfig(true)}
                                     className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300"

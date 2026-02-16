@@ -5,6 +5,7 @@ import { deduplicationService } from './deduplication';
 import { SearchService } from './search';
 import { normalizeLinkedInUrl } from './normalization';
 import { githubService } from './githubService';
+import { ApifyCrossSearchService, CrossLinkedCandidate, performCrossSearch } from './apifyCrossSearchService';
 
 export type LogCallback = (message: string) => void;
 
@@ -27,7 +28,7 @@ export class SearchEngine {
 
     public async startSearch(
         query: string,
-        source: 'linkedin' | 'github',
+        source: 'linkedin' | 'github' | 'github-linkedin',
         maxResults: number,
         options: { 
             language: string; 
@@ -37,7 +38,7 @@ export class SearchEngine {
             scoreThreshold?: number;
         },
         onLog: LogCallback,
-        onComplete: (candidates: Candidate[] | GitHubCandidate[]) => void
+        onComplete: (candidates: Candidate[] | GitHubCandidate[] | CrossLinkedCandidate[]) => void
     ) {
         this.isRunning = true;
         this.abortController = new AbortController();
@@ -83,6 +84,45 @@ export class SearchEngine {
                 } as GitHubCandidate));
 
                 onComplete(candidates);
+            } catch (error: any) {
+                onLog(`[ERROR] ❌ ${error.message}`);
+                onComplete([]);
+            } finally {
+                this.isRunning = false;
+            }
+            return;
+        }
+
+        // Handle GitHub + LinkedIn cross-search
+        if (source === 'github-linkedin') {
+            try {
+                onLog("🔍 Iniciando búsqueda cruzada GitHub ↔ LinkedIn...");
+                
+                if (!options.githubFilters) {
+                    onLog("❌ GitHub filter criteria required");
+                    onComplete([]);
+                    return;
+                }
+
+                // First: Search GitHub
+                onLog("📍 Fase 1: Buscando desarrolladores en GitHub...");
+                const githubResults = await githubService.searchDevelopers(
+                    options.githubFilters,
+                    maxResults,
+                    onLog
+                );
+
+                onLog(`✅ Fase 1 completada: ${githubResults.length} desarrolladores encontrados en GitHub`);
+
+                // Second: Cross-search to LinkedIn
+                onLog("🔗 Fase 2: Vinculando perfiles con LinkedIn...");
+                const crossLinkedResults = await performCrossSearch(githubResults, (completed, total) => {
+                    const percentage = Math.round((completed / total) * 100);
+                    onLog(`🔗 Progreso: ${completed}/${total} (${percentage}%)`);
+                });
+
+                onLog(`✅ Búsqueda cruzada completada: ${crossLinkedResults.length} perfiles vinculados`);
+                onComplete(crossLinkedResults as CrossLinkedCandidate[]);
             } catch (error: any) {
                 onLog(`[ERROR] ❌ ${error.message}`);
                 onComplete([]);
