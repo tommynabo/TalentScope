@@ -43,8 +43,16 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
         return sortConfig.direction === 'desc' ? -comparison : comparison;
     });
 
+    if (candidates.length === 0) {
+        return (
+            <div className="flex items-center justify-center h-96 text-slate-500">
+                <p>No hay candidatos para mostrar</p>
+            </div>
+        );
+    }
+
     return (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto min-h-96">
             <table className="w-full text-left border-collapse">
                 <thead>
                     <tr className="text-xs font-semibold text-slate-400 uppercase tracking-widest border-b border-slate-700 bg-slate-900/50">
@@ -175,7 +183,7 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
 
                             {/* Followers */}
                             <td className="px-4 py-3">
-                                <span className="text-xs font-bold text-slate-300">{formatNumber(candidate.followers)}</span>
+                                <span className="text-xs font-bold text-slate-300">{formatNumber(candidate.followers ?? 0)}</span>
                             </td>
 
                             {/* Public Repos */}
@@ -185,7 +193,7 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
 
                             {/* Contributions */}
                             <td className="px-4 py-3">
-                                <span className="text-xs font-bold text-slate-300">{formatNumber(candidate.total_contributions)}</span>
+                                <span className="text-xs font-bold text-slate-300">{formatNumber(candidate.total_contributions ?? 0)}</span>
                             </td>
 
                             {/* Actions */}

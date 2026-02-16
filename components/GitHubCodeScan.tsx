@@ -8,6 +8,8 @@ import { PRESET_PRODUCT_ENGINEERS } from '../lib/githubPresets';
 import { GitHubCandidatesCards } from './GitHubCandidatesCards';
 import { GitHubCandidatesPipeline } from './GitHubCandidatesPipeline';
 import { GitHubCandidatesKanban } from './GitHubCandidatesKanban';
+import { GitHubSearchService } from '../lib/githubSearchService';
+import { supabase } from '../lib/supabase';
 
 interface GitHubCodeScanProps {
     campaignId?: string;
@@ -24,11 +26,31 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
     const [criteria, setCriteria] = useState<GitHubFilterCriteria | null>(null);
     const [maxResults, setMaxResults] = useState(30);
     const [viewMode, setViewMode] = useState<ViewMode>('cards');
+    const [userId, setUserId] = useState<string>('');
 
-    // Load Product Engineers preset by default
+    // Load Product Engineers preset and restore previous search results
     useEffect(() => {
         setCriteria(PRESET_PRODUCT_ENGINEERS);
-    }, []);
+        
+        // Get current user
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session?.user?.id) {
+                setUserId(session.user.id);
+                
+                // Restore previous search results if available
+                if (campaignId) {
+                    GitHubSearchService.getSearchResults(campaignId, session.user.id)
+                        .then(restored => {
+                            if (restored && restored.length > 0) {
+                                setCandidates(restored);
+                                setLogs([`✨ Restored ${restored.length} candidates from previous search`]);
+                            }
+                        })
+                        .catch(err => console.warn('Failed to restore search results:', err));
+                }
+            }
+        });
+    }, [campaignId]);
 
     const handleLogMessage: GitHubLogCallback = (message: string) => {
         setLogs(prev => [...prev, message]);
@@ -54,6 +76,12 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
 
             setCandidates(results);
             handleLogMessage(`✨ Search completed! Found ${results.length} qualified developers`);
+
+            // Save results to Supabase for persistence
+            if (campaignId && userId && results.length > 0) {
+                await GitHubSearchService.saveSearchResults(campaignId, results, userId);
+                handleLogMessage('💾 Results saved to database');
+            }
         } catch (error: any) {
             handleLogMessage(`❌ Error: ${error.message}`);
         } finally {
@@ -275,7 +303,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                                 />
                             </div>
                         ) : viewMode === 'pipeline' ? (
-                            <div className="overflow-x-auto">
+                            <div className="overflow-x-auto min-h-96">
                                 <GitHubCandidatesPipeline
                                     candidates={candidates}
                                     formatNumber={formatNumber}
