@@ -8,10 +8,9 @@ import { PRESET_PRODUCT_ENGINEERS } from '../lib/githubPresets';
 
 interface GitHubCodeScanProps {
     campaignId?: string;
-    onCampaignCreated?: (campaign: { id: string; title: string; created_at: string; source: string }) => void;
 }
 
-export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, onCampaignCreated }) => {
+export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) => {
     const [candidates, setCandidates] = useState<GitHubMetrics[]>([]);
     const [loading, setLoading] = useState(false);
     const [logs, setLogs] = useState<string[]>([]);
@@ -49,16 +48,6 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, onCa
 
             setCandidates(results);
             handleLogMessage(`✨ Search completed! Found ${results.length} qualified developers`);
-            
-            // Notify campaign creation
-            if (onCampaignCreated) {
-                onCampaignCreated({
-                    id: `campaign-${Date.now()}`,
-                    title: `GitHub Search - ${criteria.languages.join(', ')}`,
-                    created_at: new Date().toISOString(),
-                    source: 'github'
-                });
-            }
         } catch (error: any) {
             handleLogMessage(`❌ Error: ${error.message}`);
         } finally {
@@ -91,16 +80,6 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, onCa
 
             const linkedCount = linkedResults.filter(r => r.link_status === 'linked').length;
             handleLogMessage(`✅ Cross-search completed! ${linkedCount}/${linkedResults.length} profiles linked`);
-
-            // Notify campaign creation
-            if (onCampaignCreated) {
-                onCampaignCreated({
-                    id: `campaign-${Date.now()}`,
-                    title: `Cross-Search - ${criteria.languages.join(', ')} (${linkedCount} linked)`,
-                    created_at: new Date().toISOString(),
-                    source: 'github-linkedin'
-                });
-            }
         } catch (error: any) {
             handleLogMessage(`❌ Cross-search error: ${error.message}`);
         } finally {

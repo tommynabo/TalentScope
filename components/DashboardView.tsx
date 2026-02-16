@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Linkedin, Github, Globe, Users, Lock, ArrowRight, Activity, Zap, RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { AnalyticsService } from '../lib/analytics';
 import { AnalyticsDaily } from '../types/database';
-import { GitHubScanManager } from './GitHubScanManager';
 
 interface DashboardViewProps {
   userName: string;
@@ -14,7 +14,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ userName, onOpenLinkedin,
   const [stats, setStats] = useState<AnalyticsDaily>(AnalyticsService.getEmptyStats());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeModule, setActiveModule] = useState<'overview' | 'github' | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadStats();
@@ -53,19 +53,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ userName, onOpenLinkedin,
   };
 
   // Show GitHub Scan Manager if active
-  if (activeModule === 'github') {
-    return (
-      <div className="p-6 md:p-8 max-w-7xl mx-auto">
-        <button
-          onClick={() => setActiveModule(null)}
-          className="mb-4 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 text-sm"
-        >
-          ← Volver al Dashboard
-        </button>
-        <GitHubScanManager />
-      </div>
-    );
-  }
+  // Note: Routing is now handled by App.tsx (/tablero/github)
+  // This component only shows the Dashboard overview
 
   return (
     <div className="p-6 md:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-7xl mx-auto">
@@ -160,7 +149,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ userName, onOpenLinkedin,
 
         {/* ACTIVE CARD: GitHub */}
         <div
-          onClick={() => setActiveModule('github')}
+          onClick={() => navigate('/tablero/github')}
           className="group relative bg-gradient-to-b from-slate-800/80 to-slate-900/80 backdrop-blur-md border border-orange-500/30 rounded-3xl p-6 cursor-pointer hover:border-orange-400/60 hover:shadow-[0_0_40px_rgba(249,115,22,0.15)] transition-all duration-300 overflow-hidden transform hover:-translate-y-1"
         >
           {/* Background Tech Details */}

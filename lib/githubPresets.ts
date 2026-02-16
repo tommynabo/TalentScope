@@ -187,7 +187,7 @@ export const PRESET_PRODUCT_ENGINEERS: GitHubFilterCriteria = {
     require_app_store_link: true,  // Must have shipped
     
     // Location & Demographics
-    locations: ['Spain', 'Barcelona'],
+    locations: [], // GitHub API does NOT support location: filter in search. Use post-processing if needed.
     available_for_hire: false,
     
     score_threshold: 72  // High quality

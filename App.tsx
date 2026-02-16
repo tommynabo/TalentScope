@@ -202,8 +202,14 @@ const App: React.FC = () => {
 // Wrapper components to handle params
 const CampaignListWrapper = ({ navigate }: { navigate: any }) => {
   const { platform } = useParams();
-  // Start with dummy implementation, assuming 'linkedin' mostly
-  // We reuse CampaignListView but might need to adjust props if it expects strict types
+  
+  // For GitHub, show GitHub campaign list
+  if (platform === 'github') {
+    const { GitHubCampaignList } = require('./components/GitHubCampaignList');
+    return <GitHubCampaignList />;
+  }
+  
+  // For LinkedIn, show standard campaign list
   return (
     <CampaignListView
       platform={platform === 'linkedin' ? 'LinkedIn' : 'Other'}
@@ -215,20 +221,32 @@ const CampaignListWrapper = ({ navigate }: { navigate: any }) => {
 }
 
 const CampaignDetailWrapper = ({ onBack }: { onBack: () => void }) => {
-  const { campaignId } = useParams();
+  const { campaignId, platform } = useParams();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // For GitHub campaigns, show GitHubCodeScan
+  if (platform === 'github') {
+    const { GitHubCodeScan } = require('./components/GitHubCodeScan');
+    return (
+      <div>
+        <button
+          onClick={onBack}
+          className="mb-4 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 text-sm"
+        >
+          ← Volver a Campañas
+        </button>
+        <GitHubCodeScan campaignId={campaignId} />
+      </div>
+    );
+  }
+
+  // For LinkedIn campaigns, show DetailView
   useEffect(() => {
     if (!campaignId) return;
     setLoading(true);
-    // Fetch campaign by ID. We need to implement this in CampaignService or emulate it
-    // The previous error was probably because 'settings' field was being accessed when undefined?
-    // Let's implement a robust fetch
     const fetchCampaign = async () => {
-      // Temporary: Fetch all and find (Inefficient but works without backend changes)
-      // Ideally we add getById to service
       try {
         const campaigns = await CampaignService.getAll();
         const found = campaigns.find(c => c.id === campaignId);

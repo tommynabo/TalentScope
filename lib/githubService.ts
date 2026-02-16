@@ -397,12 +397,9 @@ export class GitHubService {
             parts.push(`followers:>=${criteria.min_followers}`);
         }
 
-        // Location
-        if (criteria.locations.length > 0) {
-            criteria.locations.forEach(loc => {
-                parts.push(`location:"${loc}"`);
-            });
-        }
+        // Note: GitHub API search does NOT support location: filter
+        // Location filtering must be done post-processing if needed
+        // Removed: criteria.locations filtering
 
         // Available for hire
         if (criteria.available_for_hire) {
