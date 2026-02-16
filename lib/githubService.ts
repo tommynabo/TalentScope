@@ -38,28 +38,47 @@ export class GitHubService {
         maxResults: number = 50,
         onLog: GitHubLogCallback
     ): Promise<GitHubMetrics[]> {
-        if (!this.octokit) {
-            onLog('⚠️ GitHub token not configured. Using public API (60 requests/hour limit). Set VITE_GITHUB_TOKEN for better results.');
-            // Create unauthenticated instance for basic testing
-            this.octokit = new Octokit();
-        }
-
         try {
             onLog('🔍 Starting GitHub developer search...');
+            onLog(`📋 Token configured: ${this.octokit ? 'YES ✅' : 'NO (public API)'}`);
             
+            if (!this.octokit) {
+                onLog('⚠️ No GitHub token. Using public API (60 req/hour limit). Results may be limited.');
+                this.octokit = new Octokit();
+            }
+
             // Build search query
             const query = this.buildSearchQuery(criteria);
             onLog(`📝 Search query: ${query}`);
+            onLog(`🎯 Looking for max ${maxResults} results`);
 
-            // Execute search
-            const response = await this.octokit.rest.search.users({
-                q: query,
-                per_page: Math.min(maxResults, 30), // API limit
-                sort: 'followers',
-                order: 'desc'
-            });
+            // Execute search with better error handling
+            let response;
+            try {
+                response = await this.octokit.rest.search.users({
+                    q: query,
+                    per_page: Math.min(maxResults, 30),
+                    sort: 'followers',
+                    order: 'desc'
+                });
+            } catch (apiError: any) {
+                onLog(`❌ API Error: ${apiError.message}`);
+                if (apiError.status === 422) {
+                    onLog('⚠️ 422: Invalid search query. GitHub API rejected the query.');
+                } else if (apiError.status === 403) {
+                    onLog('⚠️ 403: Rate limited. Try again later.');
+                }
+                throw apiError;
+            }
 
-            onLog(`✅ Found ${response.data.items.length} potential candidates`);
+            onLog(`✅ API Response: Found ${response.data.items.length || 0} total users`);
+
+            if (!response.data.items || response.data.items.length === 0) {
+                onLog('⚠️ GitHub API returned 0 users for this query');
+                onLog('💡 Try adjusting filters to be less restrictive');
+                onLog(`🎉 Search complete! 0 qualified developers found`);
+                return [];
+            }
 
             // Analyze each user deeply
             const candidates: GitHubMetrics[] = [];
@@ -74,7 +93,7 @@ export class GitHubService {
                         candidates.push(metrics);
                         onLog(`✅ Added @${user.login} (Score: ${metrics.github_score})`);
                     } else {
-                        onLog(`⏭️ Skipped @${user.login} - doesn't match criteria`);
+                        onLog(`⏭️ Skipped @${user.login} - doesn't match quality criteria`);
                     }
                 } catch (err: any) {
                     onLog(`⚠️ Error analyzing @${user.login}: ${err.message}`);
@@ -384,27 +403,23 @@ export class GitHubService {
         const parts: string[] = [];
 
         // Languages - Use ONLY the first language to avoid AND logic
-        // (GitHub API would require ALL languages to match)
         if (criteria.languages.length > 0) {
             parts.push(`language:${criteria.languages[0].toLowerCase()}`);
         }
 
-        // Stars - More realistic threshold
-        if (criteria.min_stars > 0) {
-            parts.push(`stars:>=${criteria.min_stars}`);
-        }
+        // Stars - Very permissive (anything with at least 1 star)
+        parts.push(`stars:>=1`);
 
-        // Followers - More realistic threshold
-        if (criteria.min_followers > 0) {
-            parts.push(`followers:>=${criteria.min_followers}`);
-        }
+        // Followers - Very permissive (anything with at least 1 follower)
+        parts.push(`followers:>=1`);
 
         // Available for hire
         if (criteria.available_for_hire) {
             parts.push('hireable:true');
         }
 
-        return parts.length > 0 ? parts.join(' ') : 'language:typescript followers:>5';
+        const query = parts.length > 0 ? parts.join(' ') : 'language:typescript stars:>=1 followers:>=1';
+        return query;
     }
 
     /**

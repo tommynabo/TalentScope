@@ -166,31 +166,31 @@ export const PRESET_UNIVERSITY_TALENT: GitHubFilterCriteria = {
 // PRESET 6: "Product Engineers"
 // ===========================
 export const PRESET_PRODUCT_ENGINEERS: GitHubFilterCriteria = {
-    // Repository Metrics
-    min_stars: 10,         // Reduced from 80 - more realistic
+    // Repository Metrics - VERY PERMISSIVE for testing
+    min_stars: 1,          // Accept ANY repo with at least 1 star
     max_stars: 20000,
-    min_forks: 1,          // Reduced from 3
+    min_forks: 1,          
     languages: ['dart', 'typescript', 'kotlin', 'swift'],
     
-    // Developer Signals
-    min_public_repos: 3,   // Reduced from 6
-    min_followers: 10,     // Reduced from 80 - too restrictive
-    min_contributions_per_month: 1, // Reduced from 7
+    // Developer Signals - VERY PERMISSIVE for testing  
+    min_public_repos: 1,   // Accept ANY public repo
+    min_followers: 1,      // Accept anyone with at least 1 follower
+    min_contributions_per_month: 0, // Accept anyone (no minimum)
     
     // Code Quality Filters
-    min_originality_ratio: 40, // Reduced from 55
-    exclude_generic_repos: true,
-    require_recent_activity: true,
-    max_months_since_last_commit: 12, // Relaxed from 4
+    min_originality_ratio: 0, // Accept all code origins
+    exclude_generic_repos: false, // Accept generic repos
+    require_recent_activity: false, // Accept inactive users too
+    max_months_since_last_commit: 36, // Accept anyone (3+ years inactive)
     
     // Store Presence - OPTIONAL (not required)
-    require_app_store_link: false,  // Changed to false - optional
+    require_app_store_link: false,  
     
     // Location & Demographics
     locations: [], // GitHub API does NOT support location: filter in search. Use post-processing if needed.
     available_for_hire: false,
     
-    score_threshold: 50  // Reduced from 72 - more inclusive
+    score_threshold: 0  // Accept ALL scores (no minimum)
 };
 
 // ===========================
