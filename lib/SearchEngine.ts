@@ -1,9 +1,10 @@
 
-import { Candidate, SearchFilterCriteria } from '../types/database';
+import { Candidate, SearchFilterCriteria, GitHubFilterCriteria, GitHubCandidate } from '../types/database';
 import { calculateFlutterDeveloperScore } from './scoring';
 import { deduplicationService } from './deduplication';
 import { SearchService } from './search';
 import { normalizeLinkedInUrl } from './normalization';
+import { githubService } from './githubService';
 
 export type LogCallback = (message: string) => void;
 
@@ -26,26 +27,75 @@ export class SearchEngine {
 
     public async startSearch(
         query: string,
-        source: 'linkedin',
+        source: 'linkedin' | 'github',
         maxResults: number,
         options: { 
             language: string; 
             maxAge: number;
             filters?: SearchFilterCriteria;
+            githubFilters?: GitHubFilterCriteria;
             scoreThreshold?: number;
         },
         onLog: LogCallback,
-        onComplete: (candidates: Candidate[]) => void
+        onComplete: (candidates: Candidate[] | GitHubCandidate[]) => void
     ) {
         this.isRunning = true;
         this.abortController = new AbortController();
         this.apiKey = import.meta.env.VITE_APIFY_API_KEY || '';
         this.openaiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
 
+        // Handle GitHub source separately
+        if (source === 'github') {
+            try {
+                onLog("🔍 Iniciando búsqueda en GitHub Code Scan...");
+                
+                if (!options.githubFilters) {
+                    onLog("❌ GitHub filter criteria required");
+                    onComplete([]);
+                    return;
+                }
+
+                const results = await githubService.searchDevelopers(
+                    options.githubFilters,
+                    maxResults,
+                    onLog
+                );
+
+                // Convert GitHubMetrics to GitHubCandidate
+                const candidates: GitHubCandidate[] = results.map(metrics => ({
+                    id: '',
+                    full_name: metrics.github_username,
+                    email: metrics.mentioned_email,
+                    linkedin_url: null,
+                    github_url: metrics.github_url,
+                    avatar_url: null,
+                    job_title: null,
+                    current_company: null,
+                    location: null,
+                    experience_years: null,
+                    education: null,
+                    skills: [],
+                    ai_analysis: null,
+                    symmetry_score: metrics.github_score,
+                    created_at: metrics.identified_at || new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    github_metrics: metrics
+                } as GitHubCandidate));
+
+                onComplete(candidates);
+            } catch (error: any) {
+                onLog(`[ERROR] ❌ ${error.message}`);
+                onComplete([]);
+            } finally {
+                this.isRunning = false;
+            }
+            return;
+        }
+
         // OPTIMIZED: Use fast fallback for demo/production without API keys
         if (!this.apiKey || !this.openaiKey) {
             onLog("🚀 Iniciando búsqueda en modo RÁPIDO (Sin APIs externas)...");
-            this.startFastSearch(query, maxResults, options, onLog, onComplete);
+            this.startFastSearch(query, maxResults, options, onLog, onComplete as (candidates: Candidate[]) => void);
             return;
         }
 
