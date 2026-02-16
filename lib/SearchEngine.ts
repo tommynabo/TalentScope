@@ -759,7 +759,14 @@ export class SearchEngine {
             // Clean up markdown code blocks if present
             const cleanContent = content?.replace(/```json/g, '').replace(/```/g, '').trim();
 
-            return JSON.parse(cleanContent || '{}');
+            const parsed = JSON.parse(cleanContent || '{}');
+            
+            // Ensure all required fields exist
+            parsed.icebreaker = parsed.icebreaker || `Hola ${context.name}, me encantaría conectar contigo.`;
+            parsed.followup_message = parsed.followup_message || `${context.name}, tras revisar tu perfil sabemos que eres el perfil ideal.`;
+            parsed.second_followup = parsed.second_followup || `${context.name}, viendo tu trayectoria creemos que hay una gran alineación.`;
+            
+            return parsed;
         } catch (e: any) {
             // Return fallback on timeout or error
             return {

@@ -35,26 +35,26 @@ export const WaleadMessagesEditor: React.FC<WaleadMessagesEditorProps> = ({
 
   useEffect(() => {
     if (candidate && isOpen) {
-      // Get messages from candidate or from AI analysis
       let analysis: any = {};
       try {
         if (candidate.ai_analysis) {
           analysis = JSON.parse(candidate.ai_analysis);
         }
       } catch (e) {
-        // Fallback if parsing fails
+        console.warn('Error parsing ai_analysis:', e);
       }
 
-      setMessages({
-        icebreaker: candidate.walead_messages?.icebreaker || analysis.icebreaker || '',
-        followup_message: candidate.walead_messages?.followup_message || analysis.followup_message || '',
-        second_followup: candidate.walead_messages?.second_followup || analysis.second_followup || ''
-      });
+      const newMessages = {
+        icebreaker: candidate.walead_messages?.icebreaker || analysis?.icebreaker || '',
+        followup_message: candidate.walead_messages?.followup_message || analysis?.followup_message || '',
+        second_followup: candidate.walead_messages?.second_followup || analysis?.second_followup || ''
+      };
 
+      setMessages(newMessages);
       setCharCounts({
-        icebreaker: (candidate.walead_messages?.icebreaker || analysis.icebreaker || '').length,
-        followup_message: (candidate.walead_messages?.followup_message || analysis.followup_message || '').length,
-        second_followup: (candidate.walead_messages?.second_followup || analysis.second_followup || '').length
+        icebreaker: newMessages.icebreaker.length,
+        followup_message: newMessages.followup_message.length,
+        second_followup: newMessages.second_followup.length
       });
     }
   }, [candidate, isOpen]);
@@ -108,9 +108,10 @@ export const WaleadMessagesEditor: React.FC<WaleadMessagesEditorProps> = ({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {(Object.keys(MESSAGE_LIMITS) as Array<keyof typeof MESSAGE_LIMITS>).map((field) => {
-            const limit = MESSAGE_LIMITS[field].max;
-            const count = charCounts[field];
+          {Object.entries(MESSAGE_LIMITS).map(([field, config]) => {
+            const typedField = field as keyof typeof messages;
+            const limit = config.max;
+            const count = charCounts[typedField];
             const isOverLimit = count > limit;
             const percentage = (count / limit) * 100;
 
@@ -118,7 +119,7 @@ export const WaleadMessagesEditor: React.FC<WaleadMessagesEditorProps> = ({
               <div key={field} className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-semibold text-slate-300">
-                    {MESSAGE_LIMITS[field].label}
+                    {config.label}
                   </label>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-mono ${isOverLimit ? 'text-red-400' : 'text-slate-400'}`}>
@@ -129,8 +130,8 @@ export const WaleadMessagesEditor: React.FC<WaleadMessagesEditorProps> = ({
                 </div>
 
                 <textarea
-                  value={messages[field]}
-                  onChange={(e) => handleMessageChange(field, e.target.value)}
+                  value={messages[typedField]}
+                  onChange={(e) => handleMessageChange(typedField, e.target.value)}
                   className={`w-full h-24 p-3 rounded-lg bg-slate-800 border text-slate-100 text-sm resize-none focus:outline-none focus:ring-2 transition-all ${
                     isOverLimit
                       ? 'border-red-500/50 focus:ring-red-500/50'
@@ -150,14 +151,14 @@ export const WaleadMessagesEditor: React.FC<WaleadMessagesEditorProps> = ({
                 {/* Action buttons */}
                 <div className="flex gap-2">
                   <button
-                    onClick={() => copyToClipboard(field)}
+                    onClick={() => copyToClipboard(typedField)}
                     className="flex-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     <Copy className="w-3 h-3" />
                     Copiar
                   </button>
                   <button
-                    onClick={() => resetToDefault(field)}
+                    onClick={() => resetToDefault(typedField)}
                     className="flex-1 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     <RotateCcw className="w-3 h-3" />
