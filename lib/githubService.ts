@@ -407,18 +407,12 @@ export class GitHubService {
             parts.push(`language:${criteria.languages[0].toLowerCase()}`);
         }
 
-        // Stars - Very permissive (anything with at least 1 star)
-        parts.push(`stars:>=1`);
+        // NOTE: GitHub /search/users endpoint filters:
+        // Valid: language:, location:, type:user
+        // INVALID for users: stars:>=, followers:>= (these don't work)
+        // We post-filter by followers/stars/repos in analyzeUser() instead
 
-        // Followers - Very permissive (anything with at least 1 follower)
-        parts.push(`followers:>=1`);
-
-        // Available for hire
-        if (criteria.available_for_hire) {
-            parts.push('hireable:true');
-        }
-
-        const query = parts.length > 0 ? parts.join(' ') : 'language:typescript stars:>=1 followers:>=1';
+        const query = parts.length > 0 ? parts.join(' ') : 'language:typescript';
         return query;
     }
 

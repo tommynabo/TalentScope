@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Token Verification</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #00ff00;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 3px solid #ff9500;
+        }
+        .pass { color: #00ff00; }
+        .fail { color: #ff0000; }
+    </style>
+</head>
+<body>
+    <h1>🔐 GitHub Token Verification</h1>
+    <div id="results"></div>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        // Check if token is in environment
+        const token = import.meta.env.VITE_GITHUB_TOKEN;
+        
+        let html = '';
+        html += `<div class="test-result">
+            Token exists: <span class="${token ? 'pass' : 'fail'}">${token ? '✅ YES' : '❌ NO'}</span>
+        </div>`;
+        
+        if (token) {
+            html += `<div class="test-result">
+                Token length: ${token.length}
+            </div>`;
+            
+            html += `<div class="test-result">
+                Starts with ghp_: <span class="${token.startsWith('ghp_') ? 'pass' : 'fail'}">${token.startsWith('ghp_') ? '✅ YES' : '❌ NO'}</span>
+            </div>`;
+            
+            // Show first 20 chars
+            html += `<div class="test-result">
+                Token preview: ${token.substring(0, 20)}...
+            </div>`;
+        }
+        
+        // Also check localStorage for debugging
+        html += `<div class="test-result">
+            LocalStorage has token: <span class="${localStorage.getItem('github_token') ? 'pass' : 'fail'}">${localStorage.getItem('github_token') ? '✅ YES' : '❌ NO'}</span>
+        </div>`;
+        
+        results.innerHTML = html;
+    </script>
+</body>
+</html>
