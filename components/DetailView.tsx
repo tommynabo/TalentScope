@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Candidate, Campaign } from '../types/database';
-import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Search, Play, Loader2, ExternalLink, Terminal, ChevronDown, ChevronUp, X, Target, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Candidate, Campaign, CandidateStatus } from '../types/database';
+import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Search, Play, Loader2, ExternalLink, Terminal, ChevronDown, ChevronUp, X, Target, TrendingUp, AlertTriangle, Columns, List, Download } from 'lucide-react';
 import { searchEngine } from '../lib/SearchEngine';
 import { CampaignService, CandidateService } from '../lib/services';
 import { normalizeLinkedInUrl } from '../lib/normalization';
 import ScoreBreakdownCard from './ScoreBreakdownCard';
 import Scheduler from './Scheduler';
 import Toast from './Toast';
+import KanbanBoard from './KanbanBoard';
 import { saveSearchSnapshot, loadSearchSnapshot, clearSearchSnapshot } from '../lib/useSessionState';
 import { TabGuard } from '../lib/TabGuard';
 import { Square } from 'lucide-react';
@@ -34,6 +35,12 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [toast, setToast] = useState({ show: false, message: '' });
   const [sortConfig, setSortConfig] = useState<{ field: SortField; direction: SortDirection }>({ field: 'added_at', direction: 'desc' });
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
+    start: new Date().toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0]
+  });
+  const [showExportOptions, setShowExportOptions] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Show recovery toast if we restored from a snapshot
@@ -282,6 +289,95 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
     }
   };
 
+  const handleStatusChange = async (candidateId: string, newStatus: CandidateStatus) => {
+    // Optimistic update
+    setCandidates(prev => prev.map(c => 
+      c.id === candidateId ? { ...c, status_in_campaign: newStatus } : c
+    ));
+    
+    try {
+      await CampaignService.updateCandidateStatus(campaign.id, candidateId, newStatus);
+      setToast({ show: true, message: `✅ Estado actualizado` });
+    } catch (error) {
+      console.error("Failed to update status", error);
+      setToast({ show: true, message: `❌ Error al actualizar estado` });
+      loadCandidates(); // Revert on error
+    }
+  };
+
+  const handleExport = () => {
+    const { start, end } = dateRange;
+    if (!start || !end) return;
+
+    const startDate = new Date(start);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(end);
+    endDate.setHours(23, 59, 59, 999);
+
+    const filtered = candidates.filter(c => {
+      const dateStr = c.added_at || c.created_at;
+      if (!dateStr) return false;
+      const cDate = new Date(dateStr);
+      return cDate >= startDate && cDate <= endDate;
+    });
+
+    if (filtered.length === 0) {
+      setToast({ show: true, message: '⚠️ No hay candidatos para exportar en este rango' });
+      return;
+    }
+
+    const headers = ['FIRST_NAME', 'LAST_NAME', 'ROL', 'EMPRESA', 'EMAIL', 'LINKEDIN', 'SCORE', 'ICEBREAKER', 'FOLLOWUP', 'MENSAJE', 'ANALISIS', 'STATUS', 'FECHA'];
+    
+    const csvContent = [
+      headers.join(','),
+      ...filtered.map(c => {
+        const analysis = parseAnalysis(c.ai_analysis);
+        const icebreaker = analysis?.icebreaker || '';
+        const followup = analysis?.followup_message || '';
+        const message = analysis?.outreach_message || '';
+        const summary = analysis?.summary || '';
+        
+        const nameParts = (c.full_name || '').split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+        
+        return [
+          `"${firstName}"`,
+          `"${lastName}"`,
+          `"${c.job_title || ''}"`,
+          `"${c.current_company || ''}"`,
+          `"${c.email || ''}"`,
+          `"${normalizeLinkedInUrl(c.linkedin_url)}"`,
+          `"${c.symmetry_score || 0}"`,
+          `"${icebreaker.replace(/"/g, '""')}"`,
+          `"${followup.replace(/"/g, '""')}"`,
+          `"${message.replace(/"/g, '""')}"`,
+          `"${summary.replace(/"/g, '""')}"`,
+          `"${c.status_in_campaign || 'Pool'}"`,
+          `"${c.added_at ? c.added_at.split('T')[0] : ''}"`
+        ].join(',');
+      })
+    ].join('\n');
+
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `talentscope_export_${campaign.id}_${start}_${end}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      setToast({ 
+        show: true, 
+        message: `✅ CSV exportado con ${filtered.length} prospectos`
+      });
+      setShowExportOptions(false);
+    }
+  };
+
   return (
     <div className="p-3 md:p-4 lg:p-6 animate-in fade-in slide-in-from-right-8 duration-500 h-full flex flex-col relative">
       {/* Header & Nav */}
@@ -406,77 +502,80 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
 
       {/* Main Table */}
       <div className="flex-1 bg-slate-900/40 border border-slate-800 rounded-lg overflow-hidden flex flex-col min-h-[400px]">
-        <div className="px-3 py-2 border-b border-slate-800 flex justify-between items-center bg-slate-900/60">
-          <h3 className="font-semibold text-sm text-white">Pipeline de Candidatos ({candidates.length})</h3>
-          <button
-            onClick={() => {
-              // Get today's date in YYYY-MM-DD format
-              const today = new Date().toISOString().split('T')[0];
-              
-              // Filter candidates to only include those from today
-              const todaysCandidates = sortedCandidates.filter(c => {
-                const candidateDate = c.created_at?.split('T')[0];
-                return candidateDate === today;
-              });
+        {/* Header with View Toggle & Export */}
+        <div className="px-3 py-2 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900/60 transition-all">
+          <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
+            <h3 className="font-semibold text-sm text-white whitespace-nowrap">Pipeline ({candidates.length})</h3>
+            
+            {/* View Mode Toggle */}
+            <div className="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700/50">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-slate-700 text-cyan-400 shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                title="Vista de Lista"
+              >
+                <List className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setViewMode('kanban')}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'kanban' ? 'bg-slate-700 text-cyan-400 shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                title="Vista Kanban"
+              >
+                <Columns className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
 
-              const headers = ['FIRST_NAME', 'LAST_NAME', 'ROL', 'EMPRESA', 'EMAIL', 'LINKEDIN', 'SCORE', 'ICEBREAKER', 'FOLLOWUP', 'MENSAJE', 'ANALISIS'];
-              const csvContent = [
-                headers.join(','),
-                ...todaysCandidates.map(c => {
-                  const analysis = parseAnalysis(c.ai_analysis);
-                  const icebreaker = analysis?.icebreaker || '';
-                  const followup = analysis?.followup_message || '';
-                  const message = analysis?.outreach_message || '';
-                  const summary = analysis?.summary || '';
-
-                  // Split full name into first and last name
-                  const nameParts = c.full_name.split(' ');
-                  const firstName = nameParts[0] || '';
-                  const lastName = nameParts.slice(1).join(' ') || '';
-
-                  return [
-                    `"${firstName}"`,
-                    `"${lastName}"`,
-                    `"${c.job_title}"`,
-                    `"${c.current_company}"`,
-                    `"${c.email || ''}"`,
-                    `"${normalizeLinkedInUrl(c.linkedin_url)}"`,
-                    `"${c.symmetry_score || 0}"`,
-                    `"${icebreaker.replace(/"/g, '""')}"`, // Escape quotes
-                    `"${followup.replace(/"/g, '""')}"`, // Escape quotes
-                    `"${message.replace(/"/g, '""')}"`, // Escape quotes
-                    `"${summary.replace(/"/g, '""')}"`
-                  ].join(',');
-                })
-              ].join('\n');
-
-              const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-              const link = document.createElement('a');
-              if (link.download !== undefined) {
-                const url = URL.createObjectURL(blob);
-                link.setAttribute('href', url);
-                link.setAttribute('download', `talentscope_export_${campaign.id}_${today}.csv`);
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                // Show feedback
-                const count = todaysCandidates.length;
-                setToast({ 
-                  show: true, 
-                  message: count > 0 
-                    ? `✅ CSV exportado con ${count} prospectos de hoy`
-                    : `⚠️ No hay prospectos para exportar de hoy`
-                });
-              }
-            }}
-            className="px-2.5 py-1 text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors"
-          >
-            Exportar
-          </button>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* Export Date Range & Button */}
+            <div className={`flex items-center gap-2 transition-all overflow-hidden ${showExportOptions ? 'w-full opacity-100' : 'w-auto'}`}>
+              {showExportOptions ? (
+                <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 rounded-lg p-1 animate-in slide-in-from-right-4 fade-in duration-200">
+                  <input 
+                    type="date" 
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                    className="bg-transparent text-xs text-white border-0 p-1 focus:ring-0 w-24"
+                  />
+                  <span className="text-slate-500 text-xs">-</span>
+                  <input 
+                    type="date" 
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                    className="bg-transparent text-xs text-white border-0 p-1 focus:ring-0 w-24"
+                  />
+                  <button 
+                    onClick={handleExport}
+                    className="p-1 hover:bg-cyan-500/20 rounded text-cyan-400"
+                    title="Descargar CSV"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </button>
+                  <button 
+                    onClick={() => setShowExportOptions(false)}
+                    className="p-1 hover:bg-slate-700 rounded text-slate-400"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowExportOptions(true)}
+                  className="px-2.5 py-1.5 text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors flex items-center gap-1.5"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span className="hidden xs:inline">Exportar</span>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-
+        
+        {viewMode === 'kanban' ? (
+             <div className="flex-1 overflow-hidden bg-slate-900/40 relative">
+               <KanbanBoard candidates={candidates} onStatusChange={handleStatusChange} />
+             </div>
+        ) : (
         <div className="overflow-x-auto flex-1">
           {loading ? (
             <div className="flex items-center justify-center h-full text-slate-500">
@@ -626,6 +725,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
             </table>
           )}
         </div>
+        )}
       </div>
 
       {/* Analysis Modal */}

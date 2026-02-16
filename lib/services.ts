@@ -230,4 +230,15 @@ export const CampaignService = {
         })) as (Candidate & { status_in_campaign: string; added_at: string })[];
     },
 
+    async updateCandidateStatus(campaignId: string, candidateId: string, status: string) {
+        const { data, error } = await supabase
+            .from('campaign_candidates')
+            .update({ status })
+            .eq('campaign_id', campaignId)
+            .eq('candidate_id', candidateId)
+            .select();
+
+        if (error) throw error;
+        return data;
+    },
 };
