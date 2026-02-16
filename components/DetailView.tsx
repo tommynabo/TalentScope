@@ -354,7 +354,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
       return;
     }
 
-    const headers = ['FIRST_NAME', 'LAST_NAME', 'ROL', 'EMPRESA', 'EMAIL', 'LINKEDIN', 'SCORE', 'INVITACION_INICIAL', 'POST_ACEPTACION', 'SEGUIMIENTO', 'MENSAJE', 'ANALISIS', 'STATUS', 'FECHA'];
+    const headers = ['FIRST_NAME', 'LAST_NAME', 'ROL', 'EMPRESA', 'EMAIL', 'LINKEDIN', 'SCORE', 'INVITACION_INICIAL', 'POST_ACEPTACION', 'SEGUIMIENTO', 'ANALISIS', 'STATUS', 'FECHA'];
     
     const csvContent = [
       headers.join(','),
@@ -363,7 +363,6 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
         const icebreaker = c.walead_messages?.icebreaker || analysis?.icebreaker || '';
         const followup = c.walead_messages?.followup_message || analysis?.followup_message || '';
         const secondFollowup = c.walead_messages?.second_followup || analysis?.second_followup || '';
-        const message = analysis?.outreach_message || '';
         const summary = analysis?.summary || '';
         
         const nameParts = (c.full_name || '').split(' ');
@@ -381,7 +380,6 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
           `"${icebreaker.replace(/"/g, '""')}"`,
           `"${followup.replace(/"/g, '""')}"`,
           `"${secondFollowup.replace(/"/g, '""')}"`,
-          `"${message.replace(/"/g, '""')}"`,
           `"${summary.replace(/"/g, '""')}"`,
           `"${c.status_in_campaign || 'Pool'}"`,
           `"${c.added_at ? c.added_at.split('T')[0] : ''}"`
