@@ -282,6 +282,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
             setSearching(false);
             setToast({ show: true, message: '❌ Error procesando candidatos' });
           }
+        }
       );
     } catch (e: any) {
       setLogs(prev => [...prev, `❌ Error crítico: ${e.message}`]);
