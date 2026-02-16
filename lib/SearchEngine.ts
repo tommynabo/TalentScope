@@ -212,8 +212,6 @@ export class SearchEngine {
 
                 if (uniqueCandidates.length === 0) {
                     onLog(`[DEDUP] ⚠️ No candidatos nuevos en este intento. Reintentando...`);
-                    // Small delay before retry
-                    await new Promise(r => setTimeout(r, 500));
                     continue;
                 }
 
@@ -255,10 +253,7 @@ export class SearchEngine {
                     break;
                 }
 
-                // Small delay before next retry
-                if (attempt < MAX_RETRIES) {
-                    await new Promise(r => setTimeout(r, 500));
-                }
+                // No delay needed - Apify and OpenAI provide sufficient spacing
             }
 
             if (acceptedCandidates.length === 0) {
@@ -663,10 +658,7 @@ export class SearchEngine {
                 onLog(`[LINKEDIN] ⚠️ Error en intento ${attempt}: ${error.message}`);
             }
 
-            // Brief pause between retries
-            if (attempt < MAX_RETRIES && acceptedCandidates.length < maxResults) {
-                await new Promise(r => setTimeout(r, 300));
-            }
+            // No delay needed - continue immediately to maximize throughput
         }
 
         const totalTime = Math.round((performance.now() - startTime) / 1000);
