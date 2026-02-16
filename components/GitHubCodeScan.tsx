@@ -122,171 +122,166 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, onCa
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-850 p-6">
-            <div className="max-w-7xl mx-auto space-y-6">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-8">
-                    <div>
-                        <h1 className="text-4xl font-bold text-white flex items-center gap-3">
-                            <Code2 className="h-10 w-10 text-cyan-400" />
-                            GitHub Code Scan
-                        </h1>
-                        <p className="text-slate-400 mt-2">Find proven "Builders" with shipped products</p>
-                    </div>
-                    <button
-                        onClick={() => setShowFilterConfig(!showFilterConfig)}
-                        className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 rounded-lg text-white font-semibold transition"
-                    >
-                        {showFilterConfig ? '🔍 Hide Filters' : '⚙️ Show Filters'}
-                    </button>
+        <div className="space-y-6">
+            {/* Header - Simplified */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-2xl font-bold text-white">Búsqueda en GitHub</h2>
+                    <p className="text-slate-400 text-sm mt-1">Descubre desarrolladores por calidad de código</p>
                 </div>
+                <button
+                    onClick={() => setShowFilterConfig(!showFilterConfig)}
+                    className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-semibold transition text-sm"
+                >
+                    {showFilterConfig ? '🔍 Ocultar' : '⚙️ Filtros'}
+                </button>
+            </div>
 
-                {/* Filter Configuration */}
-                {showFilterConfig && (
-                    <div className="transition-all duration-300">
-                        <GitHubFilterConfig
-                            onSave={(newCriteria) => {
-                                setCriteria(newCriteria);
-                                setShowFilterConfig(false);
-                            }}
-                        />
-                    </div>
-                )}
+            {/* Filter Configuration */}
+            {showFilterConfig && (
+                <div className="transition-all duration-300">
+                    <GitHubFilterConfig
+                        onSave={(newCriteria) => {
+                            setCriteria(newCriteria);
+                            setShowFilterConfig(false);
+                        }}
+                    />
+                </div>
+            )}
 
-                {criteria && !showFilterConfig && (
-                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="text-lg font-semibold text-white mb-2">Search Configuration Ready</h3>
-                                <p className="text-slate-400 text-sm">
-                                    {criteria.languages.join(', ')} • Score ≥ {criteria.score_threshold} • 
-                                    {criteria.require_app_store_link ? ' App Store Required' : ' Any App Type'}
-                                </p>
-                            </div>
-                            <div className="flex gap-3">
-                                <input
-                                    type="number"
-                                    value={maxResults}
-                                    onChange={(e) => setMaxResults(parseInt(e.target.value))}
-                                    placeholder="Max results"
-                                    className="w-24 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none"
-                                    min="10"
-                                    max="100"
-                                />
+            {criteria && !showFilterConfig && (
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="text-lg font-semibold text-white mb-2">Criterios Configurados</h3>
+                            <p className="text-slate-400 text-sm">
+                                {criteria.languages.join(', ')} • Score ≥ {criteria.score_threshold} • 
+                                {criteria.require_app_store_link ? ' App Store Required' : ' Any App Type'}
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            <input
+                                type="number"
+                                value={maxResults}
+                                onChange={(e) => setMaxResults(parseInt(e.target.value))}
+                                placeholder="Max results"
+                                className="w-24 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-orange-500 outline-none"
+                                min="10"
+                                max="100"
+                            />
+                            <button
+                                onClick={handleStartSearch}
+                                disabled={loading}
+                                className="px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 disabled:opacity-50 rounded-lg text-white font-semibold transition flex items-center gap-2"
+                            >
+                                {loading ? (
+                                    <>
+                                        <Loader className="h-5 w-5 animate-spin" />
+                                        Buscando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Search className="h-5 w-5" />
+                                        Iniciar Búsqueda
+                                    </>
+                                )}
+                            </button>
+                            {candidates.length > 0 && (
                                 <button
-                                    onClick={handleStartSearch}
+                                    onClick={handleStartCrossSearch}
                                     disabled={loading}
-                                    className="px-6 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 rounded-lg text-white font-semibold transition flex items-center gap-2"
+                                    className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 rounded-lg text-white font-semibold transition flex items-center gap-2"
+                                    title="Link GitHub results with LinkedIn profiles"
                                 >
                                     {loading ? (
                                         <>
                                             <Loader className="h-5 w-5 animate-spin" />
-                                            Searching...
                                         </>
                                     ) : (
                                         <>
-                                            <Search className="h-5 w-5" />
-                                            Start Search
+                                            <Link2 className="h-5 w-5" />
+                                            Cross-Search
                                         </>
                                     )}
                                 </button>
-                                {candidates.length > 0 && (
-                                    <button
-                                        onClick={handleStartCrossSearch}
-                                        disabled={loading}
-                                        className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 rounded-lg text-white font-semibold transition flex items-center gap-2"
-                                        title="Link GitHub results with LinkedIn profiles"
-                                    >
-                                        {loading ? (
-                                            <>
-                                                <Loader className="h-5 w-5 animate-spin" />
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Link2 className="h-5 w-5" />
-                                                Cross-Search
-                                            </>
-                                        )}
-                                    </button>
-                                )}
-                                <button
-                                    onClick={() => setShowFilterConfig(true)}
-                                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300"
-                                >
-                                    Edit
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Logs Panel */}
-                {showLogs && (
-                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 max-h-60 overflow-y-auto font-mono text-sm">
-                        <div className="flex items-center justify-between mb-3">
-                            <h4 className="text-cyan-400 font-semibold">Search Logs</h4>
+                            )}
                             <button
-                                onClick={() => setShowLogs(false)}
-                                className="text-slate-500 hover:text-slate-400"
+                                onClick={() => setShowFilterConfig(true)}
+                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300"
                             >
-                                ✕
+                                Editar
                             </button>
                         </div>
-                        {logs.map((log, idx) => (
-                            <div key={idx} className="text-slate-300 py-0.5">{log}</div>
+                    </div>
+                </div>
+            )}
+
+            {/* Logs Panel */}
+            {showLogs && (
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 max-h-60 overflow-y-auto font-mono text-sm">
+                    <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-orange-400 font-semibold">Logs de Búsqueda</h4>
+                        <button
+                            onClick={() => setShowLogs(false)}
+                            className="text-slate-500 hover:text-slate-400"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                    {logs.map((log, idx) => (
+                        <div key={idx} className="text-slate-300 py-0.5">{log}</div>
+                    ))}
+                </div>
+            )}
+
+            {/* Results Grid */}
+            {candidates.length > 0 && (
+                <div>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-2xl font-bold text-white">
+                            Resultados: {candidates.length} Desarrolladores
+                        </h2>
+                        <button
+                            onClick={() => {
+                                // TODO: Export to campaign or save search
+                                console.log('Export clicked', candidates);
+                            }}
+                            className="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-white font-semibold transition"
+                        >
+                            <Plus className="h-4 w-4 inline mr-2" />
+                            Agregar a Campaña
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {candidates.map((candidate) => (
+                            <CandidateCard
+                                key={candidate.github_username}
+                                candidate={candidate}
+                                scoreColor={getScoreBadgeColor(candidate.github_score)}
+                                formatNumber={formatNumber}
+                            />
                         ))}
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* Results Grid */}
-                {candidates.length > 0 && (
-                    <div>
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-2xl font-bold text-white">
-                                Results: {candidates.length} Developers Found
-                            </h2>
-                            <button
-                                onClick={() => {
-                                    // TODO: Export to campaign or save search
-                                    console.log('Export clicked', candidates);
-                                }}
-                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white font-semibold transition"
-                            >
-                                <Plus className="h-4 w-4 inline mr-2" />
-                                Add to Campaign
-                            </button>
-                        </div>
+            {/* Empty State */}
+            {!loading && candidates.length === 0 && criteria && (
+                <div className="text-center py-16">
+                    <Code2 className="h-16 w-16 text-slate-600 mx-auto mb-4" />
+                    <p className="text-slate-400 text-lg">Sin búsquedas realizadas</p>
+                    <p className="text-slate-500 text-sm mt-2">Haz clic en "Iniciar Búsqueda" para encontrar desarrolladores</p>
+                </div>
+            )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {candidates.map((candidate) => (
-                                <CandidateCard
-                                    key={candidate.github_username}
-                                    candidate={candidate}
-                                    scoreColor={getScoreBadgeColor(candidate.github_score)}
-                                    formatNumber={formatNumber}
-                                />
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Empty State */}
-                {!loading && candidates.length === 0 && criteria && (
-                    <div className="text-center py-16">
-                        <Code2 className="h-16 w-16 text-slate-600 mx-auto mb-4" />
-                        <p className="text-slate-400 text-lg">No searches performed yet</p>
-                        <p className="text-slate-500 text-sm mt-2">Click "Start Search" to find developers</p>
-                    </div>
-                )}
-
-                {!loading && candidates.length === 0 && !criteria && (
-                    <div className="text-center py-16">
-                        <Trophy className="h-16 w-16 text-slate-600 mx-auto mb-4" />
-                        <p className="text-slate-400 text-lg">Configure your search criteria</p>
-                        <p className="text-slate-500 text-sm mt-2">Set up filters to find developers that match your needs</p>
-                    </div>
-                )}
-            </div>
+            {!loading && candidates.length === 0 && !criteria && (
+                <div className="text-center py-16">
+                    <Trophy className="h-16 w-16 text-slate-600 mx-auto mb-4" />
+                    <p className="text-slate-400 text-lg">Configura tus criterios de búsqueda</p>
+                    <p className="text-slate-500 text-sm mt-2">Establece filtros para encontrar desarrolladores que se adapten a tus necesidades</p>
+                </div>
+            )}
         </div>
     );
 };
@@ -302,12 +297,12 @@ const CandidateCard: React.FC<CandidateCardProps> = ({ candidate, scoreColor, fo
         href={candidate.github_url}
         target="_blank"
         rel="noopener noreferrer"
-        className="group bg-gradient-to-br from-slate-900 to-slate-800/50 border border-slate-700 hover:border-cyan-500 rounded-xl p-6 transition-all hover:shadow-lg hover:shadow-cyan-500/10"
+        className="group bg-gradient-to-br from-slate-900 to-slate-800/50 border border-slate-700 hover:border-orange-500 rounded-xl p-6 transition-all hover:shadow-lg hover:shadow-orange-500/10"
     >
         {/* Header with Score */}
         <div className="flex items-start justify-between mb-4">
             <div>
-                <h3 className="text-lg font-bold text-white group-hover:text-cyan-400 transition">
+                <h3 className="text-lg font-bold text-white group-hover:text-orange-400 transition">
                     @{candidate.github_username}
                 </h3>
                 {candidate.personal_website && (
@@ -341,22 +336,22 @@ const CandidateCard: React.FC<CandidateCardProps> = ({ candidate, scoreColor, fo
         <div className="grid grid-cols-2 gap-3 mb-4">
             <MetricBadge
                 icon={<Star className="h-4 w-4" />}
-                label="Stars"
+                label="Estrellas"
                 value={formatNumber(candidate.total_stars_received)}
             />
             <MetricBadge
                 icon={<Users className="h-4 w-4" />}
-                label="Followers"
+                label="Seguidores"
                 value={formatNumber(candidate.followers)}
             />
             <MetricBadge
                 icon={<GitBranch className="h-4 w-4" />}
-                label="Originality"
+                label="Originalidad"
                 value={`${Math.round(candidate.originality_ratio)}%`}
             />
             <MetricBadge
                 icon={<Code2 className="h-4 w-4" />}
-                label="Language"
+                label="Lenguaje"
                 value={candidate.most_used_language}
             />
         </div>
@@ -364,18 +359,18 @@ const CandidateCard: React.FC<CandidateCardProps> = ({ candidate, scoreColor, fo
         {/* Activity Info */}
         <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-                <span className="text-slate-500">Public Repos:</span>
+                <span className="text-slate-500">Repos Públicos:</span>
                 <span className="text-slate-300 font-semibold">{candidate.public_repos}</span>
             </div>
             <div className="flex justify-between">
-                <span className="text-slate-500">Originality:</span>
+                <span className="text-slate-500">Originalidad:</span>
                 <span className="text-slate-300 font-semibold">{candidate.original_repos_count} / {candidate.original_repos_count + candidate.fork_repos_count}</span>
             </div>
             {candidate.last_commit_date && (
                 <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Last Commit:</span>
+                    <span className="text-slate-500">Último Commit:</span>
                     <span className="text-slate-300">
-                        {new Date(candidate.last_commit_date).toLocaleDateString()}
+                        {new Date(candidate.last_commit_date).toLocaleDateString('es-ES')}
                     </span>
                 </div>
             )}
@@ -389,25 +384,25 @@ const CandidateCard: React.FC<CandidateCardProps> = ({ candidate, scoreColor, fo
 
         {/* Score Breakdown */}
         <div className="mt-4 pt-4 border-t border-slate-700">
-            <p className="text-xs text-slate-500 mb-2 font-semibold">Score Breakdown</p>
+            <p className="text-xs text-slate-500 mb-2 font-semibold">Desglose de Puntuación</p>
             <div className="space-y-1">
                 <ScoreBar
-                    label="Repository"
+                    label="Repositorio"
                     value={candidate.score_breakdown.repository_quality}
                     max={25}
                 />
                 <ScoreBar
-                    label="Activity"
+                    label="Actividad"
                     value={candidate.score_breakdown.code_activity}
                     max={20}
                 />
                 <ScoreBar
-                    label="Community"
+                    label="Comunidad"
                     value={candidate.score_breakdown.community_presence}
                     max={20}
                 />
                 <ScoreBar
-                    label="App Shipping"
+                    label="Apps Publicadas"
                     value={candidate.score_breakdown.app_shipping}
                     max={20}
                     highlight={candidate.has_app_store_link}
@@ -416,9 +411,9 @@ const CandidateCard: React.FC<CandidateCardProps> = ({ candidate, scoreColor, fo
         </div>
 
         {/* View on GitHub Button */}
-        <div className="mt-4 pt-4 border-t border-slate-700 flex items-center gap-2 text-cyan-400 group-hover:text-cyan-300">
+        <div className="mt-4 pt-4 border-t border-slate-700 flex items-center gap-2 text-orange-400 group-hover:text-orange-300">
             <ExternalLink className="h-4 w-4" />
-            <span className="text-sm font-semibold">View on GitHub</span>
+            <span className="text-sm font-semibold">Ver en GitHub</span>
         </div>
     </a>
 );
@@ -435,7 +430,7 @@ const MetricBadge: React.FC<MetricBadgeProps> = ({ icon, label, value }) => (
             {icon}
             {label}
         </div>
-        <div className="text-cyan-400 font-bold text-sm">{value}</div>
+        <div className="text-orange-400 font-bold text-sm">{value}</div>
     </div>
 );
 
@@ -452,7 +447,7 @@ const ScoreBar: React.FC<ScoreBarProps> = ({ label, value, max, highlight }) => 
         <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
             <div
                 className={`h-full rounded-full transition-all ${
-                    highlight ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gradient-to-r from-cyan-500 to-blue-500'
+                    highlight ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gradient-to-r from-orange-500 to-orange-400'
                 }`}
                 style={{ width: `${(value / max) * 100}%` }}
             />
