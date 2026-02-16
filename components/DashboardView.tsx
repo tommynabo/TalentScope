@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Linkedin, Github, Globe, Users, Lock, ArrowRight, Activity, Zap } from 'lucide-react';
+import { Linkedin, Github, Globe, Users, Lock, ArrowRight, Activity, Zap, RefreshCw } from 'lucide-react';
 import { AnalyticsService } from '../lib/analytics';
 import { AnalyticsDaily } from '../types/database';
 
@@ -12,11 +12,18 @@ interface DashboardViewProps {
 const DashboardView: React.FC<DashboardViewProps> = ({ userName, onOpenLinkedin, onLockedClick }) => {
   const [stats, setStats] = useState<AnalyticsDaily>(AnalyticsService.getEmptyStats());
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadStats();
 
-    // Refresh stats when tab becomes visible (user returns from DetailView)
+    // Auto-refresh stats every 2 seconds while on dashboard
+    const refreshInterval = setInterval(() => {
+      console.log('[Dashboard] Auto-refreshing stats...');
+      loadStats();
+    }, 2000);
+
+    // Also refresh when tab becomes visible
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         console.log('[Dashboard] Tab visible, refreshing stats...');
@@ -25,13 +32,29 @@ const DashboardView: React.FC<DashboardViewProps> = ({ userName, onOpenLinkedin,
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      clearInterval(refreshInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const loadStats = async () => {
-    const data = await AnalyticsService.getDailyStats();
-    setStats(data);
-    setLoading(false);
+    try {
+      console.log('[Dashboard] Loading stats...');
+      const data = await AnalyticsService.getDailyStats();
+      console.log('[Dashboard] Stats loaded:', data);
+      setStats(data);
+      setLoading(false);
+    } catch (error) {
+      console.error('[Dashboard] Error loading stats:', error);
+    }
+  };
+
+  const handleManualRefresh = async () => {
+    setRefreshing(true);
+    await loadStats();
+    setRefreshing(false);
   };
 
   return (
@@ -79,7 +102,18 @@ const DashboardView: React.FC<DashboardViewProps> = ({ userName, onOpenLinkedin,
           {/* Background Tech Details */}
           <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-soft-light pointer-events-none"></div>
 
-          <div className="absolute top-0 right-0 p-4">
+          <div className="absolute top-0 right-0 p-4 flex gap-2 items-center">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleManualRefresh();
+              }}
+              disabled={refreshing}
+              className="p-2 bg-slate-800/60 hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+              title="Actualizar stats"
+            >
+              <RefreshCw className={`h-4 w-4 text-slate-400 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
             <div className="flex items-center gap-2 bg-cyan-950/40 border border-cyan-500/20 px-3 py-1.5 rounded-full backdrop-blur-md shadow-lg shadow-cyan-900/10">
               <span className="relative flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>

@@ -231,42 +231,57 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
         searchOptions,
         (msg) => setLogs(prev => [...prev, msg]),
         async (newCandidates) => {
-          const savePromises = newCandidates.map(async (c) => {
+          try {
+            console.log(`[DetailView] Processing ${newCandidates.length} new candidates...`);
+            
+            // 1. Save candidates to database
+            const savePromises = newCandidates.map(async (c) => {
+              try {
+                const savedCandidate = await CandidateService.create(c);
+                await CampaignService.addCandidateToCampaign(campaign.id, savedCandidate.id);
+              } catch (err) {
+                console.error("Failed to save candidate", c.email, err);
+              }
+            });
+
+            await Promise.all(savePromises);
+            console.log(`[DetailView] Saved ${newCandidates.length} candidates to database`);
+
+            // 2. Update global analytics BEFORE other operations
             try {
-              const savedCandidate = await CandidateService.create(c);
-              await CampaignService.addCandidateToCampaign(campaign.id, savedCandidate.id);
+              console.log('[DetailView] Updating global analytics...');
+              await AnalyticsService.trackLeadsGenerated(newCandidates.length);
+              console.log('[DetailView] Global analytics updated successfully');
             } catch (err) {
-              console.error("Failed to save candidate", c.email, err);
+              console.error('[DetailView] Failed to update global analytics', err);
+              setLogs(prev => [...prev, `❌ Error updating dashboard stats: ${(err as any).message}`]);
             }
-          });
 
-          await Promise.all(savePromises);
-          console.log(`[DetailView] Saved ${newCandidates.length} candidates to database`);
+            // 3. Update campaign stats
+            try {
+              console.log('[DetailView] Updating campaign stats...');
+              await CampaignService.updateStats(campaign.id);
+              console.log('[DetailView] Stats updated, reloading campaign...');
+              await reloadCampaign(); // Reload campaign to get updated stats
+              console.log('[DetailView] Campaign reloaded with new stats:', campaign.settings?.stats);
+            } catch (err) {
+              console.error("[DetailView] Failed to update campaign stats", err);
+            }
 
-          // Update global analytics
-          try {
-            console.log('[DetailView] Updating global analytics...');
-            await AnalyticsService.trackLeadsGenerated(newCandidates.length);
-          } catch (err) {
-            console.error('[DetailView] Failed to update global analytics', err);
+            // 4. Reload candidates list
+            try {
+              await loadCandidates();
+            } catch (err) {
+              console.error("[DetailView] Failed to load candidates", err);
+            }
+
+            setSearching(false);
+            setToast({ show: true, message: `¡${newCandidates.length} nuevos candidatos encontrados!` });
+          } catch (error) {
+            console.error('[DetailView] Unexpected error in search callback', error);
+            setSearching(false);
+            setToast({ show: true, message: '❌ Error procesando candidatos' });
           }
-
-          // Update campaign stats after adding candidates
-          try {
-            console.log('[DetailView] Updating campaign stats...');
-            await CampaignService.updateStats(campaign.id);
-            console.log('[DetailView] Stats updated, reloading campaign...');
-            await reloadCampaign(); // Reload campaign to get updated stats
-            console.log('[DetailView] Campaign reloaded with new stats:', campaign.settings?.stats);
-          } catch (err) {
-            console.error("[DetailView] Failed to update campaign stats", err);
-          }
-
-          await loadCandidates();
-
-          setSearching(false);
-          setToast({ show: true, message: `¡${newCandidates.length} nuevos candidatos encontrados!` });
-        }
       );
     } catch (e: any) {
       setLogs(prev => [...prev, `❌ Error crítico: ${e.message}`]);
