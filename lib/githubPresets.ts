@@ -167,30 +167,30 @@ export const PRESET_UNIVERSITY_TALENT: GitHubFilterCriteria = {
 // ===========================
 export const PRESET_PRODUCT_ENGINEERS: GitHubFilterCriteria = {
     // Repository Metrics
-    min_stars: 80,
+    min_stars: 10,         // Reduced from 80 - more realistic
     max_stars: 20000,
-    min_forks: 3,
+    min_forks: 1,          // Reduced from 3
     languages: ['dart', 'typescript', 'kotlin', 'swift'],
     
     // Developer Signals
-    min_public_repos: 6,
-    min_followers: 80,
-    min_contributions_per_month: 7,
+    min_public_repos: 3,   // Reduced from 6
+    min_followers: 10,     // Reduced from 80 - too restrictive
+    min_contributions_per_month: 1, // Reduced from 7
     
     // Code Quality Filters
-    min_originality_ratio: 55,
+    min_originality_ratio: 40, // Reduced from 55
     exclude_generic_repos: true,
     require_recent_activity: true,
-    max_months_since_last_commit: 4,
+    max_months_since_last_commit: 12, // Relaxed from 4
     
-    // Store Presence - MUY IMPORTANTE
-    require_app_store_link: true,  // Must have shipped
+    // Store Presence - OPTIONAL (not required)
+    require_app_store_link: false,  // Changed to false - optional
     
     // Location & Demographics
     locations: [], // GitHub API does NOT support location: filter in search. Use post-processing if needed.
     available_for_hire: false,
     
-    score_threshold: 72  // High quality
+    score_threshold: 50  // Reduced from 72 - more inclusive
 };
 
 // ===========================

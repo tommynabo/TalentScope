@@ -39,8 +39,9 @@ export class GitHubService {
         onLog: GitHubLogCallback
     ): Promise<GitHubMetrics[]> {
         if (!this.octokit) {
-            onLog('❌ GitHub token not configured. Set VITE_GITHUB_TOKEN env variable.');
-            return [];
+            onLog('⚠️ GitHub token not configured. Using public API (60 requests/hour limit). Set VITE_GITHUB_TOKEN for better results.');
+            // Create unauthenticated instance for basic testing
+            this.octokit = new Octokit();
         }
 
         try {
@@ -376,37 +377,34 @@ export class GitHubService {
 
     /**
      * Build GitHub search query from criteria
+     * NOTE: GitHub API doesn't support multiple language filters with AND logic
+     * Instead, we search by primary language only for better results
      */
     private buildSearchQuery(criteria: GitHubFilterCriteria): string {
         const parts: string[] = [];
 
-        // Languages
+        // Languages - Use ONLY the first language to avoid AND logic
+        // (GitHub API would require ALL languages to match)
         if (criteria.languages.length > 0) {
-            criteria.languages.forEach(lang => {
-                parts.push(`language:${lang.toLowerCase()}`);
-            });
+            parts.push(`language:${criteria.languages[0].toLowerCase()}`);
         }
 
-        // Stars
+        // Stars - More realistic threshold
         if (criteria.min_stars > 0) {
             parts.push(`stars:>=${criteria.min_stars}`);
         }
 
-        // Followers
+        // Followers - More realistic threshold
         if (criteria.min_followers > 0) {
             parts.push(`followers:>=${criteria.min_followers}`);
         }
-
-        // Note: GitHub API search does NOT support location: filter
-        // Location filtering must be done post-processing if needed
-        // Removed: criteria.locations filtering
 
         // Available for hire
         if (criteria.available_for_hire) {
             parts.push('hireable:true');
         }
 
-        return parts.length > 0 ? parts.join(' ') : 'language:dart followers:>10';
+        return parts.length > 0 ? parts.join(' ') : 'language:typescript followers:>5';
     }
 
     /**
