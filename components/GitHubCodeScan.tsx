@@ -4,6 +4,7 @@ import { GitHubMetrics, GitHubFilterCriteria } from '../types/database';
 import { githubService, GitHubLogCallback } from '../lib/githubService';
 import { GitHubFilterConfig } from './GitHubFilterConfig';
 import { ApifyCrossSearchService } from '../lib/apifyCrossSearchService';
+import { PRESET_PRODUCT_ENGINEERS } from '../lib/githubPresets';
 
 interface GitHubCodeScanProps {
     campaignId?: string;
@@ -14,10 +15,15 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, onCa
     const [candidates, setCandidates] = useState<GitHubMetrics[]>([]);
     const [loading, setLoading] = useState(false);
     const [logs, setLogs] = useState<string[]>([]);
-    const [showFilterConfig, setShowFilterConfig] = useState(true);
+    const [showFilterConfig, setShowFilterConfig] = useState(false);
     const [showLogs, setShowLogs] = useState(false);
     const [criteria, setCriteria] = useState<GitHubFilterCriteria | null>(null);
     const [maxResults, setMaxResults] = useState(30);
+
+    // Load Product Engineers preset by default
+    useEffect(() => {
+        setCriteria(PRESET_PRODUCT_ENGINEERS);
+    }, []);
 
     const handleLogMessage: GitHubLogCallback = (message: string) => {
         setLogs(prev => [...prev, message]);

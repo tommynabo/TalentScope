@@ -11,7 +11,6 @@ import TalentPoolView from './components/TalentPoolView';
 import AnalyticsView from './components/AnalyticsView';
 import Toast from './components/Toast';
 import SettingsView from './components/SettingsView';
-import { GitHubScanManager } from './components/GitHubScanManager';
 import { User, Campaign } from './types';
 import { supabase } from './lib/supabase';
 import { CampaignService } from './lib/services'; // Ensure this import exists
@@ -183,11 +182,6 @@ const App: React.FC = () => {
                 </ProtectedRoute>
                 } />
 
-                <Route path="/github-scan" element={
-                <ProtectedRoute>
-                    <GitHubScanManager />
-                </ProtectedRoute>
-                } />
 
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
