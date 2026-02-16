@@ -78,7 +78,7 @@ export class SearchEngine {
                     skills: [],
                     ai_analysis: null,
                     symmetry_score: metrics.github_score,
-                    created_at: metrics.identified_at || new Date().toISOString(),
+                    created_at: metrics.created_at || new Date().toISOString(),
                     updated_at: new Date().toISOString(),
                     github_metrics: metrics
                 } as GitHubCandidate));
