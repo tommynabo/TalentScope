@@ -497,7 +497,7 @@ export class SearchEngine {
         existingLinkedin: Set<string>
     ): Promise<Candidate[]> {
         const acceptedCandidates: Candidate[] = [];
-        const MAX_RETRIES = Math.min(Math.ceil(maxResults / 2), 6); // Adaptive: fewer retries
+        const MAX_RETRIES = 10; // Always attempt 10 different search variations
         let attempt = 0;
         const seenProfileNames: string[] = [];
         const seenUrls = new Set<string>(); // Track URLs within this search session
