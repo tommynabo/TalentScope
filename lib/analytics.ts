@@ -39,7 +39,7 @@ export const AnalyticsService = {
     },
 
     // Track an event (increment counter)
-    async trackEvent(type: 'emails_sent' | 'replies_received' | 'interviews_booked' | 'leads_generated') {
+    async trackEvent(type: 'emails_sent' | 'replies_received' | 'interviews_booked' | 'leads_generated', amount: number = 1) {
         const today = new Date().toISOString().split('T')[0];
 
         // 1. Try to find today's record
@@ -53,13 +53,18 @@ export const AnalyticsService = {
             // Update
             await supabase
                 .from('analytics_daily')
-                .update({ [type]: (existing[type] as number) + 1 })
+                .update({ [type]: (existing[type] as number) + amount })
                 .eq('id', (existing as any).id);
         } else {
             // Insert new
             await supabase
                 .from('analytics_daily')
-                .insert([{ date: today, [type]: 1 }]);
+                .insert([{ date: today, [type]: amount }]);
         }
+    },
+
+    // Track multiple leads at once
+    async trackLeadsGenerated(count: number) {
+        return this.trackEvent('leads_generated', count);
     }
 };

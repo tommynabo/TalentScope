@@ -4,6 +4,7 @@ import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Sea
 import { searchEngine } from '../lib/SearchEngine';
 import { CampaignService, CandidateService } from '../lib/services';
 import { normalizeLinkedInUrl } from '../lib/normalization';
+import { AnalyticsService } from '../lib/analytics';
 import ScoreBreakdownCard from './ScoreBreakdownCard';
 import Scheduler from './Scheduler';
 import Toast from './Toast';
@@ -241,6 +242,14 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
 
           await Promise.all(savePromises);
           console.log(`[DetailView] Saved ${newCandidates.length} candidates to database`);
+
+          // Update global analytics
+          try {
+            console.log('[DetailView] Updating global analytics...');
+            await AnalyticsService.trackLeadsGenerated(newCandidates.length);
+          } catch (err) {
+            console.error('[DetailView] Failed to update global analytics', err);
+          }
 
           // Update campaign stats after adding candidates
           try {

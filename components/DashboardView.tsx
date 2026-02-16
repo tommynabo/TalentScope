@@ -15,6 +15,17 @@ const DashboardView: React.FC<DashboardViewProps> = ({ userName, onOpenLinkedin,
 
   useEffect(() => {
     loadStats();
+
+    // Refresh stats when tab becomes visible (user returns from DetailView)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[Dashboard] Tab visible, refreshing stats...');
+        loadStats();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
   const loadStats = async () => {
