@@ -73,7 +73,7 @@ export class ApifyCrossSearchService {
         const linkConfidence = this.calculateMatchConfidence(githubMetrics, linkedInProfile);
         
         return {
-          github_id: githubMetrics.github_id,
+          github_id: githubMetrics.github_id?.toString() || '',
           github_username: githubMetrics.github_username,
           github_url: githubMetrics.github_url,
           github_score: githubMetrics.github_score,
@@ -91,7 +91,7 @@ export class ApifyCrossSearchService {
       console.error(`Error linking ${githubMetrics.github_username} to LinkedIn:`, error);
       
       return {
-        github_id: githubMetrics.github_id,
+        github_id: githubMetrics.github_id?.toString() || '',
         github_username: githubMetrics.github_username,
         github_url: githubMetrics.github_url,
         github_score: githubMetrics.github_score,
@@ -104,7 +104,7 @@ export class ApifyCrossSearchService {
     }
 
     return {
-      github_id: githubMetrics.github_id,
+      github_id: githubMetrics.github_id?.toString() || '',
       github_username: githubMetrics.github_username,
       github_url: githubMetrics.github_url,
       github_score: githubMetrics.github_score,
@@ -157,10 +157,10 @@ export class ApifyCrossSearchService {
     };
 
     // PRIMARY SIGNALS (highest confidence)
-    if (options.search_email && githubMetrics.email) {
+    if (options.search_email && githubMetrics.mentioned_email) {
       signals.primary.push({
         type: 'email',
-        value: githubMetrics.email,
+        value: githubMetrics.mentioned_email,
         confidence: 95
       });
     }
@@ -174,30 +174,31 @@ export class ApifyCrossSearchService {
       });
     }
 
-    if (githubMetrics.full_name) {
+    if (githubMetrics.personal_website) {
+      // Use first_name type for website as fallback
       signals.secondary.push({
-        type: 'full_name',
-        value: githubMetrics.full_name,
+        type: 'first_name',
+        value: githubMetrics.personal_website,
         confidence: 70
       });
     }
 
     // TERTIARY SIGNALS (lower confidence)
-    if (options.search_name_fuzzy && githubMetrics.full_name) {
-      const firstName = githubMetrics.full_name.split(' ')[0];
-      if (firstName && firstName.length > 2) {
+    if (options.search_name_fuzzy && githubMetrics.github_username) {
+      const parts = githubMetrics.github_username.split(/[_-]/);
+      if (parts[0] && parts[0].length > 2) {
         signals.tertiary.push({
           type: 'first_name',
-          value: firstName,
+          value: parts[0],
           confidence: 50
         });
       }
     }
 
-    if (githubMetrics.top_languages && githubMetrics.top_languages.length > 0) {
+    if (githubMetrics.most_used_language) {
       signals.tertiary.push({
         type: 'skills',
-        value: githubMetrics.top_languages.join(', '),
+        value: githubMetrics.most_used_language,
         confidence: 40
       });
     }
@@ -350,59 +351,48 @@ export class ApifyCrossSearchService {
     let signals = 0;
 
     // Email match (highest confidence)
-    if (githubMetrics.email && linkedInProfile.email) {
-      if (githubMetrics.email.toLowerCase() === linkedInProfile.email.toLowerCase()) {
+    if (githubMetrics.mentioned_email && linkedInProfile.email) {
+      if (githubMetrics.mentioned_email.toLowerCase() === linkedInProfile.email.toLowerCase()) {
         score += 100;
         signals += 1;
       }
     }
 
-    // Name match
-    if (githubMetrics.full_name && linkedInProfile.name) {
-      const gitName = githubMetrics.full_name.toLowerCase();
-      const linkedInName = linkedInProfile.name.toLowerCase();
-      
-      if (gitName === linkedInName) {
-        score += 95;
-        signals += 1;
-      } else if (this.fuzzyNameMatch(gitName, linkedInName)) {
-        score += 70;
-        signals += 1;
-      }
-    }
-
-    // Username match
+    // Username match with profile name
     if (githubMetrics.github_username && linkedInProfile.name) {
       const username = githubMetrics.github_username.toLowerCase();
-      const fullName = linkedInProfile.name.toLowerCase();
+      const linkedInName = linkedInProfile.name.toLowerCase();
       
-      if (fullName.includes(username) || username.includes(fullName.split(' ')[0])) {
-        score += 60;
+      if (linkedInName.includes(username) || username.includes(linkedInName.split(' ')[0] || '')) {
+        score += 85;
         signals += 1;
       }
     }
 
-    // Skills overlap
-    if (githubMetrics.top_languages && linkedInProfile.skills) {
-      const commonSkills = githubMetrics.top_languages.filter(lang =>
-        linkedInProfile.skills?.some(skill => 
-          skill.toLowerCase().includes(lang.toLowerCase()) ||
-          lang.toLowerCase().includes(skill.toLowerCase())
-        )
+    // Website match
+    if (githubMetrics.personal_website && linkedInProfile.linkedin_url) {
+      // Both have URLs
+      score += 40;
+      signals += 1;
+    }
+
+    // Language/Tech match
+    if (githubMetrics.most_used_language && linkedInProfile.skills) {
+      const langMatch = linkedInProfile.skills.some(skill => 
+        skill.toLowerCase().includes(githubMetrics.most_used_language?.toLowerCase() || '') ||
+        githubMetrics.most_used_language?.toLowerCase().includes(skill.toLowerCase() || '')
       );
       
-      if (commonSkills.length > 0) {
-        score += Math.min(commonSkills.length * 15, 50);
+      if (langMatch) {
+        score += 30;
         signals += 1;
       }
     }
 
-    // Location consistency (if available)
-    if (githubMetrics.location && linkedInProfile.location) {
-      if (githubMetrics.location.toLowerCase() === linkedInProfile.location.toLowerCase()) {
-        score += 40;
-        signals += 1;
-      }
+    // App store presence indication
+    if (githubMetrics.has_app_store_link) {
+      score += 25;
+      signals += 1;
     }
 
     // Average confidence across signals

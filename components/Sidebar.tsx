@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, Activity, Settings, Zap, LogOut, Lock } from 'lucide-react';
+import { LayoutDashboard, Users, Activity, Settings, Zap, LogOut, Code2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 interface SidebarProps {
@@ -50,6 +50,14 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout }) => {
           <LayoutDashboard className="h-5 w-5" />
           {/* "Tablero" usually maps to Campaigns/Pipeline in this context */}
           <span className="hidden lg:block font-medium">Tablero</span>
+        </button>
+
+        <button
+          onClick={() => navigate('/github-scan')}
+          className={getButtonClass('/github-scan')}
+        >
+          <Code2 className="h-5 w-5" />
+          <span className="hidden lg:block font-medium">GitHub Scan</span>
         </button>
 
         <button
