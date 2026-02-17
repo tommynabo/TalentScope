@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
-import DetailView from './components/DetailView';
 import CampaignListView from './components/CampaignListView';
 import CampaignCreationView from './components/CampaignCreationView';
 import LoginView from './components/LoginView';
@@ -11,14 +10,14 @@ import TalentPoolView from './components/TalentPoolView';
 import AnalyticsView from './components/AnalyticsView';
 import Toast from './components/Toast';
 import SettingsView from './components/SettingsView';
-import { GitHubCampaignList } from './components/GitHubCampaignList';
-import { GitHubCodeScan } from './components/GitHubCodeScan';
-import AnalyticsView from './components/AnalyticsView';
-import Toast from './components/Toast';
-import SettingsView from './components/SettingsView';
+// Sistema GitHub imports
+import { GitHubCampaignList } from './SistemaGithub/components/GitHubCampaignList';
+import { GitHubCodeScan } from './SistemaGithub/components/GitHubCodeScan';
+// Sistema LinkedIn imports
+import DetailView from './SistemaLinkedin/components/DetailView';
 import { User, Campaign } from './types';
 import { supabase } from './lib/supabase';
-import { CampaignService } from './lib/services'; // Ensure this import exists
+import { CampaignService } from './lib/services';
 import { TabGuard } from './lib/TabGuard';
 import { initializeUnbreakableMarker } from './lib/UnbreakableExecution';
 
