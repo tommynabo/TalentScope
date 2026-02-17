@@ -1,10 +1,13 @@
 import { Octokit } from '@octokit/rest';
 
 /**
- * Servicio para extraer emails y URLs de LinkedIn desde perfiles de GitHub
+ * Servicio mejorado para extraer emails y URLs de LinkedIn desde perfiles de GitHub
+ * Busca de manera profunda en múltiples fuentes y valida datos de contacto
  */
 export class GitHubContactService {
     private octokit: Octokit | null = null;
+    private emailCache = new Map<string, string>();
+    private linkedinCache = new Map<string, string>();
 
     constructor(token?: string) {
         if (token) {
@@ -13,11 +16,35 @@ export class GitHubContactService {
     }
 
     /**
-     * Busca email, LinkedIn y sitio web desde el perfil GitHub y commits
+     * Verifica si es un usuario particular (no empresa)
+     */
+    async isIndividualUser(username: string): Promise<boolean> {
+        try {
+            if (!this.octokit) {
+                this.octokit = new Octokit();
+            }
+
+            const userResponse = await this.octokit.rest.users.getByUsername({ username });
+            const user = userResponse.data;
+            
+            // Si type es 'Organization', es empresa
+            if (user.type === 'Organization') {
+                return false;
+            }
+            
+            return true;
+        } catch (error) {
+            return true; // Default to individual if we can't verify
+        }
+    }
+
+    /**
+     * Busca email, LinkedIn y sitio web desde el perfil GitHub y múltiples fuentes
+     * Búsqueda profunda en repositorios, commits, bio, URLs, etc.
      */
     async findContactInfo(
         username: string,
-        topRepo?: any
+        topRepos?: any[]
     ): Promise<{
         email: string | null;
         linkedin: string | null;
@@ -28,29 +55,33 @@ export class GitHubContactService {
                 this.octokit = new Octokit();
             }
 
-            // 1. Obtener datos del perfil
+            // 1. Verificar si es usuario particular
+            const isIndividual = await this.isIndividualUser(username);
+            if (!isIndividual) {
+                return { email: null, linkedin: null, website: null };
+            }
+
+            // 2. Obtener datos del perfil
             const userResponse = await this.octokit.rest.users.getByUsername({ username });
             const profile = userResponse.data;
 
-            // 2. Extraer LinkedIn del bio/profile
-            const linkedinUrl = this.extractLinkedInFromText(profile.bio || '');
-            const websiteUrl = profile.blog || profile.html_url;
-
-            // 3. Buscar email en commits
             let email: string | null = null;
-            if (topRepo) {
-                email = await this.extractEmailFromCommits(username, topRepo.name);
-            }
+            let linkedin: string | null = null;
+            let website: string | null = null;
 
-            // 4. Si no encontramos email en commits, buscar en eventos públicos
-            if (!email) {
-                email = await this.getPublicEmail(username);
-            }
+            // 3. Buscar LinkedIn en múltiples lugares
+            linkedin = await this.findLinkedInProfile(username, profile, topRepos);
+
+            // 4. Buscar email en múltiples lugares
+            email = await this.findEmail(username, topRepos);
+
+            // 5. Obtener sitio web
+            website = profile.blog || null;
 
             return {
-                email: email || null,
-                linkedin: linkedinUrl || null,
-                website: websiteUrl || null
+                email,
+                linkedin,
+                website
             };
         } catch (error) {
             console.warn(`[GitHubContactService] Error fetching contact info for ${username}:`, error);
@@ -59,23 +90,141 @@ export class GitHubContactService {
     }
 
     /**
-     * Extrae cualquier LinkedIn encontrado en texto (bio, repositorio descriptions, etc)
+     * Busca LinkedIn en múltiples fuentes
      */
-    private extractLinkedInFromText(text: string): string | null {
+    private async findLinkedInProfile(
+        username: string,
+        profile: any,
+        topRepos?: any[]
+    ): Promise<string | null> {
+        // Check cache
+        if (this.linkedinCache.has(username)) {
+            return this.linkedinCache.get(username) || null;
+        }
+
+        let linkedinUrl: string | null = null;
+
+        // 1. Buscar en bio
+        if (profile.bio) {
+            linkedinUrl = this.extractLinkedIn(profile.bio);
+            if (linkedinUrl) {
+                this.linkedinCache.set(username, linkedinUrl);
+                return linkedinUrl;
+            }
+        }
+
+        // 2. Buscar en nombre completo si parece URL
+        if (profile.name && profile.name.includes('linkedin')) {
+            linkedinUrl = this.extractLinkedIn(profile.name);
+            if (linkedinUrl) {
+                this.linkedinCache.set(username, linkedinUrl);
+                return linkedinUrl;
+            }
+        }
+
+        // 3. Buscar en blog/website
+        if (profile.blog && profile.blog.includes('linkedin')) {
+            linkedinUrl = this.extractLinkedIn(profile.blog);
+            if (linkedinUrl) {
+                this.linkedinCache.set(username, linkedinUrl);
+                return linkedinUrl;
+            }
+        }
+
+        // 4. Buscar en repositorios (README, descripciones, etc)
+        if (topRepos && topRepos.length > 0) {
+            for (const repo of topRepos.slice(0, 5)) {
+                // Buscar en descripción del repo
+                if (repo.description) {
+                    linkedinUrl = this.extractLinkedIn(repo.description);
+                    if (linkedinUrl) {
+                        this.linkedinCache.set(username, linkedinUrl);
+                        return linkedinUrl;
+                    }
+                }
+
+                // Buscar en README
+                try {
+                    const readme = await this.getReadmeContent(repo.owner.login, repo.name);
+                    if (readme) {
+                        linkedinUrl = this.extractLinkedIn(readme);
+                        if (linkedinUrl) {
+                            this.linkedinCache.set(username, linkedinUrl);
+                            return linkedinUrl;
+                        }
+                    }
+                } catch (err) {
+                    // Continue if README not found
+                }
+            }
+        }
+
+        this.linkedinCache.set(username, null);
+        return null;
+    }
+
+    /**
+     * Busca email en múltiples fuentes con búsqueda profunda
+     */
+    private async findEmail(username: string, topRepos?: any[]): Promise<string | null> {
+        // Check cache
+        if (this.emailCache.has(username)) {
+            return this.emailCache.get(username) || null;
+        }
+
+        let email: string | null = null;
+
+        // 1. Buscar en commits de los primeros 10 repositorios
+        if (topRepos && topRepos.length > 0) {
+            for (const repo of topRepos.slice(0, 10)) {
+                email = await this.extractEmailFromCommits(username, repo.name);
+                if (email) {
+                    this.emailCache.set(username, email);
+                    return email;
+                }
+            }
+        }
+
+        // 2. Buscar en eventos públicos del usuario
+        email = await this.extractEmailFromPublicEvents(username);
+        if (email) {
+            this.emailCache.set(username, email);
+            return email;
+        }
+
+        // 3. Buscar en Gists
+        email = await this.extractEmailFromGists(username);
+        if (email) {
+            this.emailCache.set(username, email);
+            return email;
+        }
+
+        this.emailCache.set(username, null);
+        return null;
+    }
+
+    /**
+     * Extrae LinkedIn de texto con múltiples patrones
+     */
+    private extractLinkedIn(text: string): string | null {
         if (!text) return null;
 
-        // Buscar patrones comunes de LinkedIn
+        // Patrones para detectar URLs de LinkedIn
         const patterns = [
             /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/([a-zA-Z0-9\-]+)/i,
+            /(?:https?:\/\/)?linkedin\.com\/in\/([a-zA-Z0-9\-]+)/i,
             /linkedin\.com\/in\/([a-zA-Z0-9\-]+)/i,
-            /linkedin\.com\/company\/([a-zA-Z0-9\-]+)/i,
+            /in\/([a-zA-Z0-9\-]{2,})/i, // Fallback: /in/username
         ];
 
         for (const pattern of patterns) {
             const match = text.match(pattern);
             if (match) {
-                const username = match[1];
-                return `https://linkedin.com/in/${username}`;
+                const linkedinUsername = match[1];
+                // Validate it's not too short and doesn't look like company URL
+                if (linkedinUsername.length >= 2 && !linkedinUsername.includes('company')) {
+                    return `https://linkedin.com/in/${linkedinUsername}`;
+                }
             }
         }
 
@@ -83,7 +232,7 @@ export class GitHubContactService {
     }
 
     /**
-     * Extrae email desde el historial de commits
+     * Extrae email de commits con validación profunda
      */
     private async extractEmailFromCommits(
         username: string,
@@ -94,20 +243,18 @@ export class GitHubContactService {
                 this.octokit = new Octokit();
             }
 
+            // Obtener múltiples commits para aumentar chances
             const commits = await this.octokit.rest.repos.listCommits({
                 owner: username,
                 repo: repoName,
-                per_page: 10,
+                per_page: 20,
                 author: username
             });
 
             for (const commit of commits.data) {
                 const email = commit.commit.author?.email;
-                if (email && !email.includes('noreply') && !email.includes('localhost')) {
-                    // Validar que sea un email real
-                    if (this.isValidEmail(email)) {
-                        return email;
-                    }
+                if (email && this.isValidEmail(email)) {
+                    return email;
                 }
             }
 
@@ -118,24 +265,26 @@ export class GitHubContactService {
     }
 
     /**
-     * Obtiene email público desde eventos de GitHub
+     * Busca email en eventos públicos del usuario
      */
-    private async getPublicEmail(username: string): Promise<string | null> {
+    private async extractEmailFromPublicEvents(username: string): Promise<string | null> {
         try {
             if (!this.octokit) {
                 this.octokit = new Octokit();
             }
 
-            const events = await this.octokit.rest.activity.listPublicEvents({
+            // Obtener eventos públicos del usuario
+            const events = await this.octokit.rest.activity.listEventsForUser({
+                username,
                 per_page: 30
             });
 
             for (const event of events.data) {
-                if ((event as any).actor?.login === username && (event as any).payload?.commits) {
+                if ((event as any).payload?.commits) {
                     const commits = (event as any).payload.commits;
                     for (const commit of commits) {
                         const email = commit.author?.email;
-                        if (email && !email.includes('noreply') && this.isValidEmail(email)) {
+                        if (email && this.isValidEmail(email)) {
                             return email;
                         }
                     }
@@ -149,15 +298,128 @@ export class GitHubContactService {
     }
 
     /**
-     * Valida si un string es un email real
+     * Busca email en Gists del usuario
+     */
+    private async extractEmailFromGists(username: string): Promise<string | null> {
+        try {
+            if (!this.octokit) {
+                this.octokit = new Octokit();
+            }
+
+            const gists = await this.octokit.rest.gists.listForUser({
+                username,
+                per_page: 10
+            });
+
+            for (const gist of gists.data) {
+                // Search in gist description
+                if (gist.description) {
+                    const emailMatch = gist.description.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/i);
+                    if (emailMatch && this.isValidEmail(emailMatch[1])) {
+                        return emailMatch[1];
+                    }
+                }
+
+                // Search in gist files content
+                for (const file of Object.values(gist.files || {})) {
+                    if ((file as any).content) {
+                        const emailMatch = (file as any).content.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/i);
+                        if (emailMatch && this.isValidEmail(emailMatch[1])) {
+                            return emailMatch[1];
+                        }
+                    }
+                }
+            }
+
+            return null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    /**
+     * Obtiene contenido del README de un repositorio
+     */
+    private async getReadmeContent(owner: string, repo: string): Promise<string | null> {
+        try {
+            if (!this.octokit) {
+                this.octokit = new Octokit();
+            }
+
+            const readme = await this.octokit.rest.repos.getReadme({
+                owner,
+                repo,
+                headers: { Accept: 'application/vnd.github.v3.raw' }
+            });
+
+            return (readme.data as any).toString();
+        } catch (error) {
+            return null;
+        }
+    }
+
+    /**
+     * Valida si un string es un email real (no corporativo/fake)
      */
     private isValidEmail(email: string): boolean {
+        if (!email) return false;
+
+        // Validar formato básico
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email) && 
-               !email.includes('noreply') &&
-               !email.includes('localhost') &&
-               !email.includes('example') &&
-               !email.includes('test');
+        if (!emailRegex.test(email)) return false;
+
+        // Excluir emails fake/corporativos
+        const exclusions = [
+            'noreply',
+            'localhost',
+            'example',
+            'test',
+            'dummy',
+            'no-reply',
+            'donotreply',
+            '@github.com', // GitHub noreply emails
+            '@gitlab.com',
+            '@bitbucket.org',
+            '@users.noreply.github.com'
+        ];
+
+        for (const exclusion of exclusions) {
+            if (email.toLowerCase().includes(exclusion)) {
+                return false;
+            }
+        }
+
+        // Preferir gmails y otros emails personales
+        const personalDomains = [
+            '@gmail.com',
+            '@yahoo.com',
+            '@hotmail.com',
+            '@outlook.com',
+            '@protonmail.com',
+            '@icloud.com'
+        ];
+
+        // Si tiene dominio corporativo común, validar más estrictamente
+        const hasCorporateEmail = !personalDomains.some(domain => email.toLowerCase().includes(domain));
+        if (hasCorporateEmail) {
+            // Validar que no sea un common corporate pattern
+            const corporatePatterns = [
+                /support@/,
+                /admin@/,
+                /info@/,
+                /hello@/,
+                /team@/,
+                /contact@/
+            ];
+
+            for (const pattern of corporatePatterns) {
+                if (pattern.test(email.toLowerCase())) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 }
 

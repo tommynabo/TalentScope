@@ -142,6 +142,12 @@ export class GitHubService {
             const userResponse = await this.octokit!.rest.users.getByUsername({ username });
             const user = userResponse.data;
 
+            // 1.5. Verify it's an individual user (not organization/company)
+            if (user.type !== 'User') {
+                onLog(`  ⏭️ Not an individual user (type: ${user.type}). Skipping company/organization accounts.`);
+                return null;
+            }
+
             onLog(`  📌 Profile: ${user.name || 'N/A'} | ${user.followers} followers`);
 
             // 2. Check follower requirement
@@ -224,7 +230,21 @@ export class GitHubService {
             const mentionedEmail = await this.extractEmailFromCommits(username, topRepos[0]);
 
             // Search for LinkedIn and additional contact info
-            const contactInfo = await githubContactService.findContactInfo(username, topRepos[0]);
+            onLog(`  🔗 Searching for contact info...`);
+            const contactInfo = await githubContactService.findContactInfo(username, topRepos);
+            
+            if (contactInfo.email) {
+                onLog(`  ✅ Found email: ${contactInfo.email}`);
+            } else {
+                onLog(`  ⚠️ No email found in commits, gists, or events`);
+            }
+            
+            if (contactInfo.linkedin) {
+                onLog(`  ✅ Found LinkedIn: ${contactInfo.linkedin}`);
+            } else {
+                onLog(`  ⚠️ No LinkedIn profile found in bio or repositories`);
+            }
+
             const linkedinUrl = contactInfo.linkedin;
             const websiteUrl = contactInfo.website || user.blog || null;
 
