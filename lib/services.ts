@@ -57,12 +57,13 @@ export const CandidateService = {
     }
 };
 
-// --- Campaign Service ---
+// --- Campaign Service (LinkedIn Only) ---
 export const CampaignService = {
     async getAll(userId?: string) {
         let query = supabase
             .from('campaigns')
             .select('*')
+            .eq('platform', 'LinkedIn')
             .order('created_at', { ascending: false });
 
         if (userId) {
@@ -78,6 +79,7 @@ export const CampaignService = {
         const { data, error } = await supabase
             .from('campaigns')
             .select('*')
+            .eq('platform', 'LinkedIn')
             .eq('id', id)
             .single();
 
@@ -111,6 +113,7 @@ export const CampaignService = {
             .insert([{
                 ...campaignData,
                 user_id: user.id,
+                platform: 'LinkedIn', // Enforce LinkedIn platform
                 settings: {
                     ...(campaignData.settings || {}),
                     stats: { sent: 0, addedToday: 0, responseRate: 0, leads: 0 }

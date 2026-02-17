@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Github, X, Plus, Search, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Campaign } from '../../types/database';
-import { CampaignService } from '../../lib/services';
+import { GitHubCampaignService, GitHubCampaign } from '../../lib/githubCampaignService';
 import Toast from '../../components/Toast';
 
 export interface SearchCampaign {
@@ -22,7 +21,7 @@ interface GitHubCampaignListProps {
 
 export const GitHubCampaignList: React.FC<GitHubCampaignListProps> = ({ onSelectCampaign, onBack }) => {
   const navigate = useNavigate();
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [campaigns, setCampaigns] = useState<GitHubCampaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCampaignTitle, setNewCampaignTitle] = useState('');
@@ -35,10 +34,8 @@ export const GitHubCampaignList: React.FC<GitHubCampaignListProps> = ({ onSelect
   const loadCampaigns = async () => {
     try {
       setLoading(true);
-      const data = await CampaignService.getAll();
-      // Filter only GitHub campaigns
-      const githubCampaigns = data.filter(c => c.platform === 'GitHub');
-      setCampaigns(githubCampaigns);
+      const data = await GitHubCampaignService.getAll();
+      setCampaigns(data);
     } catch (error) {
       console.error('Error loading campaigns:', error);
       setToast({ show: true, message: 'Error cargando campañas' });
@@ -48,9 +45,9 @@ export const GitHubCampaignList: React.FC<GitHubCampaignListProps> = ({ onSelect
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('¿Eliminar campaña?')) {
+    if (confirm('¿Eliminar campaña de GitHub?')) {
       try {
-        await CampaignService.delete(id);
+        await GitHubCampaignService.delete(id);
         loadCampaigns();
         setToast({ show: true, message: 'Campaña eliminada' });
       } catch (error) {
@@ -63,14 +60,13 @@ export const GitHubCampaignList: React.FC<GitHubCampaignListProps> = ({ onSelect
   const handleCreate = async () => {
     if (!newCampaignTitle.trim()) return;
     try {
-      const newCampaign = await CampaignService.create({
+      const newCampaign = await GitHubCampaignService.create({
         title: newCampaignTitle,
         description: '',
-        platform: 'GitHub',
         status: 'Draft',
         target_role: 'General'
       });
-      setToast({ show: true, message: 'Campaña creada!' });
+      setToast({ show: true, message: 'Campaña GitHub creada!' });
       setShowCreateModal(false);
       setNewCampaignTitle('');
       loadCampaigns();
@@ -82,7 +78,7 @@ export const GitHubCampaignList: React.FC<GitHubCampaignListProps> = ({ onSelect
     }
   };
 
-  const handleSelectCampaign = (campaign: Campaign) => {
+  const handleSelectCampaign = (campaign: GitHubCampaign) => {
     if (onSelectCampaign) {
       onSelectCampaign(campaign as any);
     } else {
