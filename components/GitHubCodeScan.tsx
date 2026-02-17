@@ -45,28 +45,51 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
             }
         }
         
-        // Get current user and load candidates from SUPABASE
+        // Get current user and load candidates from SUPABASE or Memory
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session?.user?.id) {
                 setUserId(session.user.id);
                 
                 // Load from Supabase if campaign context available
                 if (campaignId) {
+                    // Try to load from Supabase
                     GitHubCandidatePersistence.getCampaignCandidates(campaignId, session.user.id)
                         .then(restored => {
                             if (restored && restored.length > 0) {
                                 setCandidates(restored);
-                                handleLogMessage(`✨ Loaded ${restored.length} candidates from Supabase`);
+                                console.log(`✅ Loaded ${restored.length} candidates from Supabase`);
                             } else {
-                                handleLogMessage(`📭 No previous candidates found for this campaign`);
+                                // Fallback to localStorage
+                                const localStorageKey = `github_candidates_${campaignId}`;
+                                try {
+                                    const stored = localStorage.getItem(localStorageKey);
+                                    if (stored) {
+                                        const candidates = JSON.parse(stored);
+                                        setCandidates(candidates);
+                                        console.log(`✅ Loaded ${candidates.length} candidates from localStorage`);
+                                    }
+                                } catch (err) {
+                                    console.warn('Failed to load from localStorage');
+                                }
                             }
                         })
                         .catch(err => {
-                            console.warn('Failed to restore candidates from Supabase:', err);
-                            handleLogMessage(`⚠️ Could not load candidates from database`);
+                            console.warn('Supabase query failed, trying localStorage...');
+                            // Fallback to localStorage
+                            const localStorageKey = `github_candidates_${campaignId}`;
+                            try {
+                                const stored = localStorage.getItem(localStorageKey);
+                                if (stored) {
+                                    const candidates = JSON.parse(stored);
+                                    setCandidates(candidates);
+                                    console.log(`✅ Loaded ${candidates.length} candidates from localStorage`);
+                                }
+                            } catch (err) {
+                                console.warn('Failed to load from localStorage');
+                            }
                         });
                 } else {
-                    handleLogMessage(`⚠️ No campaign context - results will not persist across sessions`);
+                    console.log('No campaign context');
                 }
             }
         });
@@ -115,17 +138,59 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                 userId       // Pass user context
             );
 
-            // Load all candidates from Supabase (search results + previous)
-            const allCandidates = await GitHubCandidatePersistence.getCampaignCandidates(
-                campaignId,
-                userId
-            );
+            // Try to load from Supabase, but fall back to search results if table doesn't exist
+            let allCandidates: GitHubMetrics[] = [];
+            let supabaseWorking = false;
+            
+            try {
+                allCandidates = await GitHubCandidatePersistence.getCampaignCandidates(
+                    campaignId,
+                    userId
+                );
+                if (allCandidates.length > 0) {
+                    handleLogMessage(`📊 Loaded ${allCandidates.length} candidates from Supabase`);
+                    supabaseWorking = true;
+                }
+            } catch (err) {
+                handleLogMessage(`⚠️ Supabase table not found. Using in-memory storage.`);
+                handleLogMessage(`💡 To enable DB persistence: supabase/github_search_results_migration.sql`);
+            }
+
+            // If no candidates from DB, use search results + previous from localStorage
+            if (allCandidates.length === 0) {
+                // Get previous from localStorage
+                const localStorageKey = `github_candidates_${campaignId}`;
+                let previousCandidates: GitHubMetrics[] = [];
+                try {
+                    const stored = localStorage.getItem(localStorageKey);
+                    if (stored) {
+                        previousCandidates = JSON.parse(stored);
+                    }
+                } catch (err) {
+                    console.warn('Failed to load from localStorage');
+                }
+                
+                // Deduplicate: combine previous + new, remove duplicates
+                allCandidates = [...previousCandidates];
+                for (const candidate of results) {
+                    const exists = allCandidates.some(c => c.github_username === candidate.github_username);
+                    if (!exists) {
+                        allCandidates.push(candidate);
+                    }
+                }
+                
+                // Save to localStorage
+                localStorage.setItem(localStorageKey, JSON.stringify(allCandidates));
+            }
 
             setCandidates(allCandidates);
             
             handleLogMessage(`✨ Found ${results.length} new developers in this search`);
-            handleLogMessage(`📊 Total accumulated in campaign: ${allCandidates.length} developers`);
-            handleLogMessage(`✅ All results automatically saved to Supabase`);
+            handleLogMessage(`📊 Total accumulated: ${allCandidates.length} developers`);
+            
+            if (allCandidates.length > 0) {
+                handleLogMessage(`✅ Results ready for viewing`);
+            }
 
         } catch (error: any) {
             handleLogMessage(`❌ Error: ${error.message}`);
