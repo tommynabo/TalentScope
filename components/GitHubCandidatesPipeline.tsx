@@ -61,7 +61,7 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                             onClick={() => toggleSort('github_username')}
                         >
                             <div className="flex items-center gap-2">
-                                Développeur
+                                Desarrollador
                                 {sortConfig.field === 'github_username' && (
                                     sortConfig.direction === 'desc' ? <ChevronDown className="h-3 w-3 text-orange-400" /> : <ChevronUp className="h-3 w-3 text-orange-400" />
                                 )}

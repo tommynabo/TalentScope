@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Github, X, Plus, Search, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Campaign } from '../types/database';
+import { CampaignService } from '../lib/services';
 import Toast from './Toast';
 
 export interface SearchCampaign {
@@ -20,60 +22,69 @@ interface GitHubCampaignListProps {
 
 export const GitHubCampaignList: React.FC<GitHubCampaignListProps> = ({ onSelectCampaign, onBack }) => {
   const navigate = useNavigate();
-  const [campaigns, setCampaigns] = useState<SearchCampaign[]>([
-    {
-      id: '1',
-      title: 'Product Engineers - Flutter',
-      description: 'Búsqueda de Product Engineers especializados en Flutter',
-      created_at: new Date().toISOString(),
-      source: 'github',
-      status: 'Running',
-      target_role: 'Product Engineer'
-    },
-    {
-      id: '2',
-      title: 'Smart Contract Developers',
-      description: 'Developers con experiencia en Solidity y Web3',
-      created_at: new Date().toISOString(),
-      source: 'github',
-      status: 'Completed',
-      target_role: 'Blockchain Dev'
-    }
-  ]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCampaignTitle, setNewCampaignTitle] = useState('');
   const [toast, setToast] = useState({ show: false, message: '' });
 
-  const handleDelete = (id: string) => {
-    if (confirm('¿Eliminar campaña?')) {
-      setCampaigns(campaigns.filter(c => c.id !== id));
-      setToast({ show: true, message: 'Campaña eliminada' });
+  useEffect(() => {
+    loadCampaigns();
+  }, []);
+
+  const loadCampaigns = async () => {
+    try {
+      setLoading(true);
+      const data = await CampaignService.getAll();
+      // Filter only GitHub campaigns
+      const githubCampaigns = data.filter(c => c.platform === 'GitHub');
+      setCampaigns(githubCampaigns);
+    } catch (error) {
+      console.error('Error loading campaigns:', error);
+      setToast({ show: true, message: 'Error cargando campañas' });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleCreate = () => {
-    if (!newCampaignTitle.trim()) return;
-    const newId = Date.now().toString();
-    const newCampaign: SearchCampaign = {
-      id: newId,
-      title: newCampaignTitle,
-      description: '',
-      created_at: new Date().toISOString(),
-      source: 'github',
-      status: 'Draft',
-      target_role: 'General'
-    };
-    setCampaigns([newCampaign, ...campaigns]);
-    setToast({ show: true, message: 'Campaña creada!' });
-    setShowCreateModal(false);
-    setNewCampaignTitle('');
-    // Navigate to new campaign
-    navigate(`/tablero/github/${newId}`);
+  const handleDelete = async (id: string) => {
+    if (confirm('¿Eliminar campaña?')) {
+      try {
+        await CampaignService.delete(id);
+        loadCampaigns();
+        setToast({ show: true, message: 'Campaña eliminada' });
+      } catch (error) {
+        console.error('Error deleting campaign:', error);
+        setToast({ show: true, message: 'Error eliminando campaña' });
+      }
+    }
   };
 
-  const handleSelectCampaign = (campaign: SearchCampaign) => {
+  const handleCreate = async () => {
+    if (!newCampaignTitle.trim()) return;
+    try {
+      const newCampaign = await CampaignService.create({
+        title: newCampaignTitle,
+        description: '',
+        platform: 'GitHub',
+        status: 'Draft',
+        target_role: 'General'
+      });
+      setToast({ show: true, message: 'Campaña creada!' });
+      setShowCreateModal(false);
+      setNewCampaignTitle('');
+      loadCampaigns();
+      // Navigate to new campaign
+      navigate(`/tablero/github/${newCampaign.id}`);
+    } catch (error) {
+      console.error('Error creating campaign:', error);
+      setToast({ show: true, message: 'Error creando campaña' });
+    }
+  };
+
+  const handleSelectCampaign = (campaign: Campaign) => {
     if (onSelectCampaign) {
-      onSelectCampaign(campaign);
+      onSelectCampaign(campaign as any);
     } else {
       // Default: navigate to campaign detail
       navigate(`/tablero/github/${campaign.id}`);
@@ -95,47 +106,57 @@ export const GitHubCampaignList: React.FC<GitHubCampaignListProps> = ({ onSelect
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {campaigns.map((campaign) => (
-          <div
-            key={campaign.id}
-            onClick={() => handleSelectCampaign(campaign)}
-            className="group bg-slate-900/50 border border-slate-800 rounded-2xl p-6 cursor-pointer hover:border-orange-500/50 hover:bg-slate-900/80 transition-all relative"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-3 bg-orange-950/30 rounded-xl text-orange-400 border border-orange-900/50">
-                <Github className="h-6 w-6" />
+      {loading ? (
+        <div className="flex items-center justify-center h-96 text-slate-400">
+          <p>Cargando campañas...</p>
+        </div>
+      ) : campaigns.length === 0 ? (
+        <div className="flex items-center justify-center h-96 text-slate-400">
+          <p>No hay campañas. Crea una nueva para empezar.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {campaigns.map((campaign) => (
+            <div
+              key={campaign.id}
+              onClick={() => handleSelectCampaign(campaign)}
+              className="group bg-slate-900/50 border border-slate-800 rounded-2xl p-6 cursor-pointer hover:border-orange-500/50 hover:bg-slate-900/80 transition-all relative"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-orange-950/30 rounded-xl text-orange-400 border border-orange-900/50">
+                  <Github className="h-6 w-6" />
+                </div>
+                <div className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                  campaign.status === 'Running' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' :
+                  campaign.status === 'Completed' ? 'bg-slate-800 text-slate-400 border-slate-700' :
+                  'bg-yellow-950/30 text-yellow-400 border-yellow-900/50'
+                }`}>
+                  {campaign.status.toUpperCase()}
+                </div>
               </div>
-              <div className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                campaign.status === 'Running' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' :
-                campaign.status === 'Completed' ? 'bg-slate-800 text-slate-400 border-slate-700' :
-                'bg-yellow-950/30 text-yellow-400 border-yellow-900/50'
-              }`}>
-                {campaign.status.toUpperCase()}
+
+              <h3 className="text-xl font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">{campaign.title}</h3>
+              <p className="text-sm text-slate-400 mb-6 line-clamp-2">{campaign.description || "Sin descripción"}</p>
+
+              <div className="flex items-center justify-between mt-auto">
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <Search className="h-4 w-4" />
+                  <span>{campaign.target_role || "General"}</span>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(campaign.id);
+                  }}
+                  className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
             </div>
-
-            <h3 className="text-xl font-bold text-white mb-2 group-hover:text-orange-400 transition-colors">{campaign.title}</h3>
-            <p className="text-sm text-slate-400 mb-6 line-clamp-2">{campaign.description || "Sin descripción"}</p>
-
-            <div className="flex items-center justify-between mt-auto">
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <Search className="h-4 w-4" />
-                <span>{campaign.target_role || "General"}</span>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(campaign.id);
-                }}
-                className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Create Modal */}
       {showCreateModal && (
