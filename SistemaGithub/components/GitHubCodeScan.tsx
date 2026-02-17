@@ -36,8 +36,8 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
     useEffect(() => {
         setCriteria(PRESET_PRODUCT_ENGINEERS);
         
-        // Load previous logs from IndexedDB (Unbreakable Execution persistence)
-        loadLogsFromIndexedDB();
+        // Load previous logs from localStorage (persists across tab changes)
+        loadPersistentLogs();
         
         // Get current user and load candidates from SUPABASE or Memory
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -91,76 +91,85 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         // Listen for visibility changes to sync logs when tab returns to focus
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
-                loadLogsFromIndexedDB();
-                // If executor is running, mark as active
-                if (executorRef.current && isStoppable) {
-                    setLoading(true);
+                // Restore logs and state when tab becomes visible
+                loadPersistentLogs();
+                const savedState = localStorage.getItem(`github_search_state_${campaignId}`);
+                if (savedState) {
+                    try {
+                        const state = JSON.parse(savedState);
+                        if (state.isRunning) {
+                            setLoading(true);
+                            setIsStoppable(true);
+                        }
+                    } catch (err) {
+                        console.warn('Failed to restore search state');
+                    }
                 }
             }
         };
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-    }, [campaignId, isStoppable]);
+    }, [campaignId]);
 
     const handleLogMessage: GitHubLogCallback = (message: string) => {
         setLogs(prev => {
             const newLogs = [...prev, message];
-            // Persist logs to sessionStorage (quick access)
+            // Persist to both sessionStorage (fast) and localStorage (persistent)
             sessionStorage.setItem(`github_logs_${campaignId}`, JSON.stringify(newLogs));
-            // Also persist to IndexedDB (survives tab switches)
-            persistLogsToIndexedDB(newLogs);
+            localStorage.setItem(`github_logs_persistent_${campaignId}`, JSON.stringify(newLogs));
             return newLogs;
         });
     };
 
-    const loadLogsFromIndexedDB = async () => {
+    const loadPersistentLogs = () => {
         try {
-            const logKey = `github_search_logs_${campaignId}`;
-            const db = await new Promise<IDBDatabase>((resolve, reject) => {
-                const request = indexedDB.open('TalentScope_GitHubSearch');
-                request.onerror = () => reject(request.error);
-                request.onsuccess = () => resolve(request.result);
-            });
-
-            const transaction = db.transaction(['executionLogs'], 'readonly');
-            const store = transaction.objectStore('executionLogs');
-            const record = await new Promise<any>((resolve, reject) => {
-                const request = store.get(logKey);
-                request.onerror = () => reject(request.error);
-                request.onsuccess = () => resolve(request.result);
-            });
-
-            if (record && record.logs && Array.isArray(record.logs)) {
-                setLogs(record.logs);
+            // Try localStorage first (more reliable for tab switches)
+            const logsKey = `github_logs_persistent_${campaignId}`;
+            const persistent = localStorage.getItem(logsKey);
+            if (persistent) {
+                const parsedLogs = JSON.parse(persistent);
+                if (Array.isArray(parsedLogs)) {
+                    setLogs(parsedLogs);
+                    return;
+                }
             }
         } catch (err) {
-            console.warn('Failed to load logs from IndexedDB:', err);
+            console.warn('Failed to load persistent logs:', err);
         }
-    };
 
-    const persistLogsToIndexedDB = async (logsToSave: string[]) => {
+        // Fallback to sessionStorage
         try {
-            const logKey = `github_search_logs_${campaignId}`;
-            const request = indexedDB.open('TalentScope_GitHubSearch');
-            
-            request.onupgradeneeded = (event) => {
-                const db = (event.target as IDBOpenDBRequest).result;
-                if (!db.objectStoreNames.contains('executionLogs')) {
-                    db.createObjectStore('executionLogs');
+            const sessionLogsKey = `github_logs_${campaignId}`;
+            const sessionLogs = sessionStorage.getItem(sessionLogsKey);
+            if (sessionLogs) {
+                const parsedLogs = JSON.parse(sessionLogs);
+                if (Array.isArray(parsedLogs)) {
+                    setLogs(parsedLogs);
                 }
-            };
-
-            request.onsuccess = () => {
-                const db = request.result;
-                const transaction = db.transaction(['executionLogs'], 'readwrite');
-                const store = transaction.objectStore('executionLogs');
-                store.put({ logs: logsToSave, timestamp: Date.now() }, logKey);
-            };
+            }
         } catch (err) {
-            console.warn('Failed to persist logs to IndexedDB:', err);
+            console.warn('Failed to load session logs:', err);
         }
     };
+
+    const savePersistentState = () => {
+        try {
+            localStorage.setItem(`github_search_state_${campaignId}`, JSON.stringify({
+                isRunning: loading,
+                isStoppable: isStoppable,
+                maxResults: maxResults,
+                timestamp: Date.now()
+            }));
+        } catch (err) {
+            console.warn('Failed to save search state:', err);
+        }
+    };
+
+    // Save state whenever loading or isStoppable changes
+    useEffect(() => {
+        savePersistentState();
+    }, [loading, isStoppable, maxResults]);
 
     const handleStopSearch = () => {
         if (executorRef.current) {
