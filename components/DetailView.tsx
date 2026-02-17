@@ -219,14 +219,20 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
       const source = campaign.platform === 'Communities' || campaign.platform === 'Freelance' ? 'communities' :
         campaign.platform === 'GitHub' ? 'github' : 'linkedin';
 
-      const searchOptions = {
+      const searchOptions: any = {
         language: campaign.settings?.language || 'Spanish',
         maxAge: campaign.settings?.max_age || 30,
         platform: campaign.platform,
         filters: campaign.settings?.search_filters,
         scoreThreshold: campaign.settings?.score_threshold,
-        campaignId: campaign.id // For Unbreakable Execution Mode tracking
+        campaignId: campaign.id, // For Unbreakable Execution Mode tracking
+        userId: campaign.user_id // For GitHub deduplication and persistence
       };
+
+      // If GitHub source, add github filters
+      if (source === 'github') {
+        searchOptions.githubFilters = campaign.settings?.github_filters;
+      }
 
       await searchEngine.startSearch(
         campaign.target_role || 'Developer',

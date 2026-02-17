@@ -55,6 +55,7 @@ export class SearchEngine {
             githubFilters?: GitHubFilterCriteria;
             scoreThreshold?: number;
             campaignId?: string; // For unbreakable execution tracking
+            userId?: string; // For GitHub deduplication and persistence
         },
         onLog: LogCallback,
         onComplete: (candidates: Candidate[] | GitHubCandidate[] | CrossLinkedCandidate[]) => void
@@ -125,7 +126,9 @@ export class SearchEngine {
                 const results = await githubService.searchDevelopers(
                     githubFilters,
                     maxResults,
-                    onLog
+                    onLog,
+                    options.campaignId,
+                    options.userId
                 );
 
                 // Convert GitHubMetrics to GitHubCandidate
@@ -173,7 +176,9 @@ export class SearchEngine {
                 const githubResults = await githubService.searchDevelopers(
                     githubFilters,
                     maxResults,
-                    onLog
+                    onLog,
+                    options.campaignId,
+                    options.userId
                 );
 
                 onLog(`✅ Fase 1 completada: ${githubResults.length} desarrolladores encontrados en GitHub`);
