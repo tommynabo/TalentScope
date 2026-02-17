@@ -1,5 +1,5 @@
-import { supabase } from './supabase';
-import { GitHubMetrics } from '../types/database';
+import { supabase } from '../../SistemaGithub/lib/supabase';
+import { GitHubMetrics } from '../../types/database';
 
 /**
  * Servicio para guardar y restaurar resultados de búsqueda GitHub

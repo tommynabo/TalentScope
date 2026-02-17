@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Github, X, Plus, Search, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Campaign } from '../types/database';
-import { CampaignService } from '../lib/services';
-import Toast from './Toast';
+import { Campaign } from '../../types/database';
+import { CampaignService } from '../../lib/services';
+import Toast from '../../components/Toast';
 
 export interface SearchCampaign {
   id: string;

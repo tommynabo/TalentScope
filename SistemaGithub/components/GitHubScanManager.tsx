@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Github, X, Plus, Search, Trash2, ArrowLeft } from 'lucide-react';
-import { Campaign } from '../types/database';
-import { CampaignService } from '../lib/services';
+import { Campaign } from '../../types/database';
+import { CampaignService } from '../../lib/services';
 import { GitHubCodeScan } from './GitHubCodeScan';
-import Toast from './Toast';
+import Toast from '../../components/Toast';
 
 interface GitHubScanManagerProps {
   onClose?: () => void;

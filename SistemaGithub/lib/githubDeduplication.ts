@@ -1,6 +1,6 @@
-import { supabase } from './supabase';
-import { GitHubMetrics } from '../types/database';
-import { GitHubCandidatePersistence } from './githubCandidatePersistence';
+import { supabase } from '../../SistemaGithub/lib/supabase';
+import { GitHubMetrics } from '../../types/database';
+import { GitHubCandidatePersistence } from '../../SistemaGithub/lib/githubCandidatePersistence';
 
 /**
  * Servicio de deduplicación para búsquedas de GitHub

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GitHubMetrics } from '../types/database';
+import { GitHubMetrics } from '../../types/database';
 import { Plus, GripVertical } from 'lucide-react';
 
 interface GitHubCandidatesKanbanProps {

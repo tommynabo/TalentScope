@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { GitHubMetrics } from '../types/database';
+import { GitHubMetrics } from '../../types/database';
 import { ChevronLeft, Calendar, ChevronDown, ChevronUp, Download, X, Loader2, ExternalLink } from 'lucide-react';
-import Toast from './Toast';
+import Toast from '../../components/Toast';
 
 interface GitHubCandidateListProps {
     campaignId?: string;

@@ -1,9 +1,9 @@
 import { Octokit } from '@octokit/rest';
-import { Candidate, GitHubFilterCriteria, GitHubMetrics, GitHubScoreBreakdown } from '../types/database';
+import { Candidate, GitHubFilterCriteria, GitHubMetrics, GitHubScoreBreakdown } from '../../types/database';
 import { v4 as uuidv4 } from 'uuid';
-import { githubContactService } from './githubContactService';
-import { githubDeduplicationService } from './githubDeduplication';
-import { GitHubCandidatePersistence } from './githubCandidatePersistence';
+import { githubContactService } from '../../SistemaGithub/lib/githubContactService';
+import { githubDeduplicationService } from '../../SistemaGithub/lib/githubDeduplication';
+import { GitHubCandidatePersistence } from '../../SistemaGithub/lib/githubCandidatePersistence';
 
 export type GitHubLogCallback = (message: string) => void;
 

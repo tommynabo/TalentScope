@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus, Link2, List, Columns3, Grid3x3, X, Download } from 'lucide-react';
-import { GitHubMetrics, GitHubFilterCriteria } from '../types/database';
-import { githubService, GitHubLogCallback } from '../lib/githubService';
+import { GitHubMetrics, GitHubFilterCriteria } from '../../types/database';
+import { githubService, GitHubLogCallback } from '../../lib/githubService';
 import { GitHubFilterConfig } from './GitHubFilterConfig';
-import { ApifyCrossSearchService } from '../lib/apifyCrossSearchService';
-import { PRESET_PRODUCT_ENGINEERS } from '../lib/githubPresets';
+import { ApifyCrossSearchService } from '../../lib/apifyCrossSearchService';
+import { PRESET_PRODUCT_ENGINEERS } from '../../lib/githubPresets';
 import { GitHubCandidatesCards } from './GitHubCandidatesCards';
 import { GitHubCandidatesPipeline } from './GitHubCandidatesPipeline';
 import { GitHubCandidatesKanban } from './GitHubCandidatesKanban';
-import { GitHubSearchService } from '../lib/githubSearchService';
-import { GitHubCandidatePersistence } from '../lib/githubCandidatePersistence';
-import { supabase } from '../lib/supabase';
+import { GitHubSearchService } from '../../lib/githubSearchService';
+import { GitHubCandidatePersistence } from '../../lib/githubCandidatePersistence';
+import { supabase } from '../../lib/supabase';
 
 interface GitHubCodeScanProps {
     campaignId?: string;

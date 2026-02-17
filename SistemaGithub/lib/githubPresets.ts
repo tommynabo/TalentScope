@@ -1,4 +1,4 @@
-import { GitHubFilterCriteria } from '../types/database';
+import { GitHubFilterCriteria } from '../../types/database';
 
 /**
  * Preset GitHub Filter Criteria Templates
@@ -442,7 +442,7 @@ export function createCustomCriteria(
 /**
  * Example: Using presets in your component
  * 
- * import { GITHUB_FILTER_PRESETS, createCustomCriteria } from './lib/githubPresets';
+ * import { GITHUB_FILTER_PRESETS, createCustomCriteria } from '../../SistemaGithub/lib/lib/githubPresets';
  * 
  * // Use preset directly
  * const criteria = GITHUB_FILTER_PRESETS['Proven Shippers'];

@@ -1,5 +1,5 @@
 import React from 'react';
-import { GitHubMetrics } from '../types/database';
+import { GitHubMetrics } from '../../types/database';
 import { Star, GitBranch, Users, Code2, Trophy, ExternalLink, Plus } from 'lucide-react';
 
 interface GitHubCandidatesCardsProps {

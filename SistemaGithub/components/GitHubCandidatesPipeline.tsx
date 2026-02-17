@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GitHubMetrics } from '../types/database';
+import { GitHubMetrics } from '../../types/database';
 import { ChevronUp, ChevronDown, ExternalLink, Trophy } from 'lucide-react';
 
 interface GitHubCandidatesPipelineProps {

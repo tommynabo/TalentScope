@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Info, Copy } from 'lucide-react';
-import { GitHubFilterCriteria } from '../types/database';
-import { GITHUB_FILTER_PRESETS, PRESET_INSIGHTS } from '../lib/githubPresets';
+import { GitHubFilterCriteria } from '../../types/database';
+import { GITHUB_FILTER_PRESETS, PRESET_INSIGHTS } from '../../lib/githubPresets';
 
 interface GitHubFilterConfigProps {
     initialCriteria?: GitHubFilterCriteria;

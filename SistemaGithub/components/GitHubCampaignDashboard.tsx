@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GitBranch, Star, Users, Code2, TrendingUp, RefreshCw, LinkedinIcon, ExternalLink, CheckCircle2, AlertCircle, Loader } from 'lucide-react';
-import { GitHubMetrics } from '../types/database';
+import { GitHubMetrics } from '../../types/database';
 
 interface GitHubCampaignDashboardProps {
     campaignId: string;
