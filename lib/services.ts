@@ -211,14 +211,15 @@ export const CampaignService = {
     },
 
     async getCandidatesByCampaign(campaignId: string) {
-        // Fetch relations. inner join with candidates
+        // Fetch relations. inner join with candidates, ordered by added_at DESC (most recent first)
         const { data, error } = await supabase
             .from('campaign_candidates')
             .select(`
                 *,
                 candidate:candidates(*)
             `)
-            .eq('campaign_id', campaignId);
+            .eq('campaign_id', campaignId)
+            .order('added_at', { ascending: false });
 
         if (error) throw error;
 
