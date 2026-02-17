@@ -3,6 +3,15 @@
 -- Separate table for GitHub campaigns - independent from LinkedIn system
 -- ============================================================================
 
+-- Create or replace the update_timestamp function
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Create the campaigns_github table
 CREATE TABLE IF NOT EXISTS public.campaigns_github (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -53,12 +62,3 @@ CREATE TRIGGER campaigns_github_update_timestamp
     BEFORE UPDATE ON public.campaigns_github
     FOR EACH ROW
     EXECUTE FUNCTION update_timestamp();
-
--- Ensure update_timestamp function exists
-CREATE OR REPLACE FUNCTION update_timestamp()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
