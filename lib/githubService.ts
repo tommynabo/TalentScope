@@ -77,71 +77,94 @@ export class GitHubService {
             // Build search query
             const query = this.buildSearchQuery(criteria);
             onLog(`📝 Search query: ${query}`);
-            onLog(`🎯 Looking for max ${maxResults} results`);
+            onLog(`🎯 Target: ${maxResults} qualified developers`);
 
-            // Execute search with better error handling
-            let response;
-            try {
-                response = await this.octokit.rest.search.users({
-                    q: query,
-                    per_page: Math.min(maxResults, 30),
-                    sort: 'followers',
-                    order: 'desc'
-                });
-            } catch (apiError: any) {
-                onLog(`❌ API Error: ${apiError.message}`);
-                if (apiError.status === 422) {
-                    onLog('⚠️ 422: Invalid search query. GitHub API rejected the query.');
-                } else if (apiError.status === 403) {
-                    onLog('⚠️ 403: Rate limited. Try again later.');
-                }
-                throw apiError;
-            }
-
-            onLog(`✅ API Response: Found ${response.data.items.length || 0} total users`);
-
-            if (!response.data.items || response.data.items.length === 0) {
-                onLog('⚠️ GitHub API returned 0 users for this query');
-                onLog('💡 Try adjusting filters to be less restrictive');
-                onLog(`🎉 Search complete! 0 qualified developers found`);
-                return [];
-            }
-
-            // Analyze each user deeply
+            // === LOOP PAGINADO ===
             const candidates: GitHubMetrics[] = [];
-            for (const user of response.data.items) {
-                if (candidates.length >= maxResults) break;
+            let page = 1;
+            const maxPages = 10; // Límite para evitar demasiadas llamadas API
+            let totalUsersAnalyzed = 0;
+            let totalUsersSkipped = 0;
 
+            while (candidates.length < maxResults && page <= maxPages) {
+                onLog(`\n📄 Fetching page ${page}...`);
+
+                let response;
                 try {
-                    onLog(`📊 Analyzing @${user.login}...`);
-                    const metrics = await this.analyzeUser(user.login, criteria, onLog);
-                    
-                    if (metrics) {
-                        // Check for duplicates before adding
-                        if (githubDeduplicationService.isDuplicate(
-                            metrics,
-                            existingUsernames,
-                            existingEmails,
-                            existingLinkedin,
-                            currentBatchUsernames
-                        )) {
-                            onLog(`⏭️ Skipped @${user.login} - duplicate (already in database or batch)`);
-                        } else {
-                            candidates.push(metrics);
-                            currentBatchUsernames.add(user.login.toLowerCase());
-                            onLog(`✅ Added @${user.login} (Score: ${metrics.github_score})`);
-                        }
-                    } else {
-                        onLog(`⏭️ Skipped @${user.login} - doesn't match quality criteria`);
+                    response = await this.octokit.rest.search.users({
+                        q: query,
+                        per_page: 30, // Max results per page
+                        page: page,
+                        sort: 'followers',
+                        order: 'desc'
+                    });
+                } catch (apiError: any) {
+                    onLog(`❌ API Error on page ${page}: ${apiError.message}`);
+                    if (apiError.status === 403) {
+                        onLog('⚠️ 403: Rate limited. Stopping search.');
                     }
-                } catch (err: any) {
-                    onLog(`⚠️ Error analyzing @${user.login}: ${err.message}`);
+                    break;
+                }
+
+                if (!response.data.items || response.data.items.length === 0) {
+                    onLog(`✅ No more results available (searched ${page - 1} pages)`);
+                    break;
+                }
+
+                onLog(`✅ Page ${page}: Found ${response.data.items.length} users`);
+
+                // Analyze each user on this page
+                for (const user of response.data.items) {
+                    if (candidates.length >= maxResults) {
+                        onLog(`✅ Reached target of ${maxResults} candidates. Stopping search.`);
+                        break;
+                    }
+
+                    totalUsersAnalyzed++;
+
+                    try {
+                        onLog(`  📊 [${candidates.length + 1}/${maxResults}] Analyzing @${user.login}...`);
+                        const metrics = await this.analyzeUser(user.login, criteria, onLog);
+                        
+                        if (metrics) {
+                            // Check for duplicates before adding
+                            if (githubDeduplicationService.isDuplicate(
+                                metrics,
+                                existingUsernames,
+                                existingEmails,
+                                existingLinkedin,
+                                currentBatchUsernames
+                            )) {
+                                onLog(`    ⏭️ Skipped - duplicate`);
+                                totalUsersSkipped++;
+                            } else {
+                                candidates.push(metrics);
+                                currentBatchUsernames.add(user.login.toLowerCase());
+                                onLog(`    ✅ Added @${user.login} (Score: ${metrics.github_score})`);
+                            }
+                        } else {
+                            onLog(`    ⏭️ Skipped - doesn't match quality criteria`);
+                            totalUsersSkipped++;
+                        }
+                    } catch (err: any) {
+                        onLog(`    ⚠️ Error analyzing @${user.login}: ${err.message}`);
+                        totalUsersSkipped++;
+                    }
+                }
+
+                // Check if we need more results
+                if (candidates.length < maxResults) {
+                    const needed = maxResults - candidates.length;
+                    onLog(`\n📊 Progress: ${candidates.length}/${maxResults} (need ${needed} more)`);
+                    page++;
+                } else {
+                    break;
                 }
             }
 
             // SAVE TO SUPABASE if campaign context available
             if (campaignId && userId && candidates.length > 0) {
-                onLog(`💾 Saving ${candidates.length} candidates to Supabase...`);
+                onLog(`\n💾 Saving ${candidates.length} candidates to Supabase...`);
                 const saved = await GitHubCandidatePersistence.saveCandidates(
                     campaignId,
                     candidates,
@@ -156,7 +179,10 @@ export class GitHubService {
                 onLog(`⚠️ No campaign context - results NOT persisted to database`);
             }
 
-            onLog(`🎉 Search complete! ${candidates.length} qualified developers found`);
+            onLog(`\n🎉 Search complete!`);
+            onLog(`✅ Found: ${candidates.length} qualified developers`);
+            onLog(`📊 Analyzed: ${totalUsersAnalyzed} users, Skipped: ${totalUsersSkipped}`);
+            
             return candidates;
 
         } catch (error: any) {
