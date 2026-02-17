@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus, Link2, List, Columns3, Grid3x3, X } from 'lucide-react';
+import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus, Link2, List, Columns3, Grid3x3, X, Download } from 'lucide-react';
 import { GitHubMetrics, GitHubFilterCriteria } from '../types/database';
 import { githubService, GitHubLogCallback } from '../lib/githubService';
 import { GitHubFilterConfig } from './GitHubFilterConfig';
@@ -44,6 +44,17 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
             }
         }
         
+        // Load previous candidates from sessionStorage
+        const previousCandidates = sessionStorage.getItem(`github_candidates_${campaignId}`);
+        if (previousCandidates) {
+            try {
+                const parsedCandidates = JSON.parse(previousCandidates);
+                setCandidates(parsedCandidates);
+            } catch (err) {
+                console.warn('Failed to restore candidates:', err);
+            }
+        }
+        
         // Get current user
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session?.user?.id) {
@@ -54,8 +65,8 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                     GitHubSearchService.getSearchResults(campaignId, session.user.id)
                         .then(restored => {
                             if (restored && restored.length > 0) {
-                                setCandidates(restored);
-                                setLogs(prev => [...prev, `✨ Restored ${restored.length} candidates from previous search`]);
+                                setCandidates(prev => [...new Map([...prev, ...restored].map(c => [c.github_username, c])).values()]);
+                                handleLogMessage(`✨ Restored ${restored.length} candidates from previous search`);
                             }
                         })
                         .catch(err => console.warn('Failed to restore search results:', err));
@@ -98,13 +109,30 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                 handleLogMessage
             );
 
-            setCandidates(results);
-            handleLogMessage(`✨ Search completed! Found ${results.length} qualified developers`);
+            // Merge with existing candidates from sessionStorage
+            const storedData = sessionStorage.getItem(`github_candidates_${campaignId}`);
+            const existingCandidates: GitHubMetrics[] = storedData ? JSON.parse(storedData) : [];
+            
+            // Add new results with timestamp
+            const newCandidatesWithDate = results.map(c => ({
+                ...c,
+                added_at: new Date().toISOString()
+            }));
+            
+            const allCandidates = [...existingCandidates, ...newCandidatesWithDate];
+            
+            setCandidates(allCandidates);
+            
+            // Save accumulated results
+            sessionStorage.setItem(`github_candidates_${campaignId}`, JSON.stringify(allCandidates));
+            
+            handleLogMessage(`✨ Search completed! Found ${results.length} new developers`);
+            handleLogMessage(`📊 Total accumulated: ${allCandidates.length} developers`);
 
             // Save results to Supabase for persistence
-            if (campaignId && userId && results.length > 0) {
+            if (campaignId && userId && allCandidates.length > 0) {
                 try {
-                    await GitHubSearchService.saveSearchResults(campaignId, results, userId);
+                    await GitHubSearchService.saveSearchResults(campaignId, allCandidates, userId);
                     handleLogMessage('💾 Results saved to session');
                 } catch (err) {
                     console.error('Error saving results:', err);
@@ -322,6 +350,24 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                                     <Columns3 className="h-4 w-4" />
                                 </button>
                             </div>
+                            
+                            {/* View Full Pipeline Button */}
+                            {candidates.length > 0 && (
+                                <button
+                                    onClick={() => {
+                                        // Save current candidates to sessionStorage
+                                        sessionStorage.setItem(`github_candidates_${campaignId}`, JSON.stringify(candidates));
+                                        // Navigate or show full view here
+                                        window.location.hash = `#/github-pipeline/${campaignId}`;
+                                    }}
+                                    className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-semibold transition text-sm flex items-center gap-2"
+                                    title="Ver pipeline completo con exportación CSV"
+                                >
+                                    <Download className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Pipeline Completo</span>
+                                    <span className="sm:hidden">Pipeline</span>
+                                </button>
+                            )}
                         </div>
                     </div>
 

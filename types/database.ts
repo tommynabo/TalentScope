@@ -198,6 +198,7 @@ export interface GitHubMetrics {
     // Enrichment
     mentioned_email: string | null;
     personal_website: string | null;
+    linkedin_url: string | null;
     
     // Scoring
     github_score: number; // 0-100

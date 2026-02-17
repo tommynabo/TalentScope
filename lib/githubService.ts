@@ -1,6 +1,8 @@
 import { Octokit } from '@octokit/rest';
 import { Candidate, GitHubFilterCriteria, GitHubMetrics, GitHubScoreBreakdown } from '../types/database';
 import { v4 as uuidv4 } from 'uuid';
+import { githubContactService } from './githubContactService';
+import { githubDeduplicationService } from './githubDeduplication';
 
 export type GitHubLogCallback = (message: string) => void;
 
@@ -47,6 +49,12 @@ export class GitHubService {
                 this.octokit = new Octokit();
             }
 
+            // Load existing candidates for deduplication
+            onLog('🔄 Loading duplicate filter...');
+            const { existingUsernames, existingEmails, existingLinkedin } = 
+                await githubDeduplicationService.fetchExistingGitHubCandidates();
+            const currentBatchUsernames = new Set<string>();
+
             // Build search query
             const query = this.buildSearchQuery(criteria);
             onLog(`📝 Search query: ${query}`);
@@ -90,8 +98,20 @@ export class GitHubService {
                     const metrics = await this.analyzeUser(user.login, criteria, onLog);
                     
                     if (metrics) {
-                        candidates.push(metrics);
-                        onLog(`✅ Added @${user.login} (Score: ${metrics.github_score})`);
+                        // Check for duplicates before adding
+                        if (githubDeduplicationService.isDuplicate(
+                            metrics,
+                            existingUsernames,
+                            existingEmails,
+                            existingLinkedin,
+                            currentBatchUsernames
+                        )) {
+                            onLog(`⏭️ Skipped @${user.login} - duplicate (already in database or batch)`);
+                        } else {
+                            candidates.push(metrics);
+                            currentBatchUsernames.add(user.login.toLowerCase());
+                            onLog(`✅ Added @${user.login} (Score: ${metrics.github_score})`);
+                        }
                     } else {
                         onLog(`⏭️ Skipped @${user.login} - doesn't match quality criteria`);
                     }
@@ -203,6 +223,11 @@ export class GitHubService {
             // Extract email from commit history
             const mentionedEmail = await this.extractEmailFromCommits(username, topRepos[0]);
 
+            // Search for LinkedIn and additional contact info
+            const contactInfo = await githubContactService.findContactInfo(username, topRepos[0]);
+            const linkedinUrl = contactInfo.linkedin;
+            const websiteUrl = contactInfo.website || user.blog || null;
+
             const metrics: GitHubMetrics = {
                 github_username: username,
                 github_url: user.html_url,
@@ -225,8 +250,9 @@ export class GitHubService {
                 app_store_url: appStoreUrl,
                 pinned_repos_count: originalRepos.filter(r => r.pushed_at && new Date(r.pushed_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length,
                 open_source_contributions: repos.length,
-                mentioned_email: mentionedEmail,
-                personal_website: user.blog || null,
+                mentioned_email: mentionedEmail || contactInfo.email,
+                personal_website: websiteUrl || null,
+                linkedin_url: linkedinUrl || null,
                 github_score: scoreBreakdown.normalized,
                 score_breakdown: scoreBreakdown
             };
