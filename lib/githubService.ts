@@ -3,6 +3,7 @@ import { Candidate, GitHubFilterCriteria, GitHubMetrics, GitHubScoreBreakdown } 
 import { v4 as uuidv4 } from 'uuid';
 import { githubContactService } from './githubContactService';
 import { githubDeduplicationService } from './githubDeduplication';
+import { GitHubCandidatePersistence } from './githubCandidatePersistence';
 
 export type GitHubLogCallback = (message: string) => void;
 
@@ -34,11 +35,14 @@ export class GitHubService {
 
     /**
      * Main search function - Busca usuarios de GitHub con criterios específicos
+     * Ahora persiste automáticamente en Supabase
      */
     async searchDevelopers(
         criteria: GitHubFilterCriteria,
         maxResults: number = 50,
-        onLog: GitHubLogCallback
+        onLog: GitHubLogCallback,
+        campaignId?: string,
+        userId?: string
     ): Promise<GitHubMetrics[]> {
         try {
             onLog('🔍 Starting GitHub developer search...');
@@ -49,10 +53,25 @@ export class GitHubService {
                 this.octokit = new Octokit();
             }
 
-            // Load existing candidates for deduplication
+            // Load existing candidates for deduplication (PER CAMPAIGN)
             onLog('🔄 Loading duplicate filter...');
-            const { existingUsernames, existingEmails, existingLinkedin } = 
-                await githubDeduplicationService.fetchExistingGitHubCandidates();
+            let existingUsernames: Set<string>;
+            let existingEmails: Set<string>;
+            let existingLinkedin: Set<string>;
+
+            if (campaignId && userId) {
+                const dedupeData = await githubDeduplicationService.fetchExistingGitHubCandidates(campaignId, userId);
+                existingUsernames = dedupeData.existingUsernames;
+                existingEmails = dedupeData.existingEmails;
+                existingLinkedin = dedupeData.existingLinkedin;
+                onLog(`✅ Loaded ${existingUsernames.size} existing usernames, ${existingEmails.size} emails, ${existingLinkedin.size} LinkedIn from campaign`);
+            } else {
+                existingUsernames = new Set();
+                existingEmails = new Set();
+                existingLinkedin = new Set();
+                onLog('⚠️ No campaign context - deduplication against current batch only');
+            }
+
             const currentBatchUsernames = new Set<string>();
 
             // Build search query
@@ -118,6 +137,23 @@ export class GitHubService {
                 } catch (err: any) {
                     onLog(`⚠️ Error analyzing @${user.login}: ${err.message}`);
                 }
+            }
+
+            // SAVE TO SUPABASE if campaign context available
+            if (campaignId && userId && candidates.length > 0) {
+                onLog(`💾 Saving ${candidates.length} candidates to Supabase...`);
+                const saved = await GitHubCandidatePersistence.saveCandidates(
+                    campaignId,
+                    candidates,
+                    userId
+                );
+                if (saved) {
+                    onLog(`✅ Successfully saved ${candidates.length} candidates to database`);
+                } else {
+                    onLog(`⚠️ Warning: Could not save to database, but results are available in memory`);
+                }
+            } else if (candidates.length > 0) {
+                onLog(`⚠️ No campaign context - results NOT persisted to database`);
             }
 
             onLog(`🎉 Search complete! ${candidates.length} qualified developers found`);

@@ -274,7 +274,7 @@ export class GitHubContactService {
             }
 
             // Obtener eventos públicos del usuario
-            const events = await this.octokit.rest.activity.listEventsForUser({
+            const events = await this.octokit.rest.activity.listPublicEventsForUser({
                 username,
                 per_page: 30
             });

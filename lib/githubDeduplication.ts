@@ -1,12 +1,21 @@
 import { supabase } from './supabase';
 import { GitHubMetrics } from '../types/database';
+import { GitHubCandidatePersistence } from './githubCandidatePersistence';
 
 /**
  * Servicio de deduplicación para búsquedas de GitHub
+ * Busca contra candidatos en la CAMPAÑA ESPECÍFICA (NOT global)
  * Evita candidatos duplicados por username, email o LinkedIn
  */
 export class GitHubDeduplicationService {
-    async fetchExistingGitHubCandidates(): Promise<{
+    /**
+     * Fetch existing candidates from SPECIFIC CAMPAIGN
+     * Este es el cambio clave: por campaña en lugar de global
+     */
+    async fetchExistingGitHubCandidates(
+        campaignId: string,
+        userId: string
+    ): Promise<{
         existingUsernames: Set<string>;
         existingEmails: Set<string>;
         existingLinkedin: Set<string>;
@@ -16,28 +25,17 @@ export class GitHubDeduplicationService {
         const existingLinkedin = new Set<string>();
 
         try {
-            // Buscar candidatos existentes en tabla candidates con datos GitHub
-            const { data, error } = await supabase
-                .from('candidates')
-                .select('github_url, email, linkedin_url')
-                .not('github_url', 'is', null);
+            // Buscar candidatos existentes EN LA CAMPAÑA ESPECÍFICA
+            const dedupeData = await GitHubCandidatePersistence.getDeduplicationData(
+                campaignId,
+                userId
+            );
 
-            if (error) {
-                console.error("[GITHUB_DEDUP] Error fetching existing candidates:", error);
-                return { existingUsernames, existingEmails, existingLinkedin };
-            }
-
-            data?.forEach((c: any) => {
-                // Extract username from GitHub URL
-                if (c.github_url) {
-                    const username = c.github_url.split('/').pop();
-                    if (username) existingUsernames.add(username.toLowerCase());
-                }
-                if (c.email) existingEmails.add(c.email.toLowerCase().trim());
-                if (c.linkedin_url) existingLinkedin.add(c.linkedin_url.toLowerCase().trim());
-            });
-
-            return { existingUsernames, existingEmails, existingLinkedin };
+            return {
+                existingUsernames: dedupeData.usernames,
+                existingEmails: dedupeData.emails,
+                existingLinkedin: dedupeData.linkedins
+            };
         } catch (e) {
             console.error("[GITHUB_DEDUP] Failed to fetch existing candidates", e);
             return { existingUsernames, existingEmails, existingLinkedin };

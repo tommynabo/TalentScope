@@ -9,6 +9,7 @@ import { GitHubCandidatesCards } from './GitHubCandidatesCards';
 import { GitHubCandidatesPipeline } from './GitHubCandidatesPipeline';
 import { GitHubCandidatesKanban } from './GitHubCandidatesKanban';
 import { GitHubSearchService } from '../lib/githubSearchService';
+import { GitHubCandidatePersistence } from '../lib/githubCandidatePersistence';
 import { supabase } from '../lib/supabase';
 
 interface GitHubCodeScanProps {
@@ -29,7 +30,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
     const [userId, setUserId] = useState<string>('');
     const [isStoppable, setIsStoppable] = useState(false); // Track if search can be stopped
 
-    // Load Product Engineers preset and restore previous search results
+    // Load Product Engineers preset and restore candidates from Supabase
     useEffect(() => {
         setCriteria(PRESET_PRODUCT_ENGINEERS);
         
@@ -44,32 +45,28 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
             }
         }
         
-        // Load previous candidates from sessionStorage
-        const previousCandidates = sessionStorage.getItem(`github_candidates_${campaignId}`);
-        if (previousCandidates) {
-            try {
-                const parsedCandidates = JSON.parse(previousCandidates);
-                setCandidates(parsedCandidates);
-            } catch (err) {
-                console.warn('Failed to restore candidates:', err);
-            }
-        }
-        
-        // Get current user
+        // Get current user and load candidates from SUPABASE
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session?.user?.id) {
                 setUserId(session.user.id);
                 
-                // Restore previous search results if available
+                // Load from Supabase if campaign context available
                 if (campaignId) {
-                    GitHubSearchService.getSearchResults(campaignId, session.user.id)
+                    GitHubCandidatePersistence.getCampaignCandidates(campaignId, session.user.id)
                         .then(restored => {
                             if (restored && restored.length > 0) {
-                                setCandidates(prev => [...new Map([...prev, ...restored].map(c => [c.github_username, c])).values()]);
-                                handleLogMessage(`✨ Restored ${restored.length} candidates from previous search`);
+                                setCandidates(restored);
+                                handleLogMessage(`✨ Loaded ${restored.length} candidates from Supabase`);
+                            } else {
+                                handleLogMessage(`📭 No previous candidates found for this campaign`);
                             }
                         })
-                        .catch(err => console.warn('Failed to restore search results:', err));
+                        .catch(err => {
+                            console.warn('Failed to restore candidates from Supabase:', err);
+                            handleLogMessage(`⚠️ Could not load candidates from database`);
+                        });
+                } else {
+                    handleLogMessage(`⚠️ No campaign context - results will not persist across sessions`);
                 }
             }
         });
@@ -96,49 +93,40 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
             return;
         }
 
+        if (!campaignId || !userId) {
+            alert('Campaign context required for persistent search');
+            return;
+        }
+
         setLoading(true);
         setIsStoppable(true);
-        setCandidates([]);
         setLogs([]);
         setShowLogs(true);
 
         try {
+            handleLogMessage('🔄 Loading existing candidates from Supabase...');
+            
+            // Search with campaign context - persistence happens automatically in githubService
             const results = await githubService.searchDevelopers(
                 criteria,
                 maxResults,
-                handleLogMessage
+                handleLogMessage,
+                campaignId,  // Pass campaign context
+                userId       // Pass user context
             );
 
-            // Merge with existing candidates from sessionStorage
-            const storedData = sessionStorage.getItem(`github_candidates_${campaignId}`);
-            const existingCandidates: GitHubMetrics[] = storedData ? JSON.parse(storedData) : [];
-            
-            // Add new results with timestamp
-            const newCandidatesWithDate = results.map(c => ({
-                ...c,
-                added_at: new Date().toISOString()
-            }));
-            
-            const allCandidates = [...existingCandidates, ...newCandidatesWithDate];
-            
+            // Load all candidates from Supabase (search results + previous)
+            const allCandidates = await GitHubCandidatePersistence.getCampaignCandidates(
+                campaignId,
+                userId
+            );
+
             setCandidates(allCandidates);
             
-            // Save accumulated results
-            sessionStorage.setItem(`github_candidates_${campaignId}`, JSON.stringify(allCandidates));
-            
-            handleLogMessage(`✨ Search completed! Found ${results.length} new developers`);
-            handleLogMessage(`📊 Total accumulated: ${allCandidates.length} developers`);
+            handleLogMessage(`✨ Found ${results.length} new developers in this search`);
+            handleLogMessage(`📊 Total accumulated in campaign: ${allCandidates.length} developers`);
+            handleLogMessage(`✅ All results automatically saved to Supabase`);
 
-            // Save results to Supabase for persistence
-            if (campaignId && userId && allCandidates.length > 0) {
-                try {
-                    await GitHubSearchService.saveSearchResults(campaignId, allCandidates, userId);
-                    handleLogMessage('💾 Results saved to session');
-                } catch (err) {
-                    console.error('Error saving results:', err);
-                    handleLogMessage('⚠️ Could not save to database, but results are available in session');
-                }
-            }
         } catch (error: any) {
             handleLogMessage(`❌ Error: ${error.message}`);
         } finally {
