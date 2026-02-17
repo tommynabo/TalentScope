@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus, Link2, List, Columns3, Grid3x3 } from 'lucide-react';
+import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus, Link2, List, Columns3, Grid3x3, X } from 'lucide-react';
 import { GitHubMetrics, GitHubFilterCriteria } from '../types/database';
 import { githubService, GitHubLogCallback } from '../lib/githubService';
 import { GitHubFilterConfig } from './GitHubFilterConfig';
@@ -22,15 +22,27 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
     const [loading, setLoading] = useState(false);
     const [logs, setLogs] = useState<string[]>([]);
     const [showFilterConfig, setShowFilterConfig] = useState(false);
-    const [showLogs, setShowLogs] = useState(false);
+    const [showLogs, setShowLogs] = useState(true); // Always show logs during execution
     const [criteria, setCriteria] = useState<GitHubFilterCriteria | null>(null);
     const [maxResults, setMaxResults] = useState(30);
-    const [viewMode, setViewMode] = useState<ViewMode>('cards');
+    const [viewMode, setViewMode] = useState<ViewMode>('pipeline'); // Default to pipeline
     const [userId, setUserId] = useState<string>('');
+    const [isStoppable, setIsStoppable] = useState(false); // Track if search can be stopped
 
     // Load Product Engineers preset and restore previous search results
     useEffect(() => {
         setCriteria(PRESET_PRODUCT_ENGINEERS);
+        
+        // Load previous logs from sessionStorage
+        const previousLogs = sessionStorage.getItem(`github_logs_${campaignId}`);
+        if (previousLogs) {
+            try {
+                const parsedLogs = JSON.parse(previousLogs);
+                setLogs(parsedLogs);
+            } catch (err) {
+                console.warn('Failed to restore logs:', err);
+            }
+        }
         
         // Get current user
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -43,7 +55,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                         .then(restored => {
                             if (restored && restored.length > 0) {
                                 setCandidates(restored);
-                                setLogs([`✨ Restored ${restored.length} candidates from previous search`]);
+                                setLogs(prev => [...prev, `✨ Restored ${restored.length} candidates from previous search`]);
                             }
                         })
                         .catch(err => console.warn('Failed to restore search results:', err));
@@ -53,7 +65,18 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
     }, [campaignId]);
 
     const handleLogMessage: GitHubLogCallback = (message: string) => {
-        setLogs(prev => [...prev, message]);
+        setLogs(prev => {
+            const newLogs = [...prev, message];
+            // Persist logs to sessionStorage
+            sessionStorage.setItem(`github_logs_${campaignId}`, JSON.stringify(newLogs));
+            return newLogs;
+        });
+    };
+
+    const handleStopSearch = () => {
+        setLoading(false);
+        setIsStoppable(false);
+        handleLogMessage('🛑 Búsqueda detenida por el usuario');
     };
 
     const handleStartSearch = async () => {
@@ -63,6 +86,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         }
 
         setLoading(true);
+        setIsStoppable(true);
         setCandidates([]);
         setLogs([]);
         setShowLogs(true);
@@ -79,13 +103,19 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
 
             // Save results to Supabase for persistence
             if (campaignId && userId && results.length > 0) {
-                await GitHubSearchService.saveSearchResults(campaignId, results, userId);
-                handleLogMessage('💾 Results saved to database');
+                try {
+                    await GitHubSearchService.saveSearchResults(campaignId, results, userId);
+                    handleLogMessage('💾 Results saved to session');
+                } catch (err) {
+                    console.error('Error saving results:', err);
+                    handleLogMessage('⚠️ Could not save to database, but results are available in session');
+                }
             }
         } catch (error: any) {
             handleLogMessage(`❌ Error: ${error.message}`);
         } finally {
             setLoading(false);
+            setIsStoppable(false);
         }
     };
 
@@ -181,24 +211,26 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                                 className="w-24 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-orange-500 outline-none"
                                 min="10"
                                 max="100"
-                            />
-                            <button
-                                onClick={handleStartSearch}
                                 disabled={loading}
-                                className="px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 disabled:opacity-50 rounded-lg text-white font-semibold transition flex items-center gap-2"
-                            >
-                                {loading ? (
-                                    <>
-                                        <Loader className="h-5 w-5 animate-spin" />
-                                        Buscando...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Search className="h-5 w-5" />
-                                        Iniciar Búsqueda
-                                    </>
-                                )}
-                            </button>
+                            />
+                            {loading ? (
+                                <button
+                                    onClick={handleStopSearch}
+                                    className="px-6 py-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 rounded-lg text-white font-semibold transition flex items-center gap-2"
+                                >
+                                    <X className="h-5 w-5" />
+                                    Detener
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleStartSearch}
+                                    disabled={loading}
+                                    className="px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 disabled:opacity-50 rounded-lg text-white font-semibold transition flex items-center gap-2"
+                                >
+                                    <Search className="h-5 w-5" />
+                                    Iniciar Búsqueda
+                                </button>
+                            )}
                             {candidates.length > 0 && (
                                 <button
                                     onClick={handleStartCrossSearch}
@@ -235,15 +267,25 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                     <div className="flex items-center justify-between mb-3">
                         <h4 className="text-orange-400 font-semibold">Logs de Búsqueda</h4>
                         <button
-                            onClick={() => setShowLogs(false)}
-                            className="text-slate-500 hover:text-slate-400"
+                            onClick={() => {
+                                if (!loading) {
+                                    setShowLogs(false);
+                                    // Clear logs from sessionStorage when closed
+                                    sessionStorage.removeItem(`github_logs_${campaignId}`);
+                                }
+                            }}
+                            disabled={loading}
+                            className={`text-slate-500 hover:text-slate-400 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            title={loading ? 'No puedes cerrar logs durante la búsqueda' : 'Cerrar logs'}
                         >
                             ✕
                         </button>
                     </div>
-                    {logs.map((log, idx) => (
-                        <div key={idx} className="text-slate-300 py-0.5">{log}</div>
-                    ))}
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                        {logs.map((log, idx) => (
+                            <div key={idx} className="text-slate-300 py-0.5">{log}</div>
+                        ))}
+                    </div>
                 </div>
             )}
 
