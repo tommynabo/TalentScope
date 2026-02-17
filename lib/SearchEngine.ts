@@ -7,6 +7,7 @@ import { normalizeLinkedInUrl } from './normalization';
 import { githubService } from './githubService';
 import { ApifyCrossSearchService, CrossLinkedCandidate, performCrossSearch } from './apifyCrossSearchService';
 import { UnbreakableExecutor, initializeUnbreakableMarker } from './UnbreakableExecution';
+import { PRESET_PRODUCT_ENGINEERS } from './githubPresets';
 
 export type LogCallback = (message: string) => void;
 
@@ -115,14 +116,14 @@ export class SearchEngine {
             try {
                 onLog("🔍 Iniciando búsqueda en GitHub Code Scan...");
                 
+                // Use provided filters or fallback to PRESET_PRODUCT_ENGINEERS
+                const githubFilters = options.githubFilters || PRESET_PRODUCT_ENGINEERS;
                 if (!options.githubFilters) {
-                    onLog("❌ GitHub filter criteria required");
-                    onComplete([]);
-                    return;
+                    onLog("📌 Using default preset: Product Engineers");
                 }
 
                 const results = await githubService.searchDevelopers(
-                    options.githubFilters,
+                    githubFilters,
                     maxResults,
                     onLog
                 );
@@ -161,16 +162,16 @@ export class SearchEngine {
             try {
                 onLog("🔍 Iniciando búsqueda cruzada GitHub ↔ LinkedIn...");
                 
+                // Use provided filters or fallback to PRESET_PRODUCT_ENGINEERS
+                const githubFilters = options.githubFilters || PRESET_PRODUCT_ENGINEERS;
                 if (!options.githubFilters) {
-                    onLog("❌ GitHub filter criteria required");
-                    onComplete([]);
-                    return;
+                    onLog("📌 Using default preset: Product Engineers");
                 }
 
                 // First: Search GitHub
                 onLog("📍 Fase 1: Buscando desarrolladores en GitHub...");
                 const githubResults = await githubService.searchDevelopers(
-                    options.githubFilters,
+                    githubFilters,
                     maxResults,
                     onLog
                 );
