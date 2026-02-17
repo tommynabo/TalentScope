@@ -67,7 +67,6 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                                 )}
                             </div>
                         </th>
-                        <th className="px-4 py-3">Bio</th>
                         <th className="px-4 py-3">Lenguajes</th>
                         <th
                             className="px-4 py-3 cursor-pointer hover:text-slate-200 transition-colors select-none"
@@ -102,17 +101,6 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                                 )}
                             </div>
                         </th>
-                        <th
-                            className="px-4 py-3 cursor-pointer hover:text-slate-200 transition-colors select-none"
-                            onClick={() => toggleSort('total_contributions')}
-                        >
-                            <div className="flex items-center gap-2">
-                                Contribuciones
-                                {sortConfig.field === 'total_contributions' && (
-                                    sortConfig.direction === 'desc' ? <ChevronDown className="h-3 w-3 text-orange-400" /> : <ChevronUp className="h-3 w-3 text-orange-400" />
-                                )}
-                            </div>
-                        </th>
                         <th className="px-4 py-3 text-right">Acciones</th>
                     </tr>
                 </thead>
@@ -143,13 +131,6 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                                 </div>
                             </td>
 
-                            {/* Bio */}
-                            <td className="px-4 py-3">
-                                <p className="text-xs text-slate-400 line-clamp-1">
-                                    {candidate.bio || '—'}
-                                </p>
-                            </td>
-
                             {/* Languages */}
                             <td className="px-4 py-3">
                                 <div className="flex flex-wrap gap-1">
@@ -168,16 +149,18 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
 
                             {/* Score */}
                             <td className="px-4 py-3">
-                                <div className="flex items-center gap-2">
-                                    <div className="flex-1 w-20 bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                                        <div
-                                            className={`h-full rounded-full ${candidate.github_score > 80 ? 'bg-gradient-to-r from-emerald-400 to-orange-400' : candidate.github_score > 60 ? 'bg-orange-500' : 'bg-slate-500'}`}
-                                            style={{ width: `${Math.min(candidate.github_score, 100)}%` }}
-                                        ></div>
-                                    </div>
-                                    <span className={`text-xs font-bold min-w-fit ${getScoreBadgeColor(candidate.github_score)}`}>
+                                <div className="flex items-center">
+                                    <div className={`px-3 py-1.5 rounded-lg text-sm font-bold border ${
+                                        candidate.github_score >= 85 
+                                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                            : candidate.github_score >= 75
+                                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                            : candidate.github_score >= 65
+                                            ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+                                            : 'bg-slate-500/20 text-slate-300 border-slate-500/40'
+                                    }`}>
                                         {Math.round(candidate.github_score)}
-                                    </span>
+                                    </div>
                                 </div>
                             </td>
 
@@ -189,11 +172,6 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                             {/* Public Repos */}
                             <td className="px-4 py-3">
                                 <span className="text-xs font-bold text-slate-300">{candidate.public_repos}</span>
-                            </td>
-
-                            {/* Contributions */}
-                            <td className="px-4 py-3">
-                                <span className="text-xs font-bold text-slate-300">{formatNumber(candidate.total_contributions ?? 0)}</span>
                             </td>
 
                             {/* Actions */}

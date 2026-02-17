@@ -265,70 +265,51 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
             )}
 
             {criteria && !showFilterConfig && (
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h3 className="text-lg font-semibold text-white mb-2">Criterios Configurados</h3>
-                            <p className="text-slate-400 text-sm">
-                                {criteria.languages.join(', ')} • Score ≥ {criteria.score_threshold} • 
-                                {criteria.require_app_store_link ? ' App Store Required' : ' Any App Type'}
-                            </p>
-                        </div>
-                        <div className="flex gap-3">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+                    <div>
+                        <h3 className="text-lg font-semibold text-white mb-2">Criterios Configurados</h3>
+                        <p className="text-slate-400 text-sm">
+                            {criteria.languages.join(', ')} • Score ≥ {criteria.score_threshold} • 
+                            {criteria.require_app_store_link ? ' App Store Required' : ' Any App Type'}
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-3 items-center pt-2">
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium text-slate-300">Límite de búsqueda:</label>
                             <input
                                 type="number"
                                 value={maxResults}
                                 onChange={(e) => setMaxResults(parseInt(e.target.value))}
-                                placeholder="Max results"
-                                className="w-24 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-orange-500 outline-none"
+                                className="w-20 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-orange-500 outline-none"
                                 min="10"
                                 max="100"
                                 disabled={loading}
                             />
-                            {loading ? (
-                                <button
-                                    onClick={handleStopSearch}
-                                    className="px-6 py-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 rounded-lg text-white font-semibold transition flex items-center gap-2"
-                                >
-                                    <X className="h-5 w-5" />
-                                    Detener
-                                </button>
-                            ) : (
-                                <button
-                                    onClick={handleStartSearch}
-                                    disabled={loading}
-                                    className="px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 disabled:opacity-50 rounded-lg text-white font-semibold transition flex items-center gap-2"
-                                >
-                                    <Search className="h-5 w-5" />
-                                    Iniciar Búsqueda
-                                </button>
-                            )}
-                            {candidates.length > 0 && (
-                                <button
-                                    onClick={handleStartCrossSearch}
-                                    disabled={loading}
-                                    className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 rounded-lg text-white font-semibold transition flex items-center gap-2"
-                                    title="Link GitHub results with LinkedIn profiles"
-                                >
-                                    {loading ? (
-                                        <>
-                                            <Loader className="h-5 w-5 animate-spin" />
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Link2 className="h-5 w-5" />
-                                            Cross-Search
-                                        </>
-                                    )}
-                                </button>
-                            )}
-                            <button
-                                onClick={() => setShowFilterConfig(true)}
-                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300"
-                            >
-                                Editar
-                            </button>
                         </div>
+                        {loading ? (
+                            <button
+                                onClick={handleStopSearch}
+                                className="px-6 py-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 rounded-lg text-white font-semibold transition flex items-center gap-2"
+                            >
+                                <X className="h-5 w-5" />
+                                Detener
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleStartSearch}
+                                disabled={loading}
+                                className="px-6 py-2 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 disabled:opacity-50 rounded-lg text-white font-semibold transition flex items-center gap-2"
+                            >
+                                <Search className="h-5 w-5" />
+                                Iniciar Búsqueda
+                            </button>
+                        )}
+                        <button
+                            onClick={() => setShowFilterConfig(true)}
+                            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300"
+                        >
+                            Editar
+                        </button>
                     </div>
                 </div>
             )}
