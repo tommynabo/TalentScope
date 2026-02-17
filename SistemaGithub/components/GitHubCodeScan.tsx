@@ -10,6 +10,7 @@ import { GitHubCandidatesPipeline } from './GitHubCandidatesPipeline';
 import { GitHubCandidatesKanban } from './GitHubCandidatesKanban';
 import { GitHubSearchService } from '../../lib/githubSearchService';
 import { GitHubCandidatePersistence } from '../../lib/githubCandidatePersistence';
+import { UnbreakableExecutor } from '../../lib/UnbreakableExecution';
 import { supabase } from '../../lib/supabase';
 
 interface GitHubCodeScanProps {
@@ -29,21 +30,14 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
     const [viewMode, setViewMode] = useState<ViewMode>('pipeline'); // Default to pipeline
     const [userId, setUserId] = useState<string>('');
     const [isStoppable, setIsStoppable] = useState(false); // Track if search can be stopped
+    const executorRef = React.useRef<UnbreakableExecutor | null>(null);
 
     // Load Product Engineers preset and restore candidates from Supabase
     useEffect(() => {
         setCriteria(PRESET_PRODUCT_ENGINEERS);
         
-        // Load previous logs from sessionStorage
-        const previousLogs = sessionStorage.getItem(`github_logs_${campaignId}`);
-        if (previousLogs) {
-            try {
-                const parsedLogs = JSON.parse(previousLogs);
-                setLogs(parsedLogs);
-            } catch (err) {
-                console.warn('Failed to restore logs:', err);
-            }
-        }
+        // Load previous logs from IndexedDB (Unbreakable Execution persistence)
+        loadLogsFromIndexedDB();
         
         // Get current user and load candidates from SUPABASE or Memory
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -93,18 +87,85 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                 }
             }
         });
-    }, [campaignId]);
+
+        // Listen for visibility changes to sync logs when tab returns to focus
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                loadLogsFromIndexedDB();
+                // If executor is running, mark as active
+                if (executorRef.current && isStoppable) {
+                    setLoading(true);
+                }
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [campaignId, isStoppable]);
 
     const handleLogMessage: GitHubLogCallback = (message: string) => {
         setLogs(prev => {
             const newLogs = [...prev, message];
-            // Persist logs to sessionStorage
+            // Persist logs to sessionStorage (quick access)
             sessionStorage.setItem(`github_logs_${campaignId}`, JSON.stringify(newLogs));
+            // Also persist to IndexedDB (survives tab switches)
+            persistLogsToIndexedDB(newLogs);
             return newLogs;
         });
     };
 
+    const loadLogsFromIndexedDB = async () => {
+        try {
+            const logKey = `github_search_logs_${campaignId}`;
+            const db = await new Promise<IDBDatabase>((resolve, reject) => {
+                const request = indexedDB.open('TalentScope_GitHubSearch');
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+            });
+
+            const transaction = db.transaction(['executionLogs'], 'readonly');
+            const store = transaction.objectStore('executionLogs');
+            const record = await new Promise<any>((resolve, reject) => {
+                const request = store.get(logKey);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+            });
+
+            if (record && record.logs && Array.isArray(record.logs)) {
+                setLogs(record.logs);
+            }
+        } catch (err) {
+            console.warn('Failed to load logs from IndexedDB:', err);
+        }
+    };
+
+    const persistLogsToIndexedDB = async (logsToSave: string[]) => {
+        try {
+            const logKey = `github_search_logs_${campaignId}`;
+            const request = indexedDB.open('TalentScope_GitHubSearch');
+            
+            request.onupgradeneeded = (event) => {
+                const db = (event.target as IDBOpenDBRequest).result;
+                if (!db.objectStoreNames.contains('executionLogs')) {
+                    db.createObjectStore('executionLogs');
+                }
+            };
+
+            request.onsuccess = () => {
+                const db = request.result;
+                const transaction = db.transaction(['executionLogs'], 'readwrite');
+                const store = transaction.objectStore('executionLogs');
+                store.put({ logs: logsToSave, timestamp: Date.now() }, logKey);
+            };
+        } catch (err) {
+            console.warn('Failed to persist logs to IndexedDB:', err);
+        }
+    };
+
     const handleStopSearch = () => {
+        if (executorRef.current) {
+            executorRef.current.stop('User clicked stop button');
+        }
         setLoading(false);
         setIsStoppable(false);
         handleLogMessage('🛑 Búsqueda detenida por el usuario');
@@ -126,69 +187,82 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         setLogs([]);
         setShowLogs(true);
 
-        try {
-            handleLogMessage('🔄 Loading existing candidates from Supabase...');
-            
-            // Search with campaign context - persistence happens automatically in githubService
-            const results = await githubService.searchDevelopers(
-                criteria,
-                maxResults,
-                handleLogMessage,
-                campaignId,  // Pass campaign context
-                userId       // Pass user context
-            );
+        // Create and store executor reference for later stop() calls
+        const executor = new UnbreakableExecutor(`github_search_${campaignId}`);
+        executorRef.current = executor;
 
-            handleLogMessage(`\n🔗 Syncing results...`);
-
-            // Get current candidates from localStorage as source of truth
-            const localStorageKey = `github_candidates_${campaignId}`;
-            let previousCandidates: GitHubMetrics[] = [];
-            
+        // Wrap entire search in Unbreakable Execution Mode
+        await executor.run(async () => {
             try {
-                const stored = localStorage.getItem(localStorageKey);
-                if (stored) {
-                    previousCandidates = JSON.parse(stored);
-                    handleLogMessage(`📦 Found ${previousCandidates.length} previous candidates in localStorage`);
+                handleLogMessage('🔄 Loading existing candidates from Supabase...');
+                
+                // Search with campaign context - persistence happens automatically in githubService
+                const results = await githubService.searchDevelopers(
+                    criteria,
+                    maxResults,
+                    handleLogMessage,
+                    campaignId,  // Pass campaign context
+                    userId       // Pass user context
+                );
+
+                handleLogMessage(`\n🔗 Syncing results...`);
+
+                // Get current candidates from localStorage as source of truth
+                const localStorageKey = `github_candidates_${campaignId}`;
+                let previousCandidates: GitHubMetrics[] = [];
+                
+                try {
+                    const stored = localStorage.getItem(localStorageKey);
+                    if (stored) {
+                        previousCandidates = JSON.parse(stored);
+                        handleLogMessage(`📦 Found ${previousCandidates.length} previous candidates in localStorage`);
+                    }
+                } catch (err) {
+                    console.warn('Failed to load from localStorage');
+                    handleLogMessage(`⚠️ Could not load previous candidates from storage`);
                 }
-            } catch (err) {
-                console.warn('Failed to load from localStorage');
-                handleLogMessage(`⚠️ Could not load previous candidates from storage`);
-            }
 
-            // Combine: previous + new, with deduplication by username
-            const allCandidates = [...previousCandidates];
-            let newCount = 0;
-            
-            for (const candidate of results) {
-                const exists = allCandidates.some(c => c.github_username.toLowerCase() === candidate.github_username.toLowerCase());
-                if (!exists) {
-                    allCandidates.push(candidate);
-                    newCount++;
+                // Combine: previous + new, with deduplication by username
+                const allCandidates = [...previousCandidates];
+                let newCount = 0;
+                
+                for (const candidate of results) {
+                    const exists = allCandidates.some(c => c.github_username.toLowerCase() === candidate.github_username.toLowerCase());
+                    if (!exists) {
+                        allCandidates.push(candidate);
+                        newCount++;
+                    }
                 }
+
+                handleLogMessage(`✨ Found ${results.length} developers in GitHub search`);
+                handleLogMessage(`✅ Added ${newCount} new (${results.length - newCount} were duplicates)`);
+                handleLogMessage(`📊 Total accumulated: ${allCandidates.length} developers`);
+
+                // Save all to localStorage
+                localStorage.setItem(localStorageKey, JSON.stringify(allCandidates));
+                handleLogMessage(`💾 Synced ${allCandidates.length} candidates to localStorage`);
+
+                // Update state with all candidates
+                setCandidates([...allCandidates]); // Force new array reference to ensure re-render
+                
+                if (allCandidates.length > 0) {
+                    handleLogMessage(`✅ Ready to view ${allCandidates.length} developers`);
+                }
+
+            } catch (error: any) {
+                handleLogMessage(`❌ Error: ${error.message}`);
+                console.error('Search error:', error);
+            } finally {
+                setLoading(false);
+                setIsStoppable(false);
             }
-
-            handleLogMessage(`✨ Found ${results.length} developers in GitHub search`);
-            handleLogMessage(`✅ Added ${newCount} new (${results.length - newCount} were duplicates)`);
-            handleLogMessage(`📊 Total accumulated: ${allCandidates.length} developers`);
-
-            // Save all to localStorage
-            localStorage.setItem(localStorageKey, JSON.stringify(allCandidates));
-            handleLogMessage(`💾 Synced ${allCandidates.length} candidates to localStorage`);
-
-            // Update state with all candidates
-            setCandidates([...allCandidates]); // Force new array reference to ensure re-render
-            
-            if (allCandidates.length > 0) {
-                handleLogMessage(`✅ Ready to view ${allCandidates.length} developers`);
+        }, (state) => {
+            // Monitor executor state changes
+            if (state === 'error' || state === 'completed') {
+                setLoading(false);
+                setIsStoppable(false);
             }
-
-        } catch (error: any) {
-            handleLogMessage(`❌ Error: ${error.message}`);
-            console.error('Search error:', error);
-        } finally {
-            setLoading(false);
-            setIsStoppable(false);
-        }
+        });
     };
 
     const handleStartCrossSearch = async () => {
