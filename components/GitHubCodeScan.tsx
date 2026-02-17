@@ -138,62 +138,53 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                 userId       // Pass user context
             );
 
-            // Try to load from Supabase, but fall back to search results if table doesn't exist
-            let allCandidates: GitHubMetrics[] = [];
-            let supabaseWorking = false;
+            handleLogMessage(`\n🔗 Syncing results...`);
+
+            // Get current candidates from localStorage as source of truth
+            const localStorageKey = `github_candidates_${campaignId}`;
+            let previousCandidates: GitHubMetrics[] = [];
             
             try {
-                allCandidates = await GitHubCandidatePersistence.getCampaignCandidates(
-                    campaignId,
-                    userId
-                );
-                if (allCandidates.length > 0) {
-                    handleLogMessage(`📊 Loaded ${allCandidates.length} candidates from Supabase`);
-                    supabaseWorking = true;
+                const stored = localStorage.getItem(localStorageKey);
+                if (stored) {
+                    previousCandidates = JSON.parse(stored);
+                    handleLogMessage(`📦 Found ${previousCandidates.length} previous candidates in localStorage`);
                 }
             } catch (err) {
-                handleLogMessage(`⚠️ Supabase table not found. Using in-memory storage.`);
-                handleLogMessage(`💡 To enable DB persistence: supabase/github_search_results_migration.sql`);
+                console.warn('Failed to load from localStorage');
+                handleLogMessage(`⚠️ Could not load previous candidates from storage`);
             }
 
-            // If no candidates from DB, use search results + previous from localStorage
-            if (allCandidates.length === 0) {
-                // Get previous from localStorage
-                const localStorageKey = `github_candidates_${campaignId}`;
-                let previousCandidates: GitHubMetrics[] = [];
-                try {
-                    const stored = localStorage.getItem(localStorageKey);
-                    if (stored) {
-                        previousCandidates = JSON.parse(stored);
-                    }
-                } catch (err) {
-                    console.warn('Failed to load from localStorage');
-                }
-                
-                // Deduplicate: combine previous + new, remove duplicates
-                allCandidates = [...previousCandidates];
-                for (const candidate of results) {
-                    const exists = allCandidates.some(c => c.github_username === candidate.github_username);
-                    if (!exists) {
-                        allCandidates.push(candidate);
-                    }
-                }
-                
-                // Save to localStorage
-                localStorage.setItem(localStorageKey, JSON.stringify(allCandidates));
-            }
-
-            setCandidates(allCandidates);
+            // Combine: previous + new, with deduplication by username
+            const allCandidates = [...previousCandidates];
+            let newCount = 0;
             
-            handleLogMessage(`✨ Found ${results.length} new developers in this search`);
+            for (const candidate of results) {
+                const exists = allCandidates.some(c => c.github_username.toLowerCase() === candidate.github_username.toLowerCase());
+                if (!exists) {
+                    allCandidates.push(candidate);
+                    newCount++;
+                }
+            }
+
+            handleLogMessage(`✨ Found ${results.length} developers in GitHub search`);
+            handleLogMessage(`✅ Added ${newCount} new (${results.length - newCount} were duplicates)`);
             handleLogMessage(`📊 Total accumulated: ${allCandidates.length} developers`);
+
+            // Save all to localStorage
+            localStorage.setItem(localStorageKey, JSON.stringify(allCandidates));
+            handleLogMessage(`💾 Synced ${allCandidates.length} candidates to localStorage`);
+
+            // Update state with all candidates
+            setCandidates([...allCandidates]); // Force new array reference to ensure re-render
             
             if (allCandidates.length > 0) {
-                handleLogMessage(`✅ Results ready for viewing`);
+                handleLogMessage(`✅ Ready to view ${allCandidates.length} developers`);
             }
 
         } catch (error: any) {
             handleLogMessage(`❌ Error: ${error.message}`);
+            console.error('Search error:', error);
         } finally {
             setLoading(false);
             setIsStoppable(false);

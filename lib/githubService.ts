@@ -60,11 +60,40 @@ export class GitHubService {
             let existingLinkedin: Set<string>;
 
             if (campaignId && userId) {
+                // Try Supabase first, fallback to localStorage
                 const dedupeData = await githubDeduplicationService.fetchExistingGitHubCandidates(campaignId, userId);
                 existingUsernames = dedupeData.existingUsernames;
                 existingEmails = dedupeData.existingEmails;
                 existingLinkedin = dedupeData.existingLinkedin;
-                onLog(`✅ Loaded ${existingUsernames.size} existing usernames, ${existingEmails.size} emails, ${existingLinkedin.size} LinkedIn from campaign`);
+
+                // If Supabase returned empty, try localStorage
+                if (existingUsernames.size === 0 && existingEmails.size === 0) {
+                    const localStorageKey = `github_candidates_${campaignId}`;
+                    try {
+                        const stored = localStorage.getItem(localStorageKey);
+                        if (stored) {
+                            const candidates = JSON.parse(stored) as GitHubMetrics[];
+                            existingUsernames = new Set(candidates.map(c => c.github_username.toLowerCase()));
+                            existingEmails = new Set(
+                                candidates
+                                    .filter(c => c.mentioned_email)
+                                    .map(c => c.mentioned_email!.toLowerCase())
+                            );
+                            existingLinkedin = new Set(
+                                candidates
+                                    .filter(c => c.linkedin_url)
+                                    .map(c => c.linkedin_url!.toLowerCase())
+                            );
+                            onLog(`✅ Loaded ${existingUsernames.size} existing fromStorage (${candidates.length} candidates)`);
+                        } else {
+                            onLog(`✅ Loaded 0 existing usernames from campaign (fresh search)`);
+                        }
+                    } catch (err) {
+                        onLog(`⚠️ Could not load from localStorage for dedup`);
+                    }
+                } else {
+                    onLog(`✅ Loaded ${existingUsernames.size} existing usernames, ${existingEmails.size} emails, ${existingLinkedin.size} LinkedIn from campaign`);
+                }
             } else {
                 existingUsernames = new Set();
                 existingEmails = new Set();
@@ -140,6 +169,7 @@ export class GitHubService {
                             } else {
                                 candidates.push(metrics);
                                 currentBatchUsernames.add(user.login.toLowerCase());
+                                existingUsernames.add(user.login.toLowerCase()); // Add to existing to avoid re-adding in same search
                                 onLog(`    ✅ Added @${user.login} (Score: ${metrics.github_score})`);
                             }
                         } else {
@@ -173,7 +203,7 @@ export class GitHubService {
                 if (saved) {
                     onLog(`✅ Successfully saved ${candidates.length} candidates to database`);
                 } else {
-                    onLog(`⚠️ Warning: Could not save to database, but results are available in memory`);
+                    onLog(`⚠️ Warning: Could not save to database, using localStorage instead`);
                 }
             } else if (candidates.length > 0) {
                 onLog(`⚠️ No campaign context - results NOT persisted to database`);
