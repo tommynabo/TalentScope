@@ -296,7 +296,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
   };
 
   const handleStopSearch = () => {
-    searchEngine.stop();
+    linkedInSearchEngine.stop();
     setSearching(false);
     setLogs(prev => [...prev, '⏹️ Búsqueda detenida por el usuario.']);
     setToast({ show: true, message: 'Búsqueda detenida.' });
