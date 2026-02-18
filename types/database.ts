@@ -85,37 +85,37 @@ export interface SearchFilterCriteria {
     // Demografía
     min_age: number;
     max_age: number;
-    
+
     has_engineering_degree: boolean;
     engineering_match: CriterionMatch;
-    
+
     // Experiencia Técnica (XX = 2pts)
     has_published_apps: boolean;
     published_apps_match: CriterionMatch;
-    
+
     has_flutter_dart_exp: boolean;
     flutter_dart_match: CriterionMatch;
-    
+
     has_portfolio_online: boolean;
     portfolio_match: CriterionMatch;
-    
+
     open_source_contributor: boolean;
     open_source_match: CriterionMatch;
-    
+
     // Emprendimiento
     startup_early_stage_exp: boolean;
     startup_match: CriterionMatch;
-    
+
     founded_business: boolean;
     founded_match: CriterionMatch;
-    
+
     // Skills Complementarios (X = 1pt)
     backend_knowledge: 'none' | 'firebase' | 'supabase' | 'custom';
     backend_match: CriterionMatch;
-    
+
     ui_ux_awareness: boolean;
     ui_ux_match: CriterionMatch;
-    
+
     ai_experience: boolean;
     ai_match: CriterionMatch;
 }
@@ -144,25 +144,25 @@ export interface GitHubFilterCriteria {
     max_stars: number;
     min_forks: number;
     languages: string[];
-    
+
     // Developer Signals
     min_public_repos: number;
     min_followers: number;
     min_contributions_per_month: number;
-    
+
     // Code Quality Filters
     min_originality_ratio: number; // % of repos that are not forks
     exclude_generic_repos: boolean; // "todo", "calculator", "weather", "clone"
     require_recent_activity: boolean;
     max_months_since_last_commit: number;
-    
+
     // Store Presence (Critical Signal)
     require_app_store_link: boolean; // Play Store or App Store
-    
+
     // Location & Demographics
     locations: string[];
     available_for_hire: boolean;
-    
+
     score_threshold?: number; // 0-100
 }
 
@@ -175,42 +175,47 @@ export interface GitHubMetrics {
     following: number;
     created_at: string;
     updated_at: string;
-    
+
     // Profile Info
     name?: string;
     bio?: string;
     avatar_url?: string;
-    
+
     // Code Metrics
     total_commits: number;
     contribution_streak: number; // days
     last_commit_date: string | null;
     most_used_language: string | null;
     total_contributions?: number;
-    
+
     // Repository Analysis
     total_stars_received: number;
     average_repo_stars: number;
     original_repos_count: number;
     fork_repos_count: number;
     originality_ratio: number; // 0-100
-    
+
     // Signal Detection
     has_app_store_link: boolean;
     app_store_url: string | null;
     pinned_repos_count: number;
     open_source_contributions: number;
-    
+
     // Enrichment
     mentioned_email: string | null;
     personal_website: string | null;
     linkedin_url: string | null;
-    
+
     // Scoring
     github_score: number; // 0-100
     score_breakdown: GitHubScoreBreakdown;
     search_quality?: 'excellent' | 'good' | 'fair' | 'poor';
     languages?: string[];
+
+    // AI Research Data
+    ai_summary?: string[]; // Bullet points analysis
+    outreach_icebreaker?: string;
+    outreach_pitch?: string;
 }
 
 export interface GitHubScoreBreakdown {

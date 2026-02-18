@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GitHubMetrics } from '../../types/database';
-import { ChevronUp, ChevronDown, ExternalLink, Trophy } from 'lucide-react';
+import { ChevronUp, ChevronDown, ExternalLink, Trophy, Eye, X, Copy, Check } from 'lucide-react';
 
 interface GitHubCandidatesPipelineProps {
     candidates: GitHubMetrics[];
@@ -20,6 +20,16 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
         field: 'github_score',
         direction: 'desc'
     });
+
+    const [selectedCandidate, setSelectedCandidate] = useState<GitHubMetrics | null>(null);
+    const [showModal, setShowModal] = useState(false);
+    const [copiedField, setCopiedField] = useState<string | null>(null);
+
+    const handleCopy = (text: string, fieldId: string) => {
+        navigator.clipboard.writeText(text);
+        setCopiedField(fieldId);
+        setTimeout(() => setCopiedField(null), 2000);
+    };
 
     const toggleSort = (field: SortField) => {
         setSortConfig(prev => ({
@@ -150,15 +160,14 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                             {/* Score */}
                             <td className="px-4 py-3">
                                 <div className="flex items-center">
-                                    <div className={`px-3 py-1.5 rounded-lg text-sm font-bold border ${
-                                        candidate.github_score >= 85 
+                                    <div className={`px-3 py-1.5 rounded-lg text-sm font-bold border ${candidate.github_score >= 85
                                             ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                                             : candidate.github_score >= 75
-                                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                                            : candidate.github_score >= 65
-                                            ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
-                                            : 'bg-slate-500/20 text-slate-300 border-slate-500/40'
-                                    }`}>
+                                                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                                : candidate.github_score >= 65
+                                                    ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+                                                    : 'bg-slate-500/20 text-slate-300 border-slate-500/40'
+                                        }`}>
                                         {Math.round(candidate.github_score)}
                                     </div>
                                 </div>
@@ -184,11 +193,172 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                                 >
                                     <ExternalLink className="h-3 w-3" />
                                 </a>
+                                <button
+                                    onClick={() => {
+                                        setSelectedCandidate(candidate);
+                                        setShowModal(true);
+                                    }}
+                                    className="inline-flex items-center gap-1 text-xs font-medium text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 px-2 py-1 rounded-lg transition-colors border border-orange-500/20 hover:border-orange-500/40 ml-2"
+                                >
+                                    <Eye className="h-3 w-3" />
+                                    Ver
+                                </button>
                             </td>
                         </tr>
                     ))}
                 </tbody>
             </table>
+
+            {/* AI Research Modal */}
+            {showModal && selectedCandidate && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+                        {/* Header */}
+                        <div className="flex items-center justify-between p-6 border-b border-slate-800 bg-slate-900/50">
+                            <div className="flex items-center gap-4">
+                                <img
+                                    src={selectedCandidate.avatar_url || `https://ui-avatars.com/api/?name=${selectedCandidate.github_username}&background=1e293b&color=94a3b8`}
+                                    alt={selectedCandidate.github_username}
+                                    className="h-12 w-12 rounded-full ring-2 ring-orange-500/20"
+                                />
+                                <div>
+                                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                        {selectedCandidate.name || selectedCandidate.github_username}
+                                        <a href={`https://github.com/${selectedCandidate.github_username}`} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white">
+                                            <ExternalLink className="h-4 w-4" />
+                                        </a>
+                                    </h3>
+                                    <p className="text-orange-400 text-sm font-medium">{selectedCandidate.bio || 'Desarrollador GitHub'}</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowModal(false)}
+                                className="text-slate-400 hover:text-white p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                            >
+                                <X className="h-6 w-6" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Left Column: Stats & Summary */}
+                            <div className="space-y-6">
+                                {/* Stats Grid */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800">
+                                        <div className="text-slate-400 text-xs uppercase tracking-wider mb-1">Score</div>
+                                        <div className="text-2xl font-bold text-white">{Math.round(selectedCandidate.github_score)}</div>
+                                    </div>
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800">
+                                        <div className="text-slate-400 text-xs uppercase tracking-wider mb-1">Repos</div>
+                                        <div className="text-2xl font-bold text-white">{selectedCandidate.public_repos}</div>
+                                    </div>
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800">
+                                        <div className="text-slate-400 text-xs uppercase tracking-wider mb-1">Followers</div>
+                                        <div className="text-2xl font-bold text-white">{formatNumber(selectedCandidate.followers)}</div>
+                                    </div>
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800">
+                                        <div className="text-slate-400 text-xs uppercase tracking-wider mb-1">Language</div>
+                                        <div className="text-lg font-bold text-orange-400 truncate">{selectedCandidate.most_used_language || 'N/A'}</div>
+                                    </div>
+                                </div>
+
+                                {/* AI Summary - "Resumen de datos importantes" */}
+                                <div className="bg-slate-950/30 border border-slate-800 rounded-lg p-5">
+                                    <h4 className="text-orange-400 font-semibold mb-4 flex items-center gap-2">
+                                        <Trophy className="h-4 w-4" />
+                                        Resumen de Datos Importantes
+                                    </h4>
+                                    <ul className="space-y-3">
+                                        {(selectedCandidate.ai_summary && selectedCandidate.ai_summary.length > 0) ? (
+                                            selectedCandidate.ai_summary.map((point, i) => (
+                                                <li key={i} className="flex items-start gap-2 text-slate-300 text-sm">
+                                                    <span className="text-orange-500 mt-1">•</span>
+                                                    {point}
+                                                </li>
+                                            ))
+                                        ) : (
+                                            // Fallback / Mock Data if no AI analysis yet
+                                            <>
+                                                <li className="flex items-start gap-2 text-slate-300 text-sm">
+                                                    <span className="text-orange-500 mt-1">•</span>
+                                                    Perfil con alta actividad reciente en repositorios {selectedCandidate.most_used_language || 'de código'}.
+                                                </li>
+                                                <li className="flex items-start gap-2 text-slate-300 text-sm">
+                                                    <span className="text-orange-500 mt-1">•</span>
+                                                    Mantiene un ratio de originalidad del {selectedCandidate.originality_ratio || 0}% en sus proyectos.
+                                                </li>
+                                                <li className="flex items-start gap-2 text-slate-300 text-sm">
+                                                    <span className="text-orange-500 mt-1">•</span>
+                                                    {selectedCandidate.contribution_streak > 0
+                                                        ? `Racha de contribuciones activa de ${selectedCandidate.contribution_streak} días.`
+                                                        : 'Contribuidor constante en proyectos open source.'}
+                                                </li>
+                                                {selectedCandidate.location && (
+                                                    <li className="flex items-start gap-2 text-slate-300 text-sm">
+                                                        <span className="text-orange-500 mt-1">•</span>
+                                                        Ubicado en {selectedCandidate.location}, posible disponibilidad horaria compatible.
+                                                    </li>
+                                                )}
+                                            </>
+                                        )}
+                                    </ul>
+                                </div>
+                            </div>
+
+                            {/* Right Column: Outreach Messages */}
+                            <div className="space-y-6">
+                                <h4 className="text-white font-semibold flex items-center gap-2">
+                                    <span className="h-6 w-1 bg-orange-500 rounded-full"></span>
+                                    Mensajes Outreach
+                                </h4>
+
+                                {/* Message 1: Icebreaker / Connection */}
+                                <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 group hover:border-orange-500/30 transition-colors">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Opción 1: Conexión Técnica</div>
+                                        <button
+                                            onClick={() => handleCopy(selectedCandidate.outreach_icebreaker || `Hola ${selectedCandidate.name || selectedCandidate.github_username}, he visto tu trabajo en GitHub con ${selectedCandidate.most_used_language} y me ha impresionado la calidad de tus repositorios.`, 'msg1')}
+                                            className="text-slate-400 hover:text-orange-400 transition-colors"
+                                            title="Copiar mensaje"
+                                        >
+                                            {copiedField === 'msg1' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                                        </button>
+                                    </div>
+                                    <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
+                                        {selectedCandidate.outreach_icebreaker || `Hola ${selectedCandidate.name || selectedCandidate.github_username}, he visto tu trabajo en GitHub con ${selectedCandidate.most_used_language} y me ha impresionado la calidad de tus repositorios.`}
+                                    </p>
+                                </div>
+
+                                {/* Message 2: Pitch / Value Prop */}
+                                <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 group hover:border-orange-500/30 transition-colors">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Opción 2: Propuesta Directa</div>
+                                        <button
+                                            onClick={() => handleCopy(selectedCandidate.outreach_pitch || `Me encantaría charlar sobre cómo podrías aplicar tu experiencia en ${selectedCandidate.most_used_language} en proyectos de alto impacto. ¿Tienes 5 minutos?`, 'msg2')}
+                                            className="text-slate-400 hover:text-orange-400 transition-colors"
+                                            title="Copiar mensaje"
+                                        >
+                                            {copiedField === 'msg2' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                                        </button>
+                                    </div>
+                                    <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
+                                        {selectedCandidate.outreach_pitch || `Me encantaría charlar sobre cómo podrías aplicar tu experiencia en ${selectedCandidate.most_used_language} en proyectos de alto impacto. ¿Tienes 5 minutos?`}
+                                    </p>
+                                </div>
+
+                                <div className="pt-4 flex justify-end">
+                                    <button
+                                        onClick={() => setShowModal(false)}
+                                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors"
+                                    >
+                                        Cerrar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
