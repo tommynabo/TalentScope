@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus, Link2, List, Columns3, Grid3x3, X, Download } from 'lucide-react';
+import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus, Link2, List, Columns3, Grid3x3, X, Download, Mail } from 'lucide-react';
 import { GitHubMetrics, GitHubFilterCriteria } from '../types/database';
 import { githubService, GitHubLogCallback } from '../lib/githubService';
 import { GitHubFilterConfig } from './GitHubFilterConfig';
@@ -10,6 +10,7 @@ import { GitHubCandidatesPipeline } from './GitHubCandidatesPipeline';
 import { GitHubCandidatesKanban } from './GitHubCandidatesKanban';
 import { GitHubSearchService } from '../lib/githubSearchService';
 import { GitHubCandidatePersistence } from '../lib/githubCandidatePersistence';
+import { GitHubContactEnricher, EnrichmentResult } from './GitHubContactEnricher';
 import { supabase } from '../lib/supabase';
 
 interface GitHubCodeScanProps {
@@ -29,6 +30,11 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
     const [viewMode, setViewMode] = useState<ViewMode>('pipeline'); // Default to pipeline
     const [userId, setUserId] = useState<string>('');
     const [isStoppable, setIsStoppable] = useState(false); // Track if search can be stopped
+    const [showContactEnricher, setShowContactEnricher] = useState(false); // Show contact enrichment modal
+    const [enrichmentStats, setEnrichmentStats] = useState({
+        emailsFound: 0,
+        linkedinsFound: 0
+    }); // Track enrichment stats
 
     // Load Product Engineers preset and restore candidates from Supabase
     useEffect(() => {
@@ -108,6 +114,31 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         setLoading(false);
         setIsStoppable(false);
         handleLogMessage('🛑 Búsqueda detenida por el usuario');
+    };
+
+    const handleContactEnrichmentComplete = (results: EnrichmentResult[]) => {
+        // Update candidates with enriched contact info
+        const updatedCandidates = candidates.map(candidate => {
+            const enrichResult = results.find(r => r.username === candidate.github_username);
+            if (enrichResult && enrichResult.success) {
+                return enrichResult.updated;
+            }
+            return candidate;
+        });
+
+        setCandidates(updatedCandidates);
+
+        // Update stats
+        const emailsFound = updatedCandidates.filter(c => c.mentioned_email).length;
+        const linkedinsFound = updatedCandidates.filter(c => c.linkedin_url).length;
+        
+        setEnrichmentStats({
+            emailsFound,
+            linkedinsFound
+        });
+
+        // Log completion
+        console.log(`✅ Contact enrichment complete: ${emailsFound} emails, ${linkedinsFound} LinkedIn URLs`);
     };
 
     const handleStartSearch = async () => {
@@ -305,6 +336,17 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                             )}
                             {candidates.length > 0 && (
                                 <button
+                                    onClick={() => setShowContactEnricher(true)}
+                                    disabled={loading}
+                                    className="px-6 py-2 bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 disabled:opacity-50 rounded-lg text-white font-semibold transition flex items-center gap-2"
+                                    title="Deep research to find emails and LinkedIn profiles"
+                                >
+                                    <Mail className="h-5 w-5" />
+                                    Enriquecer Contactos
+                                </button>
+                            )}
+                            {candidates.length > 0 && (
+                                <button
                                     onClick={handleStartCrossSearch}
                                     disabled={loading}
                                     className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 rounded-lg text-white font-semibold transition flex items-center gap-2"
@@ -472,6 +514,38 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                     <p className="text-slate-400 text-lg">Configura tus criterios de búsqueda</p>
                     <p className="text-slate-500 text-sm mt-2">Establece filtros para encontrar desarrolladores que se adapten a tus necesidades</p>
                 </div>
+            )}
+
+            {/* Contact Enrichment Statistics */}
+            {candidates.length > 0 && (enrichmentStats.emailsFound > 0 || enrichmentStats.linkedinsFound > 0) && (
+                <div className="grid grid-cols-2 gap-4 bg-slate-800/30 border border-slate-700 rounded-lg p-4">
+                    <div className="flex items-center gap-3">
+                        <Mail className="h-6 w-6 text-blue-400" />
+                        <div>
+                            <p className="text-slate-400 text-xs">Emails Encontrados</p>
+                            <p className="text-white text-lg font-bold">{enrichmentStats.emailsFound}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <ExternalLink className="h-6 w-6 text-cyan-400" />
+                        <div>
+                            <p className="text-slate-400 text-xs">LinkedIn URLs Encontradas</p>
+                            <p className="text-white text-lg font-bold">{enrichmentStats.linkedinsFound}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Contact Enricher Modal */}
+            {showContactEnricher && campaignId && userId && (
+                <GitHubContactEnricher
+                    candidates={candidates}
+                    campaignId={campaignId}
+                    userId={userId}
+                    onComplete={handleContactEnrichmentComplete}
+                    onClose={() => setShowContactEnricher(false)}
+                    autoStart={true}
+                />
             )}
         </div>
     );
