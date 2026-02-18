@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
@@ -27,6 +27,7 @@ const App: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string>('');
   const [showToast, setShowToast] = useState<boolean>(false);
   const navigate = useNavigate();
+  const currentUserIdRef = useRef<string | null>(null); // Track user ID to prevent redundant state updates
 
   // ─── TabGuard: Sistema anti-recarga automática ─────────────────────
   // Previene recargas cuando cambias de pestaña/ventana
@@ -44,6 +45,7 @@ const App: React.FC = () => {
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
+        currentUserIdRef.current = session.user.id;
         setUser({
           id: session.user.id,
           name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
@@ -55,15 +57,23 @@ const App: React.FC = () => {
       setLoading(false);
     });
 
-    // Listen for changes — IGNORE TOKEN_REFRESHED to prevent tab-switch re-renders
+    // Listen for auth changes — DEDUPLICATE to prevent tab-switch re-renders
+    // Supabase fires SIGNED_IN and TOKEN_REFRESHED on every tab visibility change,
+    // which would cause setUser() → full App re-render → DetailView state reset
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      // Skip TOKEN_REFRESHED events (fired automatically on tab focus by Supabase)
-      // These cause unnecessary re-renders without any real state change
+      // Skip TOKEN_REFRESHED — these never change user data
       if (event === 'TOKEN_REFRESHED') return;
 
       if (session?.user) {
+        // CRITICAL FIX: Skip setUser() if the same user is already set
+        // Supabase fires SIGNED_IN on every tab focus via _recoverAndRefresh()
+        // which would re-render the entire App and reset component local state
+        if (currentUserIdRef.current === session.user.id) {
+          return; // Same user, no state change needed
+        }
+        currentUserIdRef.current = session.user.id;
         setUser({
           id: session.user.id,
           name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User',
@@ -72,7 +82,11 @@ const App: React.FC = () => {
           avatar: `https://ui-avatars.com/api/?name=${session.user.email}&background=0D8ABC&color=fff`
         });
       } else {
-        setUser(null);
+        // Only set null if we actually had a user (real sign-out)
+        if (currentUserIdRef.current !== null) {
+          currentUserIdRef.current = null;
+          setUser(null);
+        }
       }
       setLoading(false);
     });

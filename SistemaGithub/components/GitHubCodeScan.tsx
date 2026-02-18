@@ -89,40 +89,32 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
             }
         });
 
-        // Listen for visibility changes to sync logs when tab returns to focus
+        // Listen for visibility changes to sync logs ONLY when a search is actively running
+        // GUARD: Don't fire when idle to prevent tab-switch re-renders
         const handleVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                // Restore logs from persistent storage
-                loadPersistentLogs();
+            if (document.visibilityState !== 'visible') return;
 
-                // ⚡ PRIMARY: Check ref (survives React batching)
-                if (isSearchingRef.current) {
-                    setLoading(true);
-                    setIsStoppable(true);
-                    return;
-                }
-
-                // ⚡ SECONDARY: Check executor (truest source of truth)
-                if (executorRef.current?.isActive()) {
-                    setLoading(true);
-                    setIsStoppable(true);
-                    isSearchingRef.current = true;
-                    return;
-                }
-
-                // FALLBACK: Check localStorage
+            // Only restore logs if a search was running
+            const isActive = isSearchingRef.current || executorRef.current?.isActive();
+            if (!isActive) {
+                // Check localStorage fallback
                 const savedState = localStorage.getItem(`github_search_state_${campaignId}`);
-                if (savedState) {
-                    try {
-                        const state = JSON.parse(savedState);
-                        if (state.isRunning && Date.now() - state.timestamp < 600000) { // < 10 min old
-                            setLoading(true);
-                            setIsStoppable(true);
-                        }
-                    } catch (err) {
-                        console.warn('Failed to restore search state');
-                    }
+                if (!savedState) return;
+                try {
+                    const state = JSON.parse(savedState);
+                    if (!state.isRunning || Date.now() - state.timestamp >= 600000) return;
+                } catch (err) {
+                    return;
                 }
+            }
+
+            // Restore logs from persistent storage
+            loadPersistentLogs();
+
+            // Restore search state if needed
+            if (isSearchingRef.current || executorRef.current?.isActive()) {
+                setLoading(true);
+                setIsStoppable(true);
             }
         };
 
