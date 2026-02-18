@@ -81,7 +81,13 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                 } else {
                     selectedCandidate.outreach_followup = editingMessage.value;
                 }
-                setTimeout(() => setSaveStatus('idle'), 2000);
+                
+                // Close modal after successful save
+                setTimeout(() => {
+                    setMessageModalOpen(false);
+                    setEditingMessage(null);
+                    setSaveStatus('idle');
+                }, 1500);
             } else {
                 setSaveStatus('error');
                 setTimeout(() => setSaveStatus('idle'), 3000);
@@ -635,57 +641,48 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                                 )}
                             </button>
 
-                            {campaignId && (
-                                <button
-                                    onClick={handleSaveMessage}
-                                    disabled={isSaving}
-                                    className={`flex-1 py-3 rounded-lg text-white font-semibold transition-colors flex items-center justify-center gap-2 border ${
-                                        saveStatus === 'saved'
-                                            ? 'bg-green-600/30 border-green-600/50'
-                                            : saveStatus === 'error'
-                                            ? 'bg-red-600/30 border-red-600/50'
-                                            : 'bg-orange-600/20 hover:bg-orange-600/30 border-orange-600/50'
-                                    }`}
-                                >
-                                    {isSaving ? (
-                                        <>
-                                            <Loader className="h-4 w-4 animate-spin" />
-                                            Guardando...
-                                        </>
-                                    ) : saveStatus === 'saved' ? (
-                                        <>
-                                            <Check className="h-4 w-4" />
-                                            ¡Guardado!
-                                        </>
-                                    ) : saveStatus === 'error' ? (
-                                        <>
-                                            <X className="h-4 w-4" />
-                                            Error
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Save className="h-4 w-4" />
-                                            Guardar Cambios
-                                        </>
-                                    )}
-                                </button>
-                            )}
-
                             <button
-                                onClick={() => {
-                                    setMessageModalOpen(false);
-                                    setEditingMessage(null);
-                                }}
-                                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 font-semibold transition-colors"
+                                onClick={handleSaveMessage}
+                                disabled={isSaving || !campaignId}
+                                className={`flex-1 py-3 rounded-lg text-white font-semibold transition-colors flex items-center justify-center gap-2 border ${
+                                    !campaignId
+                                        ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+                                        : saveStatus === 'saved'
+                                        ? 'bg-green-600/30 border-green-600/50 text-green-300'
+                                        : saveStatus === 'error'
+                                        ? 'bg-red-600/30 border-red-600/50 text-red-300'
+                                        : 'bg-orange-600/20 hover:bg-orange-600/30 border-orange-600/50 text-orange-300'
+                                }`}
+                                title={!campaignId ? 'Abre desde un contexto de campaña para guardar' : ''}
                             >
-                                Cerrar
+                                {isSaving ? (
+                                    <>
+                                        <Loader className="h-4 w-4 animate-spin" />
+                                        Guardando...
+                                    </>
+                                ) : saveStatus === 'saved' ? (
+                                    <>
+                                        <Check className="h-4 w-4" />
+                                        ¡Guardado!
+                                    </>
+                                ) : saveStatus === 'error' ? (
+                                    <>
+                                        <X className="h-4 w-4" />
+                                        Error de Guardado
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="h-4 w-4" />
+                                        Guardar Cambios
+                                    </>
+                                )}
                             </button>
                         </div>
 
                         {/* Info */}
                         <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
                             <p className="text-blue-400 text-sm">
-                                💡 <strong>Tip:</strong> Puedes editar el mensaje directamente aquí. Haz clic en "Copiar Mensaje" cuando esté listo.
+                                💡 <strong>Tip:</strong> Edita el mensaje y haz clic en "Guardar Cambios" para guardar en Supabase. O "Copiar Mensaje" para usarlo ahora.
                             </p>
                         </div>
                     </div>
