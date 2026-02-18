@@ -1,6 +1,6 @@
 import React from 'react';
 import { GitHubMetrics } from '../types/database';
-import { Star, GitBranch, Users, Code2, Trophy, ExternalLink, Plus } from 'lucide-react';
+import { ExternalLink, Mail, Linkedin } from 'lucide-react';
 
 interface GitHubCandidatesCardsProps {
     candidates: GitHubMetrics[];
@@ -11,123 +11,139 @@ interface GitHubCandidatesCardsProps {
 
 export const GitHubCandidatesCards: React.FC<GitHubCandidatesCardsProps> = ({
     candidates,
-    onAddToCampaign,
     formatNumber,
     getScoreBadgeColor
 }) => {
+    const getLanguageBadgeColor = (language: string): string => {
+        const colors: Record<string, string> = {
+            'JavaScript': 'bg-yellow-600 text-yellow-50',
+            'TypeScript': 'bg-blue-600 text-blue-50',
+            'Python': 'bg-blue-500 text-blue-50',
+            'Java': 'bg-orange-600 text-orange-50',
+            'C++': 'bg-purple-600 text-purple-50',
+            'Go': 'bg-cyan-600 text-cyan-50',
+            'Rust': 'bg-orange-700 text-orange-50',
+            'Ruby': 'bg-red-600 text-red-50',
+            'PHP': 'bg-purple-800 text-purple-50',
+            'Swift': 'bg-orange-500 text-orange-50'
+        };
+        return colors[language] || 'bg-slate-700 text-slate-50';
+    };
+
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {candidates.map((candidate) => (
-                <div
-                    key={candidate.github_username}
-                    className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-4 hover:border-orange-500/50 transition-all hover:shadow-lg hover:shadow-orange-500/10 group"
-                >
-                    {/* Header with Avatar */}
-                    <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-start gap-3 flex-1">
-                            <img
-                                src={candidate.avatar_url || `https://ui-avatars.com/api/?name=${candidate.github_username}&background=1e293b&color=94a3b8`}
-                                alt={candidate.github_username}
-                                className="h-10 w-10 rounded-full ring-2 ring-orange-500/20"
-                            />
-                            <div className="flex-1 min-w-0">
-                                <a
-                                    href={`https://github.com/${candidate.github_username}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-sm font-bold text-white hover:text-orange-400 block truncate group-hover:underline"
-                                >
-                                    {candidate.github_username}
-                                </a>
-                                {candidate.name && (
-                                    <p className="text-xs text-slate-400 truncate">{candidate.name}</p>
-                                )}
-                            </div>
-                        </div>
-                        <div className={`px-2.5 py-1 rounded-lg text-xs font-bold ${getScoreBadgeColor(candidate.github_score)}`}>
-                            {Math.round(candidate.github_score)}
-                        </div>
-                    </div>
+        <div className="overflow-x-auto">
+            <table className="w-full">
+                {/* Table Header */}
+                <thead>
+                    <tr className="border-b border-slate-700 bg-slate-900/50">
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-300">DESARROLLADOR</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-300">LENGUAJES</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-slate-300">SCORE</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-slate-300">SEGUIDORES</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-slate-300">REPOSITORIOS</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-slate-300">ACCIONES</th>
+                    </tr>
+                </thead>
 
-                    {/* Bio */}
-                    {candidate.bio && (
-                        <p className="text-xs text-slate-400 line-clamp-2 mb-3">{candidate.bio}</p>
-                    )}
+                {/* Table Body */}
+                <tbody className="divide-y divide-slate-800">
+                    {candidates.map((candidate) => (
+                        <tr key={candidate.github_username} className="hover:bg-slate-800/30 transition-colors">
+                            {/* Developer Column */}
+                            <td className="px-4 py-4 text-sm">
+                                <div className="flex items-center gap-3">
+                                    <img
+                                        src={candidate.avatar_url || `https://ui-avatars.com/api/?name=${candidate.github_username}&background=1e293b&color=94a3b8`}
+                                        alt={candidate.github_username}
+                                        className="h-8 w-8 rounded-full ring-2 ring-orange-500/20"
+                                    />
+                                    <div>
+                                        <a
+                                            href={`https://github.com/${candidate.github_username}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-white font-medium hover:text-orange-400 transition-colors"
+                                        >
+                                            {candidate.github_username}
+                                        </a>
+                                        {candidate.name && (
+                                            <p className="text-xs text-slate-500">{candidate.name}</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </td>
 
-                    {/* Metrics Grid */}
-                    <div className="grid grid-cols-2 gap-2 mb-4 p-2 bg-slate-950/50 rounded-lg border border-slate-800/50">
-                        {/* Followers */}
-                        <div className="flex items-center gap-1.5">
-                            <Users className="h-3.5 w-3.5 text-orange-400" />
-                            <span className="text-xs text-slate-300">{formatNumber(candidate.followers)}</span>
-                        </div>
+                            {/* Languages Column */}
+                            <td className="px-4 py-4 text-sm">
+                                <div className="flex flex-wrap gap-1.5">
+                                    {candidate.most_used_language && (
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getLanguageBadgeColor(candidate.most_used_language)}`}>
+                                            {candidate.most_used_language}
+                                        </span>
+                                    )}
+                                    {candidate.languages && candidate.languages.slice(0, 2).map((lang, idx) => (
+                                        <span key={idx} className={`px-2.5 py-1 rounded-full text-xs font-medium ${getLanguageBadgeColor(lang)}`}>
+                                            {lang}
+                                        </span>
+                                    ))}
+                                </div>
+                            </td>
 
-                        {/* Public Repos */}
-                        <div className="flex items-center gap-1.5">
-                            <GitBranch className="h-3.5 w-3.5 text-orange-400" />
-                            <span className="text-xs text-slate-300">{candidate.public_repos}</span>
-                        </div>
+                            {/* Score Column */}
+                            <td className="px-4 py-4 text-center">
+                                <span className={`px-3 py-1 rounded-lg text-sm font-bold ${getScoreBadgeColor(candidate.github_score)}`}>
+                                    {Math.round(candidate.github_score)}
+                                </span>
+                            </td>
 
-                        {/* Contributions */}
-                        <div className="flex items-center gap-1.5">
-                            <Code2 className="h-3.5 w-3.5 text-orange-400" />
-                            <span className="text-xs text-slate-300">{candidate.total_contributions}</span>
-                        </div>
+                            {/* Followers Column */}
+                            <td className="px-4 py-4 text-center text-slate-300 text-sm">
+                                {formatNumber(candidate.followers)}
+                            </td>
 
-                        {/* Top Language */}
-                        {candidate.most_used_language && (
-                            <div className="flex items-center gap-1.5">
-                                <Trophy className="h-3.5 w-3.5 text-orange-400" />
-                                <span className="text-xs text-slate-300 truncate">{candidate.most_used_language}</span>
-                            </div>
-                        )}
-                    </div>
+                            {/* Repos Column */}
+                            <td className="px-4 py-4 text-center text-slate-300 text-sm">
+                                {candidate.public_repos}
+                            </td>
 
-                    {/* Top Repos */}
-                    {candidate.top_repositories && candidate.top_repositories.length > 0 && (
-                        <div className="mb-4 p-2 bg-slate-950/50 rounded-lg border border-slate-800/50">
-                            <p className="text-xs font-semibold text-slate-300 mb-2">Proyectos</p>
-                            <div className="space-y-1.5">
-                                {candidate.top_repositories.slice(0, 3).map((repo, idx) => (
+                            {/* Actions Column */}
+                            <td className="px-4 py-4 text-center">
+                                <div className="flex items-center justify-center gap-2">
                                     <a
-                                        key={idx}
-                                        href={repo.url}
+                                        href={`https://github.com/${candidate.github_username}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="flex items-center gap-2 p-1.5 bg-slate-900/50 rounded hover:bg-orange-500/10 border border-slate-700/50 hover:border-orange-500/30 transition-all group/repo"
+                                        className="p-2 text-slate-400 hover:text-orange-400 hover:bg-slate-800 rounded-lg transition-colors"
+                                        title="Ver perfil GitHub"
                                     >
-                                        <Star className="h-3 w-3 text-orange-400 flex-shrink-0" />
-                                        <span className="text-xs text-slate-400 group-hover/repo:text-orange-300 truncate">{repo.name}</span>
-                                        <span className="text-xs text-slate-500 flex-shrink-0">{repo.stars}</span>
+                                        <ExternalLink className="h-4 w-4" />
                                     </a>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-2 pt-2 border-t border-slate-700/50">
-                        <a
-                            href={`https://github.com/${candidate.github_username}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-medium text-slate-200 transition-colors flex items-center justify-center gap-1.5"
-                        >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            Ver Perfil
-                        </a>
-                        {onAddToCampaign && (
-                            <button
-                                onClick={() => onAddToCampaign(candidate)}
-                                className="flex-1 px-3 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-xs font-medium text-white transition-colors flex items-center justify-center gap-1.5"
-                            >
-                                <Plus className="h-3.5 w-3.5" />
-                                Agregar
-                            </button>
-                        )}
-                    </div>
-                </div>
-            ))}
+                                    {candidate.email && (
+                                        <a
+                                            href={`mailto:${candidate.email}`}
+                                            className="p-2 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-lg transition-colors"
+                                            title={`Enviar email a ${candidate.email}`}
+                                        >
+                                            <Mail className="h-4 w-4" />
+                                        </a>
+                                    )}
+                                    {candidate.linkedin_profile && (
+                                        <a
+                                            href={candidate.linkedin_profile}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="p-2 text-slate-400 hover:text-blue-400 hover:bg-slate-800 rounded-lg transition-colors"
+                                            title="Ir a LinkedIn"
+                                        >
+                                            <Linkedin className="h-4 w-4" />
+                                        </a>
+                                    )}
+                                </div>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 };
