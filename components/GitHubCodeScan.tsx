@@ -39,7 +39,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         linkedinsFound: 0
     }); // Track enrichment stats
     const [selectedCandidate, setSelectedCandidate] = useState<GitHubMetrics | null>(null); // Selected candidate for deep research
-    
+
     // Ref for Unbreakable Execution - survives tab changes
     const executorRef = React.useRef<UnbreakableExecutor | null>(null);
 
@@ -57,12 +57,12 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                 console.warn('Failed to restore logs:', err);
             }
         }
-        
+
         // Get current user and load candidates from SUPABASE or Memory
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session?.user?.id) {
                 setUserId(session.user.id);
-                
+
                 // Load from Supabase if campaign context available
                 if (campaignId) {
                     // Try to load from Supabase
@@ -107,9 +107,14 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
             }
         });
 
-        // ✅ FIX: Use Page Lifecycle API to sync logs when tab becomes active again
-        // Avoid constant polling which causes duplicates
-        const handlePageShow = () => {
+        // ✅ FIX: Use Page Lifecycle API to sync logs ONLY when a search is actively running
+        // Guard: don't fire when idle to prevent tab-switch re-renders
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== 'visible') return;
+            // Only re-sync if a search was actively running
+            const isActive = sessionStorage.getItem('ts_active_search') === 'true';
+            if (!isActive) return;
+
             try {
                 const savedLogs = sessionStorage.getItem(`github_logs_${campaignId}`);
                 if (savedLogs) {
@@ -121,15 +126,10 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
             }
         };
 
-        // Listen for when page becomes visible again after tab pause
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                handlePageShow();
-            }
-        });
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
-            document.removeEventListener('visibilitychange', handlePageShow);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [campaignId]);
 
@@ -145,7 +145,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
             }
             return newLogs;
         });
-        
+
         // ALSO log to console for visibility during tab pause
         console.log('[GitHubSearch]', message);
     };
@@ -175,7 +175,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         // Update stats
         const emailsFound = updatedCandidates.filter(c => c.mentioned_email).length;
         const linkedinsFound = updatedCandidates.filter(c => c.linkedin_url).length;
-        
+
         setEnrichmentStats({
             emailsFound,
             linkedinsFound
@@ -200,7 +200,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         setIsStoppable(true);
         setLogs([]);
         setShowLogs(true);
-        
+
         // Mark search as active so tab can't be accidentally closed
         TabGuard.setSearchActive(true);
 
@@ -285,7 +285,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
             setLoading(false);
             setIsStoppable(false);
         });
-        
+
         // ✅ Return immediately - executor runs in background
     };
 
@@ -368,7 +368,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                         <div>
                             <h3 className="text-lg font-semibold text-white mb-2">Criterios Configurados</h3>
                             <p className="text-slate-400 text-sm">
-                                {criteria.languages.join(', ')} • Score ≥ {criteria.score_threshold} • 
+                                {criteria.languages.join(', ')} • Score ≥ {criteria.score_threshold} •
                                 {criteria.require_app_store_link ? ' App Store Required' : ' Any App Type'}
                             </p>
                         </div>
@@ -503,7 +503,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                                     <Columns3 className="h-4 w-4" />
                                 </button>
                             </div>
-                            
+
                             {/* View Full Pipeline Button */}
                             {candidates.length > 0 && (
                                 <button

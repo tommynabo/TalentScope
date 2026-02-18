@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Linkedin, Github, Globe, Users, Lock, ArrowRight, Activity, Zap, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AnalyticsService } from '../lib/analytics';
 import { AnalyticsDaily } from '../types/database';
+import { useStableData } from '../lib/useStableData';
 
 interface DashboardViewProps {
   userName: string;
@@ -11,44 +12,21 @@ interface DashboardViewProps {
 }
 
 const DashboardView: React.FC<DashboardViewProps> = ({ userName, onOpenLinkedin, onLockedClick }) => {
-  const [stats, setStats] = useState<AnalyticsDaily>(AnalyticsService.getEmptyStats());
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    loadStats();
-
-    // Only refresh when tab becomes visible, NOT auto-refresh every 2 seconds
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('[Dashboard] Tab visible, refreshing stats...');
-        loadStats();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
-
-  const loadStats = async () => {
-    try {
-      console.log('[Dashboard] Loading stats...');
-      const data = await AnalyticsService.getDailyStats();
-      console.log('[Dashboard] Stats loaded:', data);
-      setStats(data);
-      setLoading(false);
-    } catch (error) {
-      console.error('[Dashboard] Error loading stats:', error);
-    }
-  };
+  // useStableData: fetches on mount, caches for 5 min, silently refreshes when stale
+  // NO visible flash/reload when switching tabs
+  const { data: stats, loading, refresh } = useStableData<AnalyticsDaily>(
+    'dashboard-stats',
+    () => AnalyticsService.getDailyStats(),
+    AnalyticsService.getEmptyStats(),
+    { staleTTL: 5 * 60 * 1000 } // 5 minutes
+  );
 
   const handleManualRefresh = async () => {
     setRefreshing(true);
-    await loadStats();
+    await refresh();
     setRefreshing(false);
   };
 

@@ -103,18 +103,20 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
   }, [searching]);
 
   // ⚡ Restore searching state when tab returns to focus
+  // GUARD: Only fires when a search is actively running to prevent idle re-renders
   useEffect(() => {
+    if (!isSearchingRef.current) return; // Don't even listen if no search is running
+
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // Check ref (survives React batching)
-        if (isSearchingRef.current && !searching) {
+      if (document.visibilityState === 'visible' && isSearchingRef.current) {
+        if (!searching) {
           setSearching(true);
           setShowLogs(true);
-          // Re-read logs from sessionStorage  
-          const snap = loadSearchSnapshot(initialCampaign.id);
-          if (snap?.logs && snap.logs.length > 0) {
-            setLogs(snap.logs);
-          }
+        }
+        // Re-read logs from sessionStorage  
+        const snap = loadSearchSnapshot(initialCampaign.id);
+        if (snap?.logs && snap.logs.length > 0) {
+          setLogs(snap.logs);
         }
       }
     };

@@ -33,10 +33,10 @@ const App: React.FC = () => {
   useEffect(() => {
     const guard = new TabGuard();
     guard.activate();
-    
+
     // Initialize Unbreakable Execution Mode marker
     initializeUnbreakableMarker();
-    
+
     return () => guard.deactivate();
   }, []);
 
@@ -55,10 +55,14 @@ const App: React.FC = () => {
       setLoading(false);
     });
 
-    // Listen for changes
+    // Listen for changes — IGNORE TOKEN_REFRESHED to prevent tab-switch re-renders
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // Skip TOKEN_REFRESHED events (fired automatically on tab focus by Supabase)
+      // These cause unnecessary re-renders without any real state change
+      if (event === 'TOKEN_REFRESHED') return;
+
       if (session?.user) {
         setUser({
           id: session.user.id,
@@ -101,9 +105,9 @@ const App: React.FC = () => {
 
   if (loading) {
     return (
-        <div className="flex items-center justify-center h-screen bg-slate-950 text-slate-500">
-            <div className="w-8 h-8 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin"></div>
-        </div>
+      <div className="flex items-center justify-center h-screen bg-slate-950 text-slate-500">
+        <div className="w-8 h-8 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin"></div>
+      </div>
     );
   }
 
@@ -124,78 +128,78 @@ const App: React.FC = () => {
       <main className="flex-1 relative z-10 flex flex-col h-screen overflow-hidden bg-gradient-to-br from-slate-950 via-slate-950 to-blue-950/20">
         {/* Top Header / Status Bar (Mobile Only) */}
         <header className="h-14 border-b border-slate-800/50 bg-slate-950/50 backdrop-blur-md flex items-center justify-between px-4 sticky top-0 md:hidden">
-            <span className="font-bold text-base text-white tracking-tight">TalentScope</span>
+          <span className="font-bold text-base text-white tracking-tight">TalentScope</span>
         </header>
 
         {/* Scrollable Content Area with Responsive Padding */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden w-full flex justify-center">
-            <div className="w-full max-w-7xl min-h-full px-2 sm:px-3 md:px-4 lg:px-6 xl:px-8 py-3 md:py-4">
+          <div className="w-full max-w-7xl min-h-full px-2 sm:px-3 md:px-4 lg:px-6 xl:px-8 py-3 md:py-4">
             <Routes>
-                {/* Redirect root to dashboard since we are already authenticated */}
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                
-                <Route path="/dashboard" element={
+              {/* Redirect root to dashboard since we are already authenticated */}
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+              <Route path="/dashboard" element={
                 <ProtectedRoute>
-                    <DashboardView
+                  <DashboardView
                     userName={user.name.split(' ')[0] || 'User'}
                     onOpenLinkedin={() => navigate('/tablero/linkedin')}
                     onLockedClick={handleLockedClick}
-                    />
+                  />
                 </ProtectedRoute>
-                } />
+              } />
 
-                <Route path="/tablero/:platform" element={
+              <Route path="/tablero/:platform" element={
                 <ProtectedRoute>
-                    <CampaignListWrapper navigate={navigate} />
+                  <CampaignListWrapper navigate={navigate} />
                 </ProtectedRoute>
-                } />
+              } />
 
-                <Route path="/tablero/:platform/:campaignId" element={
+              <Route path="/tablero/:platform/:campaignId" element={
                 <ProtectedRoute>
-                    <CampaignDetailWrapper onBack={() => navigate(-1)} />
+                  <CampaignDetailWrapper onBack={() => navigate(-1)} />
                 </ProtectedRoute>
-                } />
+              } />
 
-                <Route path="/new-campaign" element={
+              <Route path="/new-campaign" element={
                 <ProtectedRoute>
-                    <CampaignCreationView
+                  <CampaignCreationView
                     onBack={() => navigate(-1)}
                     onCampaignCreated={() => navigate('/tablero/linkedin')}
-                    />
+                  />
                 </ProtectedRoute>
-                } />
+              } />
 
-                <Route path="/talento" element={
+              <Route path="/talento" element={
                 <ProtectedRoute>
-                    <TalentPoolView />
+                  <TalentPoolView />
                 </ProtectedRoute>
-                } />
+              } />
 
-                <Route path="/analytics" element={
+              <Route path="/analytics" element={
                 <ProtectedRoute>
-                    <AnalyticsView />
+                  <AnalyticsView />
                 </ProtectedRoute>
-                } />
+              } />
 
-                <Route path="/settings" element={
+              <Route path="/settings" element={
                 <ProtectedRoute>
-                    <SettingsView
+                  <SettingsView
                     currentName={user.name || ''}
                     onNameChange={(newName) => {
-                        setUser({ ...user, name: newName });
-                        setToastMessage('Name updated successfully!');
-                        setShowToast(true);
-                        supabase.auth.updateUser({ data: { full_name: newName } });
+                      setUser({ ...user, name: newName });
+                      setToastMessage('Name updated successfully!');
+                      setShowToast(true);
+                      supabase.auth.updateUser({ data: { full_name: newName } });
                     }}
-                    />
+                  />
                 </ProtectedRoute>
-                } />
+              } />
 
 
-                {/* Fallback */}
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
-            </div>
+          </div>
         </div>
       </main>
 
@@ -211,12 +215,12 @@ const App: React.FC = () => {
 // Wrapper components to handle params
 const CampaignListWrapper = ({ navigate }: { navigate: any }) => {
   const { platform } = useParams();
-  
+
   // For GitHub, show GitHub campaign list
   if (platform === 'github') {
     return <GitHubCampaignList />;
   }
-  
+
   // For LinkedIn, show standard campaign list
   return (
     <CampaignListView
