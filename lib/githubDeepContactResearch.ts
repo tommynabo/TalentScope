@@ -193,7 +193,7 @@ export class GitHubDeepContactResearch {
             }
             result.research_depth++;
 
-            // ESTRATEGIA 6: Eventos públicos
+            // ESTRATEGIA 8: Eventos públicos
             onProgress?.(`🔍 [7/8] Checking public events...`);
             const eventData = await this.searchInPublicEvents(username);
             if (eventData.emails.length > 0) {
@@ -202,6 +202,31 @@ export class GitHubDeepContactResearch {
                     result.sources_found.push('Public events');
                 } else {
                     result.secondary_emails.push(...eventData.emails);
+                }
+            }
+            result.research_depth++;
+
+            // ESTRATEGIA 9 (EXTRA): Buscar en issues y discussions comentarios
+            onProgress?.(`🔍 [8/8] Searching in issues & discussions...`);
+            if (topRepos && topRepos.length > 0) {
+                for (const repo of topRepos.slice(0, 3)) {
+                    try {
+                        const issueEmails = await this.searchEmailInIssuesAndComments(
+                            repo.owner.login,
+                            repo.name,
+                            username
+                        );
+                        if (issueEmails.length > 0) {
+                            if (!result.primary_email) {
+                                result.primary_email = issueEmails[0];
+                                result.sources_found.push(`Issues/Discussions: ${repo.name}`);
+                            } else {
+                                result.secondary_emails.push(...issueEmails);
+                            }
+                        }
+                    } catch (err) {
+                        // Continue
+                    }
                 }
             }
             result.research_depth++;
@@ -304,25 +329,54 @@ export class GitHubDeepContactResearch {
     }
 
     /**
-     * Search email in commit history (deep)
+     * Search email in commit history (mejorado - búsqueda más agresiva)
      */
     private async searchEmailInCommits(username: string, topRepos?: any[]): Promise<string | null> {
         if (!topRepos || topRepos.length === 0) return null;
 
         try {
-            for (const repo of topRepos.slice(0, 10)) {
-                const commits = await this.octokit!.rest.repos.listCommits({
-                    owner: repo.owner.login,
-                    repo: repo.name,
-                    author: username,
-                    per_page: 30
-                });
+            // Search in top 15 repos (increased from 10)
+            for (const repo of topRepos.slice(0, 15)) {
+                try {
+                    // 1. Commits authored by user
+                    const commits = await this.octokit!.rest.repos.listCommits({
+                        owner: repo.owner.login,
+                        repo: repo.name,
+                        author: username,
+                        per_page: 50  // Increased from 30
+                    });
 
-                for (const commit of commits.data) {
-                    const email = commit.commit.author?.email;
-                    if (email && this.isValidEmail(email)) {
-                        return email;
+                    for (const commit of commits.data) {
+                        const email = commit.commit.author?.email;
+                        if (email && this.isValidEmail(email)) {
+                            return email;
+                        }
                     }
+
+                    // 2. Search in ALL commits (committer email may be different)
+                    const allCommits = await this.octokit!.rest.repos.listCommits({
+                        owner: repo.owner.login,
+                        repo: repo.name,
+                        per_page: 100
+                    });
+
+                    for (const commit of allCommits.data) {
+                        // Check if user appears in commit body/message or is mentioned as author
+                        const message = commit.commit.message || '';
+                        const authorName = commit.commit.author?.name || '';
+                        
+                        if (
+                            (message.toLowerCase().includes(username.toLowerCase()) ||
+                             authorName.toLowerCase().includes(username.toLowerCase())) &&
+                            commit.commit.author?.email &&
+                            this.isValidEmail(commit.commit.author.email)
+                        ) {
+                            return commit.commit.author.email;
+                        }
+                    }
+                } catch (err) {
+                    // Continue to next repo
+                    continue;
                 }
             }
         } catch (error) {
@@ -333,17 +387,78 @@ export class GitHubDeepContactResearch {
     }
 
     /**
-     * Search email in personal website (basic)
+     * Search email in personal website (mejorado)
      */
     private async searchEmailInWebsite(websiteUrl: string): Promise<string[]> {
-        // Este método requeriría un scraper HTTP real
-        // Por ahora retorna array vacío - puede extenderse con servicio externo
-        // En producción: usar fetch + cheerio o similar
-        return [];
+        const emails: string[] = [];
+        
+        try {
+            // Normalize URL
+            let url = websiteUrl.trim();
+            if (!url.includes('://')) {
+                url = `https://${url}`;
+            }
+
+            // Set timeout for fetch
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+            const response = await fetch(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (compatible; TalentScope/1.0; +http://talentscope.local)',
+                },
+                signal: controller.signal,
+            }).catch(() => null);
+
+            clearTimeout(timeoutId);
+
+            if (!response || !response.ok) return [];
+
+            const html = await response.text().catch(() => '');
+            
+            // Look for emails in common contact page patterns
+            const emailMatches = html.match(this.emailPatterns[0]);
+            if (emailMatches) {
+                const uniqueEmails = [...new Set(emailMatches)];
+                emails.push(
+                    ...uniqueEmails.filter(e => this.isValidEmail(e))
+                );
+            }
+
+            // Look in href="mailto:" links
+            const mailtoMatches = html.match(/mailto:([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi);
+            if (mailtoMatches) {
+                const uniqueMailtos = [...new Set(mailtoMatches.map(m => m.replace('mailto:', '')))];
+                emails.push(
+                    ...uniqueMailtos.filter(e => this.isValidEmail(e))
+                );
+            }
+
+            // Look in common contact formats
+            const contactPatterns = [
+                /contact[^<]*?[\s:=]+([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi,
+                /email[^<]*?[\s:=]+([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi,
+                /reach[^<]*?[\s:=]+([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi,
+            ];
+
+            for (const pattern of contactPatterns) {
+                const matches = html.match(pattern);
+                if (matches) {
+                    emails.push(...matches.map(m => {
+                        const emailMatch = m.match(/[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+/);
+                        return emailMatch ? emailMatch[0] : null;
+                    }).filter((e): e is string => e !== null && this.isValidEmail(e)));
+                }
+            }
+        } catch (error) {
+            // Silently fail - website may not be accessible
+        }
+
+        return [...new Set(emails)];
     }
 
     /**
-     * Extract data from repository README
+     * Extract data from repository README (mejorado - busca múltiples archivos)
      */
     private async extractFromReadme(owner: string, repo: string): Promise<{
         emails: string[];
@@ -356,39 +471,54 @@ export class GitHubDeepContactResearch {
             linkedin_alternatives: [] as string[]
         };
 
-        try {
-            const readme = await this.octokit!.rest.repos.getReadme({
-                owner,
-                repo,
-                headers: { Accept: 'application/vnd.github.v3.raw' }
-            });
+        // Try multiple common files where contact info might be
+        const filesToCheck = ['README.md', 'CONTRIBUTING.md', 'AUTHORS', 'CONTACT.md', 'MAINTAINERS'];
 
-            const content = (readme.data as any).toString();
+        for (const fileName of filesToCheck) {
+            try {
+                const readme = await this.octokit!.rest.repos.getContent({
+                    owner,
+                    repo,
+                    path: fileName
+                });
 
-            // Extract emails
-            const emailMatches = content.match(this.emailPatterns[0]);
-            if (emailMatches) {
-                result.emails = [...new Set(emailMatches)];
-            }
+                const content = typeof readme.data === 'string'
+                    ? readme.data
+                    : Buffer.from((readme.data as any).content || '', 'base64').toString('utf-8');
 
-            // Extract LinkedIn
-            for (const pattern of this.linkedinPatterns) {
-                const match = content.match(pattern);
-                if (match && !result.linkedin) {
-                    result.linkedin = `https://linkedin.com/in/${match[1] || match[0]}`;
-                } else if (match) {
-                    result.linkedin_alternatives.push(`https://linkedin.com/in/${match[1] || match[0]}`);
+                // Extract emails
+                const emailMatches = content.match(this.emailPatterns[0]);
+                if (emailMatches) {
+                    result.emails.push(...emailMatches);
                 }
+
+                // Extract LinkedIn
+                for (const pattern of this.linkedinPatterns) {
+                    const match = content.match(pattern);
+                    if (match && !result.linkedin) {
+                        result.linkedin = `https://linkedin.com/in/${match[1] || match[0]}`;
+                    } else if (match) {
+                        result.linkedin_alternatives.push(`https://linkedin.com/in/${match[1] || match[0]}`);
+                    }
+                }
+
+                // If found in this file, move to next file
+                if (result.emails.length > 0) break;
+            } catch (error) {
+                // Continue to next file
+                continue;
             }
-        } catch (error) {
-            // Continue
         }
+
+        // Remove duplicates and filter invalid emails
+        result.emails = [...new Set(result.emails.filter(e => this.isValidEmail(e)))];
+        result.linkedin_alternatives = [...new Set(result.linkedin_alternatives)];
 
         return result;
     }
 
     /**
-     * Search in Gists
+     * Search in Gists (mejorado)
      */
     private async searchInGists(username: string): Promise<{
         emails: string[];
@@ -396,17 +526,22 @@ export class GitHubDeepContactResearch {
         const result = { emails: [] as string[] };
 
         try {
+            // Get more gists (increased from 10 to 30)
             const gists = await this.octokit!.rest.gists.listForUser({
                 username,
-                per_page: 10
+                per_page: 30
             });
 
             for (const gist of gists.data) {
-                const textSources = [gist.description || ''];
+                const textSources = [
+                    gist.description || '',
+                    gist.comments?.toString() || ''
+                ];
 
                 // Search in files
                 for (const file of Object.values(gist.files || {})) {
-                    textSources.push((file as any).content || '');
+                    const fileContent = (file as any).content || '';
+                    textSources.push(fileContent);
                 }
 
                 const combinedText = textSources.join(' ');
@@ -416,7 +551,7 @@ export class GitHubDeepContactResearch {
                 }
             }
 
-            result.emails = [...new Set(result.emails)];
+            result.emails = [...new Set(result.emails.filter(e => this.isValidEmail(e)))];
         } catch (error) {
             // Continue
         }
@@ -491,6 +626,64 @@ export class GitHubDeepContactResearch {
         }
 
         return result;
+    }
+
+    /**
+     * Search emails in issues and discussions where user participated
+     */
+    private async searchEmailInIssuesAndComments(
+        owner: string,
+        repo: string,
+        username: string
+    ): Promise<string[]> {
+        const emails: string[] = [];
+
+        try {
+            // Search issues where user participated as author or assignee
+            const issues = await this.octokit!.rest.issues.listForRepo({
+                owner,
+                repo,
+                creator: username,
+                state: 'all',
+                per_page: 5
+            });
+
+            for (const issue of issues.data) {
+                // Search in issue body
+                if (issue.body) {
+                    const emailMatches = issue.body.match(this.emailPatterns[0]);
+                    if (emailMatches) {
+                        emails.push(...emailMatches);
+                    }
+                }
+
+                // Search in issue comments
+                try {
+                    const comments = await this.octokit!.rest.issues.listComments({
+                        owner,
+                        repo,
+                        issue_number: issue.number,
+                        per_page: 3
+                    });
+
+                    for (const comment of comments.data) {
+                        if (comment.user?.login === username && comment.body) {
+                            const emailMatches = comment.body.match(this.emailPatterns[0]);
+                            if (emailMatches) {
+                                emails.push(...emailMatches);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    // Continue
+                }
+            }
+        } catch (error) {
+            // Continue
+        }
+
+        // Filter valid emails and return unique results
+        return [...new Set(emails.filter(e => this.isValidEmail(e)))];
     }
 
     /**
