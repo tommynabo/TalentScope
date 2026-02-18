@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GitHubMetrics } from '../../types/database';
-import { ChevronUp, ChevronDown, ExternalLink, Trophy, Eye, X, Copy, Check } from 'lucide-react';
+import { ChevronUp, ChevronDown, ExternalLink, Trophy, Eye, X, Copy, Check, Calendar } from 'lucide-react';
 
 interface GitHubCandidatesPipelineProps {
     candidates: GitHubMetrics[];
@@ -18,7 +18,7 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
 }) => {
     const [sortConfig, setSortConfig] = useState<{ field: SortField; direction: SortDirection }>({
         field: 'github_score',
-        direction: 'desc'
+        direction: 'asc'
     });
 
     const [selectedCandidate, setSelectedCandidate] = useState<GitHubMetrics | null>(null);
@@ -52,6 +52,44 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
         const comparison = aVal < bVal ? -1 : 1;
         return sortConfig.direction === 'desc' ? -comparison : comparison;
     });
+
+    // Helper to format date labels
+    const formatDateLabel = (dateStr: string): string => {
+        if (!dateStr) return 'Fecha desconocida';
+        const date = new Date(dateStr);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const diffDays = Math.round((today.getTime() - target.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) return 'Hoy';
+        if (diffDays === 1) return 'Ayer';
+
+        return target.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+    };
+
+    // Group candidates by date
+    const groupedCandidates = React.useMemo(() => {
+        const groups: { label: string; count: number; candidates: GitHubMetrics[] }[] = [];
+        let currentKey = '';
+
+        for (const c of sortedCandidates) {
+            const dateStr = c.created_at || new Date().toISOString(); // Fallback to now if missing
+            const date = new Date(dateStr);
+            const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+
+            if (dayKey !== currentKey) {
+                currentKey = dayKey;
+                groups.push({ label: formatDateLabel(dateStr), count: 0, candidates: [] });
+            }
+
+            const group = groups[groups.length - 1];
+            group.candidates.push(c);
+            group.count++;
+        }
+
+        return groups;
+    }, [sortedCandidates]);
 
     if (candidates.length === 0) {
         return (
@@ -115,96 +153,122 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                     </tr>
                 </thead>
                 <tbody>
-                    {sortedCandidates.map((candidate, idx) => (
-                        <tr key={candidate.github_username} className={`border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors ${idx % 2 === 0 ? 'bg-slate-900/30' : ''}`}>
-                            {/* Developer Name */}
-                            <td className="px-4 py-3">
-                                <div className="flex items-center gap-2">
-                                    <img
-                                        src={candidate.avatar_url || `https://ui-avatars.com/api/?name=${candidate.github_username}&background=1e293b&color=94a3b8`}
-                                        alt={candidate.github_username}
-                                        className="h-8 w-8 rounded-full ring-2 ring-orange-500/20"
-                                    />
-                                    <div>
+                    {groupedCandidates.map((group) => (
+                        <React.Fragment key={group.label}>
+                            {/* Date SECTION Row */}
+                            <tr>
+                                <td colSpan={6} className="px-0 py-0">
+                                    <div className="flex items-center gap-3 px-4 py-2 bg-orange-950/20 border-y border-orange-500/10 backdrop-blur-sm mt-2 first:mt-0">
+                                        <div className="flex items-center gap-2">
+                                            <Calendar className="h-3.5 w-3.5 text-orange-400/80" />
+                                            <span className="text-xs font-bold text-orange-100/90 uppercase tracking-wider">{group.label}</span>
+                                        </div>
+                                        <div className="flex-1 h-px bg-gradient-to-r from-orange-500/20 via-orange-400/10 to-transparent"></div>
+                                        <span className="text-[10px] font-bold text-orange-300/80 bg-orange-900/30 px-2.5 py-0.5 rounded-full border border-orange-500/20 shadow-sm">
+                                            {group.count} leads
+                                        </span>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            {/* Candidate Rows */}
+                            {group.candidates.map((candidate, idx) => (
+                                <tr key={candidate.github_username} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors group">
+                                    {/* Developer Name */}
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="relative">
+                                                <img
+                                                    src={candidate.avatar_url || `https://ui-avatars.com/api/?name=${candidate.github_username}&background=1e293b&color=94a3b8`}
+                                                    alt={candidate.github_username}
+                                                    className="h-9 w-9 rounded-full ring-2 ring-slate-800 group-hover:ring-orange-500/30 transition-all"
+                                                />
+                                                {candidate.location && (
+                                                    <div className="absolute -bottom-1 -right-1 bg-slate-900 rounded-full p-0.5 border border-slate-700" title={candidate.location}>
+                                                        <span className="text-[10px]">🌍</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <a
+                                                    href={`https://github.com/${candidate.github_username}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-sm font-bold text-white hover:text-orange-400 transition-colors flex items-center gap-1.5"
+                                                >
+                                                    {candidate.name || candidate.github_username}
+                                                </a>
+                                                <p className="text-xs text-slate-500 font-mono">@{candidate.github_username}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    {/* Languages */}
+                                    <td className="px-4 py-3">
+                                        <div className="flex flex-wrap gap-1">
+                                            {candidate.most_used_language && (
+                                                <span className="px-2 py-1 text-xs bg-orange-500/20 text-orange-300 rounded-full border border-orange-500/30">
+                                                    {candidate.most_used_language}
+                                                </span>
+                                            )}
+                                            {candidate.languages && candidate.languages.length > 1 && (
+                                                <span className="px-2 py-1 text-xs bg-slate-700 text-slate-300 rounded-full">
+                                                    +{candidate.languages.length - 1}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+
+                                    {/* Score */}
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center">
+                                            <div className={`px-3 py-1.5 rounded-lg text-sm font-bold border ${candidate.github_score >= 85
+                                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                                : candidate.github_score >= 75
+                                                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                                    : candidate.github_score >= 65
+                                                        ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+                                                        : 'bg-slate-500/20 text-slate-300 border-slate-500/40'
+                                                }`}>
+                                                {Math.round(candidate.github_score)}
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    {/* Followers */}
+                                    <td className="px-4 py-3">
+                                        <span className="text-xs font-bold text-slate-300">{formatNumber(candidate.followers ?? 0)}</span>
+                                    </td>
+
+                                    {/* Public Repos */}
+                                    <td className="px-4 py-3">
+                                        <span className="text-xs font-bold text-slate-300">{candidate.public_repos}</span>
+                                    </td>
+
+                                    {/* Actions */}
+                                    <td className="px-4 py-3 text-right">
                                         <a
                                             href={`https://github.com/${candidate.github_username}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-xs font-bold text-white hover:text-orange-400"
+                                            className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-orange-400 hover:bg-slate-700 px-2 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
                                         >
-                                            {candidate.github_username}
+                                            <ExternalLink className="h-3 w-3" />
                                         </a>
-                                        {candidate.name && (
-                                            <p className="text-xs text-slate-500">{candidate.name}</p>
-                                        )}
-                                    </div>
-                                </div>
-                            </td>
-
-                            {/* Languages */}
-                            <td className="px-4 py-3">
-                                <div className="flex flex-wrap gap-1">
-                                    {candidate.most_used_language && (
-                                        <span className="px-2 py-1 text-xs bg-orange-500/20 text-orange-300 rounded-full border border-orange-500/30">
-                                            {candidate.most_used_language}
-                                        </span>
-                                    )}
-                                    {candidate.languages && candidate.languages.length > 1 && (
-                                        <span className="px-2 py-1 text-xs bg-slate-700 text-slate-300 rounded-full">
-                                            +{candidate.languages.length - 1}
-                                        </span>
-                                    )}
-                                </div>
-                            </td>
-
-                            {/* Score */}
-                            <td className="px-4 py-3">
-                                <div className="flex items-center">
-                                    <div className={`px-3 py-1.5 rounded-lg text-sm font-bold border ${candidate.github_score >= 85
-                                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                                            : candidate.github_score >= 75
-                                                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                                                : candidate.github_score >= 65
-                                                    ? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
-                                                    : 'bg-slate-500/20 text-slate-300 border-slate-500/40'
-                                        }`}>
-                                        {Math.round(candidate.github_score)}
-                                    </div>
-                                </div>
-                            </td>
-
-                            {/* Followers */}
-                            <td className="px-4 py-3">
-                                <span className="text-xs font-bold text-slate-300">{formatNumber(candidate.followers ?? 0)}</span>
-                            </td>
-
-                            {/* Public Repos */}
-                            <td className="px-4 py-3">
-                                <span className="text-xs font-bold text-slate-300">{candidate.public_repos}</span>
-                            </td>
-
-                            {/* Actions */}
-                            <td className="px-4 py-3 text-right">
-                                <a
-                                    href={`https://github.com/${candidate.github_username}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-orange-400 hover:bg-slate-700 px-2 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
-                                >
-                                    <ExternalLink className="h-3 w-3" />
-                                </a>
-                                <button
-                                    onClick={() => {
-                                        setSelectedCandidate(candidate);
-                                        setShowModal(true);
-                                    }}
-                                    className="inline-flex items-center gap-1 text-xs font-medium text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 px-2 py-1 rounded-lg transition-colors border border-orange-500/20 hover:border-orange-500/40 ml-2"
-                                >
-                                    <Eye className="h-3 w-3" />
-                                    Ver
-                                </button>
-                            </td>
-                        </tr>
+                                        <button
+                                            onClick={() => {
+                                                setSelectedCandidate(candidate);
+                                                setShowModal(true);
+                                            }}
+                                            className="inline-flex items-center gap-1 text-xs font-medium text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 px-2 py-1 rounded-lg transition-colors border border-orange-500/20 hover:border-orange-500/40 ml-2"
+                                        >
+                                            <Eye className="h-3 w-3" />
+                                            Ver
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </React.Fragment>
                     ))}
                 </tbody>
             </table>
