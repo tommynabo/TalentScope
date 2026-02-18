@@ -238,3 +238,66 @@ export interface GitHubScoreBreakdown {
 export interface GitHubCandidate extends Candidate {
     github_metrics?: GitHubMetrics;
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GitHub System - NEW CORRECTED SCHEMA (matching LinkedIn structure)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Base GitHub candidate profile (like Candidate table)
+ * Stores unique GitHub developers independent of campaigns
+ */
+export interface GitHubCandidateProfile {
+    id: string; // UUID
+    
+    // GitHub User Info
+    github_id: number | null;
+    github_username: string; // UNIQUE
+    github_url: string;
+    
+    // Contact Information
+    email: string | null;
+    linkedin_url: string | null;
+    personal_website: string | null;
+    
+    // Scoring
+    score: number; // 0-100
+    
+    // Full metrics stored as JSONB
+    github_metrics: GitHubMetrics;
+    
+    // AI Analysis
+    analysis_psychological: string | null;
+    analysis_business: string | null;
+    analysis_sales_angle: string | null;
+    analysis_bottleneck: string | null;
+    
+    // Timestamps
+    created_at: string; // When discovered globally
+    updated_at: string;
+}
+
+/**
+ * Junction table: links campaigns to GitHub candidates (like CampaignCandidate)
+ * Tracks WHEN a candidate was added to a campaign
+ * Key difference from github_search_results: separates candidate from campaign relationship
+ */
+export interface CampaignGitHubCandidate {
+    id: string; // UUID
+    
+    // Relationships
+    campaign_id: string; // UUID
+    user_id: string; // UUID (campaign owner)
+    github_candidate_id: string; // UUID (references GitHubCandidateProfile)
+    
+    // ✅ KEY FIELD: When was added to THIS campaign
+    added_at: string; // date-time of when discovered in this campaign
+    
+    // Status tracking
+    status: CandidateStatus; // 'Discovered', 'Contacted', 'Responded', etc.
+    notes: string | null;
+    
+    // Metadata
+    created_at: string;
+    updated_at: string;
+}

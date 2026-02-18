@@ -107,30 +107,31 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
             }
         });
 
-        // ✅ FIX: Poll for updated logs every 2 seconds (when tab is active again)
-        // This ensures logs are updated even after tab pause
-        let logPollingInterval: NodeJS.Timeout | null = null;
-        
-        if (isStoppable) {
-            logPollingInterval = setInterval(() => {
-                try {
-                    const savedLogs = sessionStorage.getItem(`github_logs_${campaignId}`);
-                    if (savedLogs) {
-                        const parsedLogs = JSON.parse(savedLogs);
-                        setLogs(parsedLogs);
-                    }
-                } catch (e) {
-                    // Ignore parsing errors
+        // ✅ FIX: Use Page Lifecycle API to sync logs when tab becomes active again
+        // Avoid constant polling which causes duplicates
+        const handlePageShow = () => {
+            try {
+                const savedLogs = sessionStorage.getItem(`github_logs_${campaignId}`);
+                if (savedLogs) {
+                    const parsedLogs = JSON.parse(savedLogs);
+                    setLogs(parsedLogs);
                 }
-            }, 1000); // Poll every 1 second during search
-        }
-
-        return () => {
-            if (logPollingInterval) {
-                clearInterval(logPollingInterval);
+            } catch (e) {
+                // Ignore parsing errors
             }
         };
-    }, [campaignId, isStoppable]);
+
+        // Listen for when page becomes visible again after tab pause
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                handlePageShow();
+            }
+        });
+
+        return () => {
+            document.removeEventListener('visibilitychange', handlePageShow);
+        };
+    }, [campaignId]);
 
     const handleLogMessage: GitHubLogCallback = (message: string) => {
         // Update React state for UI
