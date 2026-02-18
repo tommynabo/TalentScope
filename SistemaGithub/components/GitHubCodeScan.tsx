@@ -558,6 +558,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                                     candidates={candidates}
                                     formatNumber={formatNumber}
                                     getScoreBadgeColor={getScoreBadgeColor}
+                                    campaignId={campaignId}
                                 />
                             </div>
                         ) : (
