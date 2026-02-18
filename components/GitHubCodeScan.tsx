@@ -11,6 +11,7 @@ import { GitHubCandidatesKanban } from './GitHubCandidatesKanban';
 import { GitHubSearchService } from '../lib/githubSearchService';
 import { GitHubCandidatePersistence } from '../lib/githubCandidatePersistence';
 import { GitHubContactEnricher, EnrichmentResult } from './GitHubContactEnricher';
+import { GitHubProfileResearch } from './GitHubProfileResearch';
 import { supabase } from '../lib/supabase';
 
 interface GitHubCodeScanProps {
@@ -35,6 +36,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         emailsFound: 0,
         linkedinsFound: 0
     }); // Track enrichment stats
+    const [selectedCandidate, setSelectedCandidate] = useState<GitHubMetrics | null>(null); // Selected candidate for deep research
 
     // Load Product Engineers preset and restore candidates from Supabase
     useEffect(() => {
@@ -482,6 +484,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                                     candidates={candidates}
                                     formatNumber={formatNumber}
                                     getScoreBadgeColor={getScoreBadgeColor}
+                                    onViewCandidate={setSelectedCandidate}
                                 />
                             </div>
                         ) : (
@@ -545,6 +548,14 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                     onComplete={handleContactEnrichmentComplete}
                     onClose={() => setShowContactEnricher(false)}
                     autoStart={true}
+                />
+            )}
+
+            {/* GitHub Profile Research Modal */}
+            {selectedCandidate && (
+                <GitHubProfileResearch
+                    candidate={selectedCandidate}
+                    onClose={() => setSelectedCandidate(null)}
                 />
             )}
         </div>

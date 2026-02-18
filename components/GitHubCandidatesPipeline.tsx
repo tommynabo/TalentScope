@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { GitHubMetrics } from '../types/database';
-import { ChevronUp, ChevronDown, ExternalLink, Trophy } from 'lucide-react';
+import { ChevronUp, ChevronDown, ExternalLink, Trophy, BrainCircuit } from 'lucide-react';
 
 interface GitHubCandidatesPipelineProps {
     candidates: GitHubMetrics[];
     formatNumber: (num: number) => string;
     getScoreBadgeColor: (score: number) => string;
+    onViewCandidate?: (candidate: GitHubMetrics) => void;
 }
 
 type SortField = 'github_username' | 'github_score' | 'followers' | 'public_repos' | 'total_contributions';
@@ -198,14 +199,26 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
 
                             {/* Actions */}
                             <td className="px-4 py-3 text-right">
-                                <a
-                                    href={`https://github.com/${candidate.github_username}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-orange-400 hover:bg-slate-700 px-2 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
-                                >
-                                    <ExternalLink className="h-3 w-3" />
-                                </a>
+                                <div className="flex items-center justify-end gap-1">
+                                    {onViewCandidate && (
+                                        <button
+                                            onClick={() => onViewCandidate(candidate)}
+                                            className="inline-flex items-center gap-1 text-xs font-medium text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 px-3 py-1.5 rounded-lg transition-colors border border-orange-500/20 hover:border-orange-500/40"
+                                            title="Deep Research Profile"
+                                        >
+                                            <BrainCircuit className="h-3.5 w-3.5" />
+                                            Ver
+                                        </button>
+                                    )}
+                                    <a
+                                        href={`https://github.com/${candidate.github_username}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-orange-400 hover:bg-slate-700 px-2 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                                    >
+                                        <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                     ))}

@@ -114,6 +114,7 @@ export class GitHubService {
             const maxPages = 10; // Límite para evitar demasiadas llamadas API
             let totalUsersAnalyzed = 0;
             let totalUsersSkipped = 0;
+            let candidatesFoundInSearch = 0; // Track candidates found in THIS search session
 
             while (candidates.length < maxResults && page <= maxPages) {
                 onLog(`\n📄 Fetching page ${page}...`);
@@ -152,7 +153,7 @@ export class GitHubService {
                     totalUsersAnalyzed++;
 
                     try {
-                        onLog(`  📊 [${candidates.length + 1}/${maxResults}] Analyzing @${user.login}...`);
+                        onLog(`  📊 [${candidatesFoundInSearch + 1}/${maxResults}] Analyzing @${user.login}...`);
                         const metrics = await this.analyzeUser(user.login, criteria, onLog);
                         
                         if (metrics) {
@@ -168,6 +169,7 @@ export class GitHubService {
                                 totalUsersSkipped++;
                             } else {
                                 candidates.push(metrics);
+                                candidatesFoundInSearch++;
                                 currentBatchUsernames.add(user.login.toLowerCase());
                                 existingUsernames.add(user.login.toLowerCase()); // Add to existing to avoid re-adding in same search
                                 onLog(`    ✅ Added @${user.login} (Score: ${metrics.github_score})`);

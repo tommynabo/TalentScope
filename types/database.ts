@@ -176,11 +176,17 @@ export interface GitHubMetrics {
     created_at: string;
     updated_at: string;
     
+    // Profile Info
+    name?: string;
+    bio?: string;
+    avatar_url?: string;
+    
     // Code Metrics
     total_commits: number;
     contribution_streak: number; // days
     last_commit_date: string | null;
     most_used_language: string | null;
+    total_contributions?: number;
     
     // Repository Analysis
     total_stars_received: number;
@@ -203,6 +209,8 @@ export interface GitHubMetrics {
     // Scoring
     github_score: number; // 0-100
     score_breakdown: GitHubScoreBreakdown;
+    search_quality?: 'excellent' | 'good' | 'fair' | 'poor';
+    languages?: string[];
 }
 
 export interface GitHubScoreBreakdown {
