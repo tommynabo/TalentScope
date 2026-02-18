@@ -74,7 +74,7 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
         let currentKey = '';
 
         for (const c of sortedCandidates) {
-            const dateStr = c.created_at || new Date().toISOString(); // Fallback to now if missing
+            const dateStr = c.updated_at || c.created_at || new Date().toISOString(); // Use insertion date, not GitHub account creation
             const date = new Date(dateStr);
             const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 

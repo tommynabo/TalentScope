@@ -152,12 +152,20 @@ export class GitHubService {
 
                     totalUsersAnalyzed++;
 
+                    // ⚡ FAST PRE-CHECK: Skip known duplicates BEFORE any API calls
+                    const lowerLogin = user.login.toLowerCase();
+                    if (existingUsernames.has(lowerLogin) || currentBatchUsernames.has(lowerLogin)) {
+                        onLog(`  ⏭️ @${user.login} → duplicate (skipped instantly)`);
+                        totalUsersSkipped++;
+                        continue;
+                    }
+
                     try {
                         onLog(`  📊 [${candidatesFoundInSearch + 1}/${maxResults}] Analyzing @${user.login}...`);
                         const metrics = await this.analyzeUser(user.login, criteria, onLog);
 
                         if (metrics) {
-                            // Check for duplicates before adding
+                            // Final dedup check (email/linkedin)
                             if (githubDeduplicationService.isDuplicate(
                                 metrics,
                                 existingUsernames,
@@ -165,13 +173,13 @@ export class GitHubService {
                                 existingLinkedin,
                                 currentBatchUsernames
                             )) {
-                                onLog(`    ⏭️ Skipped - duplicate`);
+                                onLog(`    ⏭️ Skipped - duplicate (email/linkedin match)`);
                                 totalUsersSkipped++;
                             } else {
                                 candidates.push(metrics);
                                 candidatesFoundInSearch++;
-                                currentBatchUsernames.add(user.login.toLowerCase());
-                                existingUsernames.add(user.login.toLowerCase()); // Add to existing to avoid re-adding in same search
+                                currentBatchUsernames.add(lowerLogin);
+                                existingUsernames.add(lowerLogin);
                                 onLog(`    ✅ Added @${user.login} (Score: ${metrics.github_score})`);
                             }
                         } else {
@@ -238,13 +246,13 @@ export class GitHubService {
 
             // 1.5. Verify it's an individual user (not organization/company)
             if (user.type !== 'User') {
-                onLog(`  ⏭️ Not an individual user (type: ${user.type}). Skipping company/organization accounts.`);
+                onLog(`  ⏭️ Not an individual user (type: ${user.type}). Skipping.`);
                 return null;
             }
 
             onLog(`  📌 Profile: ${user.name || 'N/A'} | ${user.followers} followers`);
 
-            // 2. Check follower requirement
+            // 2. Check follower requirement (FAST - no API call needed)
             if (user.followers < criteria.min_followers) {
                 onLog(`  ⏭️ Followers (${user.followers}) below minimum (${criteria.min_followers})`);
                 return null;
@@ -266,30 +274,10 @@ export class GitHubService {
 
             onLog(`  ✨ Originality: ${originalRepos.length}/${repos.length} (${originality.toFixed(0)}%)`);
 
-            // 5. Anti-bootcamp filter
-            if (this.isBootcampProfile(repos, criteria)) {
-                onLog(`  ⏭️ Detected bootcamp profile (high fork ratio + generic repos)`);
-                return null;
-            }
+            // 5. ⚡ FAST: Detect languages from repo metadata (NO extra API calls)
+            const languages = this.detectLanguages(originalRepos.length > 0 ? originalRepos : repos);
 
-            // 6. Analyze repository quality
-            const topRepos = originalRepos
-                .sort((a, b) => (b.stargazers_count || 0) - (a.stargazers_count || 0))
-                .slice(0, 10);
-
-            const totalStars = topRepos.reduce((sum, r) => sum + (r.stargazers_count || 0), 0);
-            const avgStars = topRepos.length > 0 ? totalStars / topRepos.length : 0;
-
-            // 7. Check for app store links
-            const { hasAppStoreLink, appStoreUrl } = await this.findAppStoreLink(topRepos, username);
-
-            // 8. Analyze commit activity
-            const commitMetrics = await this.analyzeCommitActivity(username, topRepos);
-
-            // 9. Detect languages
-            const languages = this.detectLanguages(topRepos);
-
-            // Check language match
+            // 5.1 ⚡ FAST: Check language match EARLY (before expensive calls)
             if (criteria.languages.length > 0) {
                 const hasMatchingLanguage = languages.some(lang =>
                     criteria.languages.some(c => c.toLowerCase().includes(lang.toLowerCase()))
@@ -300,7 +288,28 @@ export class GitHubService {
                 }
             }
 
-            // 10. Calculate GitHub score
+            // 6. Anti-bootcamp filter
+            if (this.isBootcampProfile(repos, criteria)) {
+                onLog(`  ⏭️ Detected bootcamp profile (high fork ratio + generic repos)`);
+                return null;
+            }
+
+            // 7. Analyze repository quality
+            const topRepos = originalRepos
+                .sort((a, b) => (b.stargazers_count || 0) - (a.stargazers_count || 0))
+                .slice(0, 10);
+
+            const totalStars = topRepos.reduce((sum, r) => sum + (r.stargazers_count || 0), 0);
+            const avgStars = topRepos.length > 0 ? totalStars / topRepos.length : 0;
+
+            // 8. ⚡ PARALLEL: App store links + commit activity at the same time
+            const [appStoreResult, commitMetrics] = await Promise.all([
+                this.findAppStoreLink(topRepos, username),
+                this.analyzeCommitActivity(username, topRepos)
+            ]);
+            const { hasAppStoreLink, appStoreUrl } = appStoreResult;
+
+            // 9. Calculate GitHub score
             const scoreBreakdown = this.calculateGitHubScore(
                 {
                     repos: topRepos,
@@ -314,57 +323,34 @@ export class GitHubService {
                 criteria
             );
 
-            // 11. Check score threshold
+            // 10. ⚡ Check score threshold BEFORE contact search + AI (saves ~5-8 API calls + OpenAI)
             if (scoreBreakdown.normalized < (criteria.score_threshold || 60)) {
                 onLog(`  ⏭️ Score ${scoreBreakdown.normalized} below threshold ${criteria.score_threshold || 60}`);
                 return null;
             }
 
-            // Extract email from commit history
-            const mentionedEmail = await this.extractEmailFromCommits(username, topRepos[0]);
+            // 11. ⚡ Contact search + AI analysis in PARALLEL (only for qualifying candidates)
+            onLog(`  🔗 Searching for contact info + AI analysis...`);
 
-            // Search for LinkedIn and additional contact info
-            onLog(`  🔗 Searching for contact info...`);
-            const contactInfo = await githubContactService.findContactInfo(username, topRepos);
+            const [contactInfo, aiAnalysis] = await Promise.all([
+                githubContactService.findContactInfoFast(username, topRepos, user),
+                this.generateAIAnalysis(user, languages, topRepos, criteria, onLog)
+            ]);
 
             if (contactInfo.email) {
                 onLog(`  ✅ Found email: ${contactInfo.email}`);
             } else {
-                onLog(`  ⚠️ No email found in commits, gists, or events`);
+                onLog(`  ⚠️ No email found`);
             }
 
             if (contactInfo.linkedin) {
                 onLog(`  ✅ Found LinkedIn: ${contactInfo.linkedin}`);
             } else {
-                onLog(`  ⚠️ No LinkedIn profile found in bio or repositories`);
+                onLog(`  ⚠️ No LinkedIn found`);
             }
 
-            // 12. Generar análisis AI (Solo si pasa el filtro de calidad)
-            let aiAnalysis = null;
-            if (scoreBreakdown.normalized >= (criteria.score_threshold || 60)) {
-                onLog(`  🤖 Generating AI analysis...`);
-                try {
-                    // Import dinámico para evitar dependencias circulares si las hubiera
-                    const { generateCandidateAnalysis } = await import('./openai');
-
-                    const profileData = {
-                        name: user.name,
-                        username: user.login,
-                        bio: user.bio,
-                        languages: languages.slice(0, 5),
-                        topRepos: topRepos.slice(0, 5).map(r => ({
-                            name: r.name,
-                            description: r.description
-                        }))
-                    };
-
-                    aiAnalysis = await generateCandidateAnalysis(profileData);
-                    if (aiAnalysis) {
-                        onLog(`  ✅ AI Analysis generated successfully`);
-                    }
-                } catch (err) {
-                    onLog(`  ⚠️ Failed to generate AI analysis: ${err}`);
-                }
+            if (aiAnalysis) {
+                onLog(`  ✅ AI Analysis generated`);
             }
 
             const linkedinUrl = contactInfo.linkedin;
@@ -377,7 +363,7 @@ export class GitHubService {
                 public_repos: user.public_repos || 0,
                 followers: user.followers || 0,
                 following: user.following || 0,
-                created_at: user.created_at || new Date().toISOString(),
+                created_at: new Date().toISOString(), // Date added to pipeline (NOT GitHub account creation)
                 updated_at: new Date().toISOString(),
                 total_commits: commitMetrics.totalCommits,
                 contribution_streak: commitMetrics.contributionStreak,
@@ -392,7 +378,7 @@ export class GitHubService {
                 app_store_url: appStoreUrl,
                 pinned_repos_count: originalRepos.filter(r => r.pushed_at && new Date(r.pushed_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length,
                 open_source_contributions: repos.length,
-                mentioned_email: mentionedEmail || contactInfo.email,
+                mentioned_email: contactInfo.email,
                 personal_website: websiteUrl || null,
                 linkedin_url: linkedinUrl || null,
                 github_score: scoreBreakdown.normalized,
@@ -412,6 +398,35 @@ export class GitHubService {
 
         } catch (error: any) {
             throw error;
+        }
+    }
+
+    /**
+     * Generate AI analysis for qualifying candidates
+     */
+    private async generateAIAnalysis(
+        user: any,
+        languages: string[],
+        topRepos: any[],
+        criteria: GitHubFilterCriteria,
+        onLog: GitHubLogCallback
+    ): Promise<any> {
+        try {
+            const { generateCandidateAnalysis } = await import('./openai');
+            const profileData = {
+                name: user.name,
+                username: user.login,
+                bio: user.bio,
+                languages: languages.slice(0, 5),
+                topRepos: topRepos.slice(0, 5).map(r => ({
+                    name: r.name,
+                    description: r.description
+                }))
+            };
+            return await generateCandidateAnalysis(profileData);
+        } catch (err) {
+            onLog(`  ⚠️ AI analysis failed: ${err}`);
+            return null;
         }
     }
 
@@ -442,31 +457,37 @@ export class GitHubService {
         username: string
     ): Promise<{ hasAppStoreLink: boolean; appStoreUrl: string | null }> {
         try {
-            for (const repo of repos.slice(0, 10)) {
-                if (!repo.name) continue;
+            // ⚡ Reduced from 10 to 3 top repos (most stars = most likely to have store links)
+            const reposToCheck = repos.slice(0, 3).filter(r => r.name);
 
+            // ⚡ Fetch all READMEs in parallel
+            const readmePromises = reposToCheck.map(async (repo) => {
                 try {
                     const readmeResponse = await this.octokit!.rest.repos.getReadme({
                         owner: username,
                         repo: repo.name
                     });
+                    return Buffer.from(readmeResponse.data.content, 'base64').toString();
+                } catch {
+                    return null;
+                }
+            });
 
-                    const content = Buffer.from(readmeResponse.data.content, 'base64').toString();
+            const readmeContents = await Promise.all(readmePromises);
 
-                    for (const keyword of APP_STORE_KEYWORDS) {
-                        if (content.toLowerCase().includes(keyword)) {
-                            // Extract URL
-                            const match = content.match(
-                                /https?:\/\/(play\.google\.com|apps\.apple\.com)[^\s\)"\]>]*/gi
-                            );
-                            if (match && match[0]) {
-                                return { hasAppStoreLink: true, appStoreUrl: match[0] };
-                            }
-                            return { hasAppStoreLink: true, appStoreUrl: null };
+            for (const content of readmeContents) {
+                if (!content) continue;
+                const lowerContent = content.toLowerCase();
+                for (const keyword of APP_STORE_KEYWORDS) {
+                    if (lowerContent.includes(keyword)) {
+                        const match = content.match(
+                            /https?:\/\/(play\.google\.com|apps\.apple\.com)[^\s\)"\]>]*/gi
+                        );
+                        if (match && match[0]) {
+                            return { hasAppStoreLink: true, appStoreUrl: match[0] };
                         }
+                        return { hasAppStoreLink: true, appStoreUrl: null };
                     }
-                } catch (err) {
-                    // No readme - continue
                 }
             }
             return { hasAppStoreLink: false, appStoreUrl: null };
@@ -487,27 +508,35 @@ export class GitHubService {
         lastCommitDate: string | null;
     }> {
         try {
+            // ⚡ Reduced from 5 to 2 repos, fetched in parallel
+            const reposToCheck = repos.slice(0, 2);
+
+            const commitResults = await Promise.all(
+                reposToCheck.map(async (repo) => {
+                    try {
+                        const commits = await this.octokit!.rest.repos.listCommits({
+                            owner: username,
+                            repo: repo.name,
+                            per_page: 1,
+                            author: username
+                        });
+                        return {
+                            count: repo.watchers_count || 0,
+                            date: commits.data.length > 0 ? commits.data[0].commit.author?.date || null : null
+                        };
+                    } catch {
+                        return { count: 0, date: null };
+                    }
+                })
+            );
+
             let totalCommits = 0;
             let lastCommitDate: string | null = null;
 
-            for (const repo of repos.slice(0, 5)) {
-                try {
-                    const commits = await this.octokit!.rest.repos.listCommits({
-                        owner: username,
-                        repo: repo.name,
-                        per_page: 1,
-                        author: username
-                    });
-
-                    if (commits.data.length > 0) {
-                        totalCommits += (repo.watchers_count || 0); // Proxy for commits
-                        const date = commits.data[0].commit.author?.date;
-                        if (date && (!lastCommitDate || new Date(date) > new Date(lastCommitDate))) {
-                            lastCommitDate = date;
-                        }
-                    }
-                } catch (err) {
-                    // Repo might not have commits
+            for (const result of commitResults) {
+                totalCommits += result.count;
+                if (result.date && (!lastCommitDate || new Date(result.date) > new Date(lastCommitDate))) {
+                    lastCommitDate = result.date;
                 }
             }
 
@@ -525,34 +554,8 @@ export class GitHubService {
         }
     }
 
-    /**
-     * Extract developer email from commit history
-     */
-    private async extractEmailFromCommits(
-        username: string,
-        repo: any
-    ): Promise<string | null> {
-        try {
-            if (!repo) return null;
-
-            const commits = await this.octokit!.rest.repos.listCommits({
-                owner: username,
-                repo: repo.name,
-                per_page: 5,
-                author: username
-            });
-
-            for (const commit of commits.data) {
-                const email = commit.commit.author?.email;
-                if (email && !email.includes('noreply')) {
-                    return email;
-                }
-            }
-            return null;
-        } catch (error) {
-            return null;
-        }
-    }
+    // ⚡ REMOVED: extractEmailFromCommits — this was duplicating work already done by githubContactService.findEmail
+    // Contact info extraction is now handled entirely by githubContactService.findContactInfoFast
 
     /**
      * Detect programming languages used
@@ -584,12 +587,15 @@ export class GitHubService {
             parts.push(`language:${criteria.languages[0].toLowerCase()}`);
         }
 
-        // NOTE: GitHub /search/users endpoint filters:
-        // Valid: language:, location:, type:user
-        // INVALID for users: stars:>=, followers:>= (these don't work)
-        // We post-filter by followers/stars/repos in analyzeUser() instead
+        // ⚡ PRE-FILTER: type:user eliminates organizations from API results
+        parts.push('type:user');
 
-        const query = parts.length > 0 ? parts.join(' ') : 'language:typescript';
+        // ⚡ PRE-FILTER: followers minimum eliminates low-quality profiles at API level
+        if (criteria.min_followers > 0) {
+            parts.push(`followers:>=${criteria.min_followers}`);
+        }
+
+        const query = parts.length > 0 ? parts.join(' ') : 'language:typescript type:user';
         return query;
     }
 

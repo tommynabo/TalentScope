@@ -26,12 +26,12 @@ export class GitHubContactService {
 
             const userResponse = await this.octokit.rest.users.getByUsername({ username });
             const user = userResponse.data;
-            
+
             // Si type es 'Organization', es empresa
             if (user.type === 'Organization') {
                 return false;
             }
-            
+
             return true;
         } catch (error) {
             return true; // Default to individual if we can't verify
@@ -90,6 +90,43 @@ export class GitHubContactService {
     }
 
     /**
+     * ⚡ OPTIMIZED: Uses pre-fetched profile, skips org check, runs LinkedIn+email in parallel
+     * Saves 2 API calls (isIndividualUser + getByUsername) and runs searches concurrently
+     */
+    async findContactInfoFast(
+        username: string,
+        topRepos?: any[],
+        preFetchedProfile?: any
+    ): Promise<{
+        email: string | null;
+        linkedin: string | null;
+        website: string | null;
+    }> {
+        try {
+            if (!this.octokit) {
+                this.octokit = new Octokit();
+            }
+
+            const profile = preFetchedProfile || (await this.octokit.rest.users.getByUsername({ username })).data;
+
+            // ⚡ Run LinkedIn + email search in PARALLEL
+            const [linkedin, email] = await Promise.all([
+                this.findLinkedInProfile(username, profile, topRepos),
+                this.findEmail(username, topRepos)
+            ]);
+
+            return {
+                email,
+                linkedin,
+                website: profile.blog || null
+            };
+        } catch (error) {
+            console.warn(`[GitHubContactService] Error in findContactInfoFast for ${username}:`, error);
+            return { email: null, linkedin: null, website: null };
+        }
+    }
+
+    /**
      * Busca LinkedIn en múltiples fuentes
      */
     private async findLinkedInProfile(
@@ -133,7 +170,8 @@ export class GitHubContactService {
 
         // 4. Buscar en repositorios (README, descripciones, etc)
         if (topRepos && topRepos.length > 0) {
-            for (const repo of topRepos.slice(0, 5)) {
+            // ⚡ Reduced from 5 to 2 repos for README scanning
+            for (const repo of topRepos.slice(0, 2)) {
                 // Buscar en descripción del repo
                 if (repo.description) {
                     linkedinUrl = this.extractLinkedIn(repo.description);
@@ -174,9 +212,10 @@ export class GitHubContactService {
 
         let email: string | null = null;
 
-        // 1. Buscar en commits de los primeros 10 repositorios
+        // 1. Buscar en commits de los primeros 3 repositorios
         if (topRepos && topRepos.length > 0) {
-            for (const repo of topRepos.slice(0, 10)) {
+            // ⚡ Reduced from 10 to 3 repos for email search
+            for (const repo of topRepos.slice(0, 3)) {
                 email = await this.extractEmailFromCommits(username, repo.name);
                 if (email) {
                     this.emailCache.set(username, email);
