@@ -46,7 +46,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
     // Load Product Engineers preset and restore candidates from Supabase
     useEffect(() => {
         setCriteria(PRESET_PRODUCT_ENGINEERS);
-        
+
         // Load previous logs from sessionStorage
         const previousLogs = sessionStorage.getItem(`github_logs_${campaignId}`);
         if (previousLogs) {
@@ -106,15 +106,47 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                 }
             }
         });
-    }, [campaignId]);
+
+        // ✅ FIX: Poll for updated logs every 2 seconds (when tab is active again)
+        // This ensures logs are updated even after tab pause
+        let logPollingInterval: NodeJS.Timeout | null = null;
+        
+        if (isStoppable) {
+            logPollingInterval = setInterval(() => {
+                try {
+                    const savedLogs = sessionStorage.getItem(`github_logs_${campaignId}`);
+                    if (savedLogs) {
+                        const parsedLogs = JSON.parse(savedLogs);
+                        setLogs(parsedLogs);
+                    }
+                } catch (e) {
+                    // Ignore parsing errors
+                }
+            }, 1000); // Poll every 1 second during search
+        }
+
+        return () => {
+            if (logPollingInterval) {
+                clearInterval(logPollingInterval);
+            }
+        };
+    }, [campaignId, isStoppable]);
 
     const handleLogMessage: GitHubLogCallback = (message: string) => {
+        // Update React state for UI
         setLogs(prev => {
             const newLogs = [...prev, message];
-            // Persist logs to sessionStorage
-            sessionStorage.setItem(`github_logs_${campaignId}`, JSON.stringify(newLogs));
+            // Persist logs immediately to sessionStorage (survives tab pause)
+            try {
+                sessionStorage.setItem(`github_logs_${campaignId}`, JSON.stringify(newLogs));
+            } catch (e) {
+                console.warn('Failed to save logs to sessionStorage:', e);
+            }
             return newLogs;
         });
+        
+        // ALSO log to console for visibility during tab pause
+        console.log('[GitHubSearch]', message);
     };
 
     const handleStopSearch = () => {
@@ -175,8 +207,9 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         const executor = new UnbreakableExecutor(`github_search_${campaignId}`);
         executorRef.current = executor;
 
-        // Wrap entire search in Unbreakable Execution Mode
-        await executor.run(async () => {
+        // Run the search in background (NOT awaited - allows executor to run independently)
+        // This is key: don't await, let executor manage its own lifecycle
+        executor.run(async () => {
             try {
                 handleLogMessage('🔄 Loading existing candidates from Supabase...');
 
@@ -251,6 +284,10 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
             setLoading(false);
             setIsStoppable(false);
         });
+        
+        // DON'T AWAIT - let executor run in background
+        // Return immediately so UI isn't blocked
+        return;
     };
 
     const handleStartCrossSearch = async () => {
