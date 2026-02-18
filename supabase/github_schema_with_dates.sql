@@ -3,10 +3,15 @@
 -- Separates candidates from campaign-candidate relationship (like LinkedIn)
 -- ═══════════════════════════════════════════════════════════════════════════════
 
+-- 0️⃣ CLEANUP: Drop old tables if they exist (bad schema versions)
+-- This ensures we start fresh with correct schema
+DROP TABLE IF EXISTS public.campaign_github_candidates CASCADE;
+DROP TABLE IF EXISTS public.github_candidates CASCADE;
+
 -- 1️⃣ Rename/consolidate github_search_results → github_candidates
 -- This is the base candidate data table
 
-CREATE TABLE IF NOT EXISTS public.github_candidates (
+CREATE TABLE public.github_candidates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     
     -- GitHub User Info
@@ -36,9 +41,9 @@ CREATE TABLE IF NOT EXISTS public.github_candidates (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_github_candidates_username ON public.github_candidates(github_username);
-CREATE INDEX IF NOT EXISTS idx_github_candidates_email ON public.github_candidates(email) WHERE email IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_github_candidates_created ON public.github_candidates(created_at DESC);
+CREATE INDEX idx_github_candidates_username ON public.github_candidates(github_username);
+CREATE INDEX idx_github_candidates_email ON public.github_candidates(email) WHERE email IS NOT NULL;
+CREATE INDEX idx_github_candidates_created ON public.github_candidates(created_at DESC);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 
@@ -46,7 +51,7 @@ CREATE INDEX IF NOT EXISTS idx_github_candidates_created ON public.github_candid
 -- This table tracks WHEN a candidate was added to each campaign
 -- This allows same developer in multiple campaigns with different dates
 
-CREATE TABLE IF NOT EXISTS public.campaign_github_candidates (
+CREATE TABLE public.campaign_github_candidates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     
     -- Relationships
@@ -70,10 +75,10 @@ CREATE TABLE IF NOT EXISTS public.campaign_github_candidates (
 );
 
 -- Performance Indexes
-CREATE INDEX IF NOT EXISTS idx_campaign_github_candidates_campaign ON public.campaign_github_candidates(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_campaign_github_candidates_user ON public.campaign_github_candidates(user_id);
-CREATE INDEX IF NOT EXISTS idx_campaign_github_candidates_candidate ON public.campaign_github_candidates(github_candidate_id);
-CREATE INDEX IF NOT EXISTS idx_campaign_github_candidates_added_at ON public.campaign_github_candidates(added_at DESC);
+CREATE INDEX idx_campaign_github_candidates_campaign ON public.campaign_github_candidates(campaign_id);
+CREATE INDEX idx_campaign_github_candidates_user ON public.campaign_github_candidates(user_id);
+CREATE INDEX idx_campaign_github_candidates_candidate ON public.campaign_github_candidates(github_candidate_id);
+CREATE INDEX idx_campaign_github_candidates_added_at ON public.campaign_github_candidates(added_at DESC);
 
 -- Enable RLS
 ALTER TABLE public.github_candidates ENABLE ROW LEVEL SECURITY;
