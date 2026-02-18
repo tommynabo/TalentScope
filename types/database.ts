@@ -223,6 +223,7 @@ export interface GitHubMetrics {
 
     outreach_icebreaker?: string;
     outreach_pitch?: string;
+    outreach_followup?: string;
 }
 
 export interface GitHubScoreBreakdown {
@@ -249,34 +250,34 @@ export interface GitHubCandidate extends Candidate {
  */
 export interface GitHubCandidateProfile {
     id: string; // UUID
-    
+
     // GitHub User Info
     github_id: number | null;
     github_username: string; // UNIQUE
     github_url: string;
-    
+
     // Contact Information
     email: string | null;
     linkedin_url: string | null;
     personal_website: string | null;
-    
+
     // Scoring
     score: number; // 0-100
-    
+
     // Full metrics stored as JSONB
     github_metrics: GitHubMetrics;
-    
+
     // AI Analysis
     analysis_psychological: string | null;
     analysis_business: string | null;
     analysis_sales_angle: string | null;
     analysis_bottleneck: string | null;
-    
+
     // Outreach Messages (AI-generated, user can edit)
     outreach_icebreaker: string | null;
     outreach_pitch: string | null;
     outreach_followup: string | null;
-    
+
     // Timestamps
     created_at: string; // When discovered globally
     updated_at: string;
@@ -289,19 +290,19 @@ export interface GitHubCandidateProfile {
  */
 export interface CampaignGitHubCandidate {
     id: string; // UUID
-    
+
     // Relationships
     campaign_id: string; // UUID
     user_id: string; // UUID (campaign owner)
     github_candidate_id: string; // UUID (references GitHubCandidateProfile)
-    
+
     // ✅ KEY FIELD: When was added to THIS campaign
     added_at: string; // date-time of when discovered in this campaign
-    
+
     // Status tracking
     status: CandidateStatus; // 'Discovered', 'Contacted', 'Responded', etc.
     notes: string | null;
-    
+
     // Metadata
     created_at: string;
     updated_at: string;
