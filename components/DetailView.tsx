@@ -46,6 +46,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
   const [isWaleadEditorOpen, setIsWaleadEditorOpen] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const isSearchingRef = useRef(false); // Survives React batching during background tabs
 
   // Show recovery toast if we restored from a snapshot
   useEffect(() => {
@@ -100,6 +101,26 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
       clearInterval(keepAlive);
     };
   }, [searching]);
+
+  // ⚡ Restore searching state when tab returns to focus
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Check ref (survives React batching)
+        if (isSearchingRef.current && !searching) {
+          setSearching(true);
+          setShowLogs(true);
+          // Re-read logs from sessionStorage  
+          const snap = loadSearchSnapshot(initialCampaign.id);
+          if (snap?.logs && snap.logs.length > 0) {
+            setLogs(snap.logs);
+          }
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [searching, initialCampaign.id]);
 
   // Update local campaign state when prop changes
   useEffect(() => {
@@ -207,6 +228,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
   }, [sortedCandidates]);
 
   const handleRunSearch = async () => {
+    isSearchingRef.current = true;
     setSearching(true);
     setLogs([]);
     setShowLogs(true);
@@ -243,7 +265,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
         async (newCandidates) => {
           try {
             console.log(`[DetailView] Processing ${newCandidates.length} new candidates...`);
-            
+
             // 1. Save candidates to database
             const savePromises = newCandidates.map(async (c) => {
               try {
@@ -285,10 +307,12 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
               console.error("[DetailView] Failed to load candidates", err);
             }
 
+            isSearchingRef.current = false;
             setSearching(false);
             setToast({ show: true, message: `¡${newCandidates.length} nuevos candidatos encontrados!` });
           } catch (error) {
             console.error('[DetailView] Unexpected error in search callback', error);
+            isSearchingRef.current = false;
             setSearching(false);
             setToast({ show: true, message: '❌ Error procesando candidatos' });
           }
@@ -297,12 +321,14 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
     } catch (e: any) {
       setLogs(prev => [...prev, `❌ Error crítico: ${e.message}`]);
       setToast({ show: true, message: 'Error en la búsqueda: ' + e.message });
+      isSearchingRef.current = false;
       setSearching(false);
     }
   };
 
   const handleStopSearch = () => {
     searchEngine.stop();
+    isSearchingRef.current = false;
     setSearching(false);
     setLogs(prev => [...prev, '⏹️ Búsqueda detenida por el usuario.']);
     setToast({ show: true, message: 'Búsqueda detenida.' });
@@ -326,10 +352,10 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
 
   const handleStatusChange = async (candidateId: string, newStatus: CandidateStatus) => {
     // Optimistic update
-    setCandidates(prev => prev.map(c => 
+    setCandidates(prev => prev.map(c =>
       c.id === candidateId ? { ...c, status_in_campaign: newStatus } : c
     ));
-    
+
     try {
       await CampaignService.updateCandidateStatus(campaign.id, candidateId, newStatus);
       setToast({ show: true, message: `✅ Estado actualizado` });
@@ -362,7 +388,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
     }
 
     const headers = ['FIRST_NAME', 'LAST_NAME', 'ROL', 'EMPRESA', 'EMAIL', 'LINKEDIN', 'SCORE', 'INVITACION_INICIAL', 'POST_ACEPTACION', 'SEGUIMIENTO', 'ANALISIS', 'STATUS', 'FECHA'];
-    
+
     const csvContent = [
       headers.join(','),
       ...filtered.map(c => {
@@ -371,11 +397,11 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
         const followup = c.walead_messages?.followup_message || analysis?.followup_message || '';
         const secondFollowup = c.walead_messages?.second_followup || analysis?.second_followup || '';
         const summary = analysis?.summary || '';
-        
+
         const nameParts = (c.full_name || '').split(' ');
         const firstName = nameParts[0] || '';
         const lastName = nameParts.slice(1).join(' ') || '';
-        
+
         return [
           `"${firstName}"`,
           `"${lastName}"`,
@@ -404,9 +430,9 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-      setToast({ 
-        show: true, 
+
+      setToast({
+        show: true,
         message: `✅ CSV exportado con ${filtered.length} prospectos`
       });
       setShowExportOptions(false);
@@ -541,7 +567,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
         <div className="px-3 py-2 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900/60 transition-all">
           <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
             <h3 className="font-semibold text-sm text-white whitespace-nowrap">Pipeline ({candidates.length})</h3>
-            
+
             {/* View Mode Toggle */}
             <div className="flex bg-slate-800 rounded-lg p-0.5 border border-slate-700/50">
               <button
@@ -566,27 +592,27 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
             <div className={`flex items-center gap-2 transition-all overflow-hidden ${showExportOptions ? 'w-full opacity-100' : 'w-auto'}`}>
               {showExportOptions ? (
                 <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 rounded-lg p-1 animate-in slide-in-from-right-4 fade-in duration-200">
-                  <input 
-                    type="date" 
+                  <input
+                    type="date"
                     value={dateRange.start}
                     onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
                     className="bg-transparent text-xs text-white border-0 p-1 focus:ring-0 w-24"
                   />
                   <span className="text-slate-500 text-xs">-</span>
-                  <input 
-                    type="date" 
+                  <input
+                    type="date"
                     value={dateRange.end}
                     onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
                     className="bg-transparent text-xs text-white border-0 p-1 focus:ring-0 w-24"
                   />
-                  <button 
+                  <button
                     onClick={handleExport}
                     className="p-1 hover:bg-cyan-500/20 rounded text-cyan-400"
                     title="Descargar CSV"
                   >
                     <Download className="h-3.5 w-3.5" />
                   </button>
-                  <button 
+                  <button
                     onClick={() => setShowExportOptions(false)}
                     className="p-1 hover:bg-slate-700 rounded text-slate-400"
                   >
@@ -605,161 +631,161 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
             </div>
           </div>
         </div>
-        
+
         {viewMode === 'kanban' ? (
-             <div className="flex-1 overflow-hidden bg-slate-900/40 relative">
-               <KanbanBoard candidates={candidates} onStatusChange={handleStatusChange} />
-             </div>
+          <div className="flex-1 overflow-hidden bg-slate-900/40 relative">
+            <KanbanBoard candidates={candidates} onStatusChange={handleStatusChange} />
+          </div>
         ) : (
-        <div className="overflow-x-auto flex-1">
-          {loading ? (
-            <div className="flex items-center justify-center h-full text-slate-500">
-              <Loader2 className="h-6 w-6 animate-spin text-cyan-500" />
-            </div>
-          ) : candidates.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-slate-500">
-              <Search className="h-10 w-10 mb-3 opacity-20" />
-              <p className="text-sm">No se encontraron candidatos.</p>
-              <button onClick={handleRunSearch} className="text-cyan-400 hover:text-cyan-300 text-xs mt-2">Ejecutar búsqueda para comenzar</button>
-            </div>
-          ) : (
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="text-xs font-semibold text-slate-500 uppercase tracking-widest border-b border-slate-800">
-                  <th
-                    className="px-3 lg:px-4 py-2 cursor-pointer hover:text-slate-300 transition-colors select-none"
-                    onClick={() => toggleSort('full_name')}
-                  >
-                    <div className="flex items-center gap-1">
-                      Candidato
-                      {sortConfig.field === 'full_name' && (
-                        sortConfig.direction === 'desc' ? <ChevronDown className="h-3 w-3 text-cyan-400" /> : <ChevronUp className="h-3 w-3 text-cyan-400" />
-                      )}
-                    </div>
-                  </th>
-                  <th className="px-3 lg:px-4 py-2">Rol Actual</th>
-                  <th className="px-3 lg:px-4 py-2">Estado</th>
-                  <th className="px-3 lg:px-4 py-2">Mensaje</th>
-                  <th
-                    className="px-3 lg:px-4 py-2 cursor-pointer hover:text-slate-300 transition-colors select-none"
-                    onClick={() => toggleSort('symmetry_score')}
-                  >
-                    <div className="flex items-center gap-1">
-                      <BrainCircuit className="h-3 w-3" /> Score
-                      {sortConfig.field === 'symmetry_score' && (
-                        sortConfig.direction === 'desc' ? <ChevronDown className="h-3 w-3 text-cyan-400" /> : <ChevronUp className="h-3 w-3 text-cyan-400" />
-                      )}
-                    </div>
-                  </th>
-                  <th className="px-3 lg:px-4 py-2 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {groupedCandidates.map((group) => (
-                  <React.Fragment key={group.label}>
-                    {/* Date Divider Row */}
-                    <tr>
-                      <td colSpan={6} className="px-0 py-0">
-                        <div className="flex items-center gap-3 px-3 lg:px-4 py-1.5 bg-blue-950/20 border-y border-blue-500/15 backdrop-blur-sm">
-                          <div className="flex items-center gap-1.5">
-                            <Calendar className="h-3 w-3 text-blue-400/70" />
-                            <span className="text-xs font-semibold text-slate-300">{group.label}</span>
-                          </div>
-                          <div className="flex-1 h-px bg-gradient-to-r from-blue-500/30 via-blue-400/20 to-transparent"></div>
-                          <span className="text-[10px] font-medium text-blue-300/70 bg-blue-950/40 px-2 py-0.5 rounded-full border border-blue-500/20">
-                            {group.count} {group.count === 1 ? 'lead' : 'leads'}
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                    {/* Candidate Rows for this group */}
-                    {group.candidates.map((candidate) => (
-                      <tr key={candidate.id} className="hover:bg-slate-800/30 transition-colors group border-b border-slate-800/50">
-                        <td className="px-3 lg:px-4 py-2">
-                          <div className="flex items-center gap-2">
-                            <img
-                              src={candidate.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.full_name)}&background=0F172A&color=94A3B8`}
-                              alt={candidate.full_name}
-                              className="h-8 w-8 rounded-full object-cover ring-2 ring-slate-800"
-                            />
-                            <div className="min-w-0">
-                              <p className="font-medium text-white text-xs lg:text-sm truncate">{candidate.full_name}</p>
-                              <p className="text-xs text-slate-500 hidden sm:block">{candidate.location}</p>
+          <div className="overflow-x-auto flex-1">
+            {loading ? (
+              <div className="flex items-center justify-center h-full text-slate-500">
+                <Loader2 className="h-6 w-6 animate-spin text-cyan-500" />
+              </div>
+            ) : candidates.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-slate-500">
+                <Search className="h-10 w-10 mb-3 opacity-20" />
+                <p className="text-sm">No se encontraron candidatos.</p>
+                <button onClick={handleRunSearch} className="text-cyan-400 hover:text-cyan-300 text-xs mt-2">Ejecutar búsqueda para comenzar</button>
+              </div>
+            ) : (
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="text-xs font-semibold text-slate-500 uppercase tracking-widest border-b border-slate-800">
+                    <th
+                      className="px-3 lg:px-4 py-2 cursor-pointer hover:text-slate-300 transition-colors select-none"
+                      onClick={() => toggleSort('full_name')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Candidato
+                        {sortConfig.field === 'full_name' && (
+                          sortConfig.direction === 'desc' ? <ChevronDown className="h-3 w-3 text-cyan-400" /> : <ChevronUp className="h-3 w-3 text-cyan-400" />
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-3 lg:px-4 py-2">Rol Actual</th>
+                    <th className="px-3 lg:px-4 py-2">Estado</th>
+                    <th className="px-3 lg:px-4 py-2">Mensaje</th>
+                    <th
+                      className="px-3 lg:px-4 py-2 cursor-pointer hover:text-slate-300 transition-colors select-none"
+                      onClick={() => toggleSort('symmetry_score')}
+                    >
+                      <div className="flex items-center gap-1">
+                        <BrainCircuit className="h-3 w-3" /> Score
+                        {sortConfig.field === 'symmetry_score' && (
+                          sortConfig.direction === 'desc' ? <ChevronDown className="h-3 w-3 text-cyan-400" /> : <ChevronUp className="h-3 w-3 text-cyan-400" />
+                        )}
+                      </div>
+                    </th>
+                    <th className="px-3 lg:px-4 py-2 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupedCandidates.map((group) => (
+                    <React.Fragment key={group.label}>
+                      {/* Date Divider Row */}
+                      <tr>
+                        <td colSpan={6} className="px-0 py-0">
+                          <div className="flex items-center gap-3 px-3 lg:px-4 py-1.5 bg-blue-950/20 border-y border-blue-500/15 backdrop-blur-sm">
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="h-3 w-3 text-blue-400/70" />
+                              <span className="text-xs font-semibold text-slate-300">{group.label}</span>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-3 lg:px-4 py-2">
-                          <p className="text-xs lg:text-sm text-slate-300">{candidate.job_title}</p>
-                          <p className="text-xs text-slate-500 hidden md:block">@ {candidate.current_company}</p>
-                        </td>
-                        <td className="px-3 lg:px-4 py-2">
-                          <StatusBadge status={candidate.status_in_campaign || 'Pool'} />
-                        </td>
-                        <td className="px-3 lg:px-4 py-2">
-                          {(() => {
-                            const analysis = parseAnalysis(candidate.ai_analysis);
-                            const message = analysis?.outreach_message || '';
-                            return message ? (
-                              <div className="max-w-xs">
-                                <p className="text-xs text-slate-300 line-clamp-2" title={message}>
-                                  {message}
-                                </p>
-                                <button
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(message);
-                                    setToast({ show: true, message: '✅ Mensaje copiado!' });
-                                  }}
-                                  className="text-xs text-cyan-400 hover:text-cyan-300 mt-0.5"
-                                >
-                                  Copiar
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-slate-500 text-xs">No disponible</span>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-3 lg:px-4 py-2">
-                          {candidate.symmetry_score !== undefined && (
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 w-16 bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full ${candidate.symmetry_score > 90 ? 'bg-gradient-to-r from-emerald-400 to-cyan-400' : candidate.symmetry_score > 80 ? 'bg-cyan-500' : 'bg-slate-500'}`}
-                                  style={{ width: `${candidate.symmetry_score}%` }}
-                                ></div>
-                              </div>
-                              <span className={`text-xs font-bold ${candidate.symmetry_score > 90 ? 'text-emerald-400' : 'text-slate-400'}`}>
-                                {candidate.symmetry_score}%
-                              </span>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-3 lg:px-4 py-2 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => setSelectedCandidate(candidate)}
-                              className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-cyan-400 hover:bg-slate-700 px-1.5 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
-                            >
-                              <BrainCircuit className="h-3 w-3" /> <span className="hidden sm:inline">Ver</span>
-                            </button>
-                            <a
-                              href={candidate.linkedin_url || '#'}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-700 px-1.5 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
+                            <div className="flex-1 h-px bg-gradient-to-r from-blue-500/30 via-blue-400/20 to-transparent"></div>
+                            <span className="text-[10px] font-medium text-blue-300/70 bg-blue-950/40 px-2 py-0.5 rounded-full border border-blue-500/20">
+                              {group.count} {group.count === 1 ? 'lead' : 'leads'}
+                            </span>
                           </div>
                         </td>
                       </tr>
-                    ))}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                      {/* Candidate Rows for this group */}
+                      {group.candidates.map((candidate) => (
+                        <tr key={candidate.id} className="hover:bg-slate-800/30 transition-colors group border-b border-slate-800/50">
+                          <td className="px-3 lg:px-4 py-2">
+                            <div className="flex items-center gap-2">
+                              <img
+                                src={candidate.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.full_name)}&background=0F172A&color=94A3B8`}
+                                alt={candidate.full_name}
+                                className="h-8 w-8 rounded-full object-cover ring-2 ring-slate-800"
+                              />
+                              <div className="min-w-0">
+                                <p className="font-medium text-white text-xs lg:text-sm truncate">{candidate.full_name}</p>
+                                <p className="text-xs text-slate-500 hidden sm:block">{candidate.location}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 lg:px-4 py-2">
+                            <p className="text-xs lg:text-sm text-slate-300">{candidate.job_title}</p>
+                            <p className="text-xs text-slate-500 hidden md:block">@ {candidate.current_company}</p>
+                          </td>
+                          <td className="px-3 lg:px-4 py-2">
+                            <StatusBadge status={candidate.status_in_campaign || 'Pool'} />
+                          </td>
+                          <td className="px-3 lg:px-4 py-2">
+                            {(() => {
+                              const analysis = parseAnalysis(candidate.ai_analysis);
+                              const message = analysis?.outreach_message || '';
+                              return message ? (
+                                <div className="max-w-xs">
+                                  <p className="text-xs text-slate-300 line-clamp-2" title={message}>
+                                    {message}
+                                  </p>
+                                  <button
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(message);
+                                      setToast({ show: true, message: '✅ Mensaje copiado!' });
+                                    }}
+                                    className="text-xs text-cyan-400 hover:text-cyan-300 mt-0.5"
+                                  >
+                                    Copiar
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-slate-500 text-xs">No disponible</span>
+                              );
+                            })()}
+                          </td>
+                          <td className="px-3 lg:px-4 py-2">
+                            {candidate.symmetry_score !== undefined && (
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 w-16 bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${candidate.symmetry_score > 90 ? 'bg-gradient-to-r from-emerald-400 to-cyan-400' : candidate.symmetry_score > 80 ? 'bg-cyan-500' : 'bg-slate-500'}`}
+                                    style={{ width: `${candidate.symmetry_score}%` }}
+                                  ></div>
+                                </div>
+                                <span className={`text-xs font-bold ${candidate.symmetry_score > 90 ? 'text-emerald-400' : 'text-slate-400'}`}>
+                                  {candidate.symmetry_score}%
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-3 lg:px-4 py-2 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => setSelectedCandidate(candidate)}
+                                className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-cyan-400 hover:bg-slate-700 px-1.5 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                              >
+                                <BrainCircuit className="h-3 w-3" /> <span className="hidden sm:inline">Ver</span>
+                              </button>
+                              <a
+                                href={candidate.linkedin_url || '#'}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-700 px-1.5 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         )}
       </div>
 

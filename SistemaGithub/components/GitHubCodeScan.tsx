@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus, Link2, List, Columns3, Grid3x3, X, Download } from 'lucide-react';
 import { GitHubMetrics, GitHubFilterCriteria } from '../../types/database';
 import { githubService, GitHubLogCallback } from '../../lib/githubService';
@@ -30,7 +30,8 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
     const [viewMode, setViewMode] = useState<ViewMode>('pipeline'); // Default to pipeline
     const [userId, setUserId] = useState<string>('');
     const [isStoppable, setIsStoppable] = useState(false); // Track if search can be stopped
-    const executorRef = React.useRef<UnbreakableExecutor | null>(null);
+    const executorRef = useRef<UnbreakableExecutor | null>(null);
+    const isSearchingRef = useRef(false); // Mirror of loading state that survives React batching
 
     // Load Product Engineers preset and restore candidates from Supabase
     useEffect(() => {
@@ -91,13 +92,30 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         // Listen for visibility changes to sync logs when tab returns to focus
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
-                // Restore logs and state when tab becomes visible
+                // Restore logs from persistent storage
                 loadPersistentLogs();
+
+                // ⚡ PRIMARY: Check ref (survives React batching)
+                if (isSearchingRef.current) {
+                    setLoading(true);
+                    setIsStoppable(true);
+                    return;
+                }
+
+                // ⚡ SECONDARY: Check executor (truest source of truth)
+                if (executorRef.current?.isActive()) {
+                    setLoading(true);
+                    setIsStoppable(true);
+                    isSearchingRef.current = true;
+                    return;
+                }
+
+                // FALLBACK: Check localStorage
                 const savedState = localStorage.getItem(`github_search_state_${campaignId}`);
                 if (savedState) {
                     try {
                         const state = JSON.parse(savedState);
-                        if (state.isRunning) {
+                        if (state.isRunning && Date.now() - state.timestamp < 600000) { // < 10 min old
                             setLoading(true);
                             setIsStoppable(true);
                         }
@@ -111,6 +129,36 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
     }, [campaignId]);
+
+    // ⚡ Web Locks: prevent browser from discarding/freezing the tab during search
+    useEffect(() => {
+        if (!loading) return;
+        let lockResolver: (() => void) | null = null;
+        if ('locks' in navigator) {
+            (navigator as any).locks.request('github-search-lock', () => {
+                return new Promise<void>((resolve) => {
+                    lockResolver = resolve;
+                });
+            });
+        }
+        // Keep-alive ping to prevent throttling
+        const keepAlive = setInterval(() => { void document.hidden; }, 3000);
+        return () => {
+            if (lockResolver) lockResolver();
+            clearInterval(keepAlive);
+        };
+    }, [loading]);
+
+    // ⚡ Periodic log sync: re-read from localStorage every 2s while searching
+    useEffect(() => {
+        if (!loading) return;
+        const syncInterval = setInterval(() => {
+            if (isSearchingRef.current) {
+                loadPersistentLogs();
+            }
+        }, 2000);
+        return () => clearInterval(syncInterval);
+    }, [loading]);
 
     const handleLogMessage: GitHubLogCallback = (message: string) => {
         setLogs(prev => {
@@ -175,6 +223,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         if (executorRef.current) {
             executorRef.current.stop('User clicked stop button');
         }
+        isSearchingRef.current = false;
         setLoading(false);
         setIsStoppable(false);
         handleLogMessage('🛑 Búsqueda detenida por el usuario');
@@ -191,6 +240,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
             return;
         }
 
+        isSearchingRef.current = true;
         setLoading(true);
         setIsStoppable(true);
         setLogs([]);
@@ -262,6 +312,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                 handleLogMessage(`❌ Error: ${error.message}`);
                 console.error('Search error:', error);
             } finally {
+                isSearchingRef.current = false;
                 setLoading(false);
                 setIsStoppable(false);
             }
@@ -374,7 +425,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                                 disabled={loading}
                             />
                         </div>
-                        {loading ? (
+                        {(loading || isSearchingRef.current) ? (
                             <button
                                 onClick={handleStopSearch}
                                 className="px-6 py-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 rounded-lg text-white font-semibold transition flex items-center gap-2"
@@ -489,12 +540,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
 
                     {/* Results Content */}
                     <div className="bg-slate-900/40 border border-slate-800 rounded-xl overflow-hidden">
-                        {loading ? (
-                            <div className="flex items-center justify-center h-96 text-slate-500">
-                                <Loader className="h-6 w-6 animate-spin text-orange-500 mr-2" />
-                                Cargando candidatos...
-                            </div>
-                        ) : viewMode === 'cards' ? (
+                        {viewMode === 'cards' ? (
                             <div className="p-6">
                                 <GitHubCandidatesCards
                                     candidates={candidates}
