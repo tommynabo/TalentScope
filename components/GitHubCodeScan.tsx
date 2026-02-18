@@ -6,7 +6,7 @@ import { GitHubFilterConfig } from './GitHubFilterConfig';
 import { ApifyCrossSearchService } from '../lib/apifyCrossSearchService';
 import { PRESET_PRODUCT_ENGINEERS } from '../lib/githubPresets';
 import { GitHubCandidatesCards } from './GitHubCandidatesCards';
-import { GitHubCandidatesPipeline } from './GitHubCandidatesPipeline';
+import { GitHubCandidatesPipeline } from '../SistemaGithub/components/GitHubCandidatesPipeline';
 import { GitHubCandidatesKanban } from './GitHubCandidatesKanban';
 import { GitHubSearchService } from '../lib/githubSearchService';
 import { GitHubCandidatePersistence } from '../lib/githubCandidatePersistence';
@@ -549,7 +549,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                                     candidates={candidates}
                                     formatNumber={formatNumber}
                                     getScoreBadgeColor={getScoreBadgeColor}
-                                    onViewCandidate={setSelectedCandidate}
+                                    campaignId={campaignId}
                                 />
                             </div>
                         ) : (

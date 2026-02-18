@@ -36,7 +36,12 @@ export const GitHubCandidatePersistence = {
                 analysis_psychological: candidate.analysis_psychological,
                 analysis_business: candidate.analysis_business,
                 analysis_sales_angle: candidate.analysis_sales_angle,
-                analysis_bottleneck: candidate.analysis_bottleneck
+                analysis_bottleneck: candidate.analysis_bottleneck,
+                
+                // Add outreach messages if they exist
+                outreach_icebreaker: candidate.outreach_icebreaker,
+                outreach_pitch: candidate.outreach_pitch,
+                outreach_followup: candidate.outreach_followup
             }));
 
             // Upsert - si existe con mismo github_username, actualizar; si no, insertar

@@ -391,7 +391,8 @@ export class GitHubService {
                 analysis_sales_angle: aiAnalysis?.analysis_sales_angle,
                 analysis_bottleneck: aiAnalysis?.analysis_bottleneck,
                 outreach_icebreaker: aiAnalysis?.outreach_icebreaker,
-                outreach_pitch: aiAnalysis?.outreach_pitch
+                outreach_pitch: aiAnalysis?.outreach_pitch,
+                outreach_followup: aiAnalysis?.outreach_followup
             };
 
             return metrics;
