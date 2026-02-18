@@ -8,6 +8,9 @@ import {
     EnrichmentOptions 
 } from '../lib/githubBatchContactEnricher';
 
+// Re-export EnrichmentResult for consumers
+export type { EnrichmentResult, EnrichmentProgress, EnrichmentOptions };
+
 interface GitHubContactEnricherProps {
     candidates: GitHubMetrics[];
     campaignId: string;

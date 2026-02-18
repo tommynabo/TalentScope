@@ -13,6 +13,8 @@ import { GitHubCandidatePersistence } from '../lib/githubCandidatePersistence';
 import { GitHubContactEnricher, EnrichmentResult } from './GitHubContactEnricher';
 import { GitHubProfileResearch } from './GitHubProfileResearch';
 import { supabase } from '../lib/supabase';
+import { UnbreakableExecutor } from '../lib/UnbreakableExecution';
+import { TabGuard } from '../lib/TabGuard';
 
 interface GitHubCodeScanProps {
     campaignId?: string;
@@ -37,6 +39,9 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         linkedinsFound: 0
     }); // Track enrichment stats
     const [selectedCandidate, setSelectedCandidate] = useState<GitHubMetrics | null>(null); // Selected candidate for deep research
+    
+    // Ref for Unbreakable Execution - survives tab changes
+    const executorRef = React.useRef<UnbreakableExecutor | null>(null);
 
     // Load Product Engineers preset and restore candidates from Supabase
     useEffect(() => {
@@ -113,8 +118,12 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
     };
 
     const handleStopSearch = () => {
+        if (executorRef.current) {
+            executorRef.current.stop('User stopped search');
+        }
         setLoading(false);
         setIsStoppable(false);
+        TabGuard.setSearchActive(false);
         handleLogMessage('🛑 Búsqueda detenida por el usuario');
     };
 
@@ -158,70 +167,90 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         setIsStoppable(true);
         setLogs([]);
         setShowLogs(true);
+        
+        // Mark search as active so tab can't be accidentally closed
+        TabGuard.setSearchActive(true);
 
-        try {
-            handleLogMessage('🔄 Loading existing candidates from Supabase...');
-            
-            // Search with campaign context - persistence happens automatically in githubService
-            const results = await githubService.searchDevelopers(
-                criteria,
-                maxResults,
-                handleLogMessage,
-                campaignId,  // Pass campaign context
-                userId       // Pass user context
-            );
+        // Create and store executor reference for later stop() calls
+        const executor = new UnbreakableExecutor(`github_search_${campaignId}`);
+        executorRef.current = executor;
 
-            handleLogMessage(`\n🔗 Syncing results...`);
-
-            // Get current candidates from localStorage as source of truth
-            const localStorageKey = `github_candidates_${campaignId}`;
-            let previousCandidates: GitHubMetrics[] = [];
-            
+        // Wrap entire search in Unbreakable Execution Mode
+        await executor.run(async () => {
             try {
-                const stored = localStorage.getItem(localStorageKey);
-                if (stored) {
-                    previousCandidates = JSON.parse(stored);
-                    handleLogMessage(`📦 Found ${previousCandidates.length} previous candidates in localStorage`);
+                handleLogMessage('🔄 Loading existing candidates from Supabase...');
+
+                // Search with campaign context - persistence happens automatically in githubService
+                const results = await githubService.searchDevelopers(
+                    criteria,
+                    maxResults,
+                    handleLogMessage,
+                    campaignId,  // Pass campaign context
+                    userId       // Pass user context
+                );
+
+                handleLogMessage(`\n🔗 Syncing results...`);
+
+                // Get current candidates from localStorage as source of truth
+                const localStorageKey = `github_candidates_${campaignId}`;
+                let previousCandidates: GitHubMetrics[] = [];
+
+                try {
+                    const stored = localStorage.getItem(localStorageKey);
+                    if (stored) {
+                        previousCandidates = JSON.parse(stored);
+                        handleLogMessage(`📦 Found ${previousCandidates.length} previous candidates in localStorage`);
+                    }
+                } catch (err) {
+                    console.warn('Failed to load from localStorage');
+                    handleLogMessage(`⚠️ Could not load previous candidates from storage`);
                 }
-            } catch (err) {
-                console.warn('Failed to load from localStorage');
-                handleLogMessage(`⚠️ Could not load previous candidates from storage`);
-            }
 
-            // Combine: previous + new, with deduplication by username
-            const allCandidates = [...previousCandidates];
-            let newCount = 0;
-            
-            for (const candidate of results) {
-                const exists = allCandidates.some(c => c.github_username.toLowerCase() === candidate.github_username.toLowerCase());
-                if (!exists) {
-                    allCandidates.push(candidate);
-                    newCount++;
+                // Combine: previous + new, with deduplication by username
+                const allCandidates = [...previousCandidates];
+                let newCount = 0;
+
+                for (const candidate of results) {
+                    const exists = allCandidates.some(c => c.github_username.toLowerCase() === candidate.github_username.toLowerCase());
+                    if (!exists) {
+                        allCandidates.push(candidate);
+                        newCount++;
+                    }
                 }
+
+                handleLogMessage(`✨ Found ${results.length} developers in GitHub search`);
+                handleLogMessage(`✅ Added ${newCount} new (${results.length - newCount} were duplicates)`);
+                handleLogMessage(`📊 Total accumulated: ${allCandidates.length} developers`);
+
+                // Save all to localStorage
+                localStorage.setItem(localStorageKey, JSON.stringify(allCandidates));
+                handleLogMessage(`💾 Synced ${allCandidates.length} candidates to localStorage`);
+
+                // Update state with all candidates
+                setCandidates([...allCandidates]); // Force new array reference to ensure re-render
+
+                if (allCandidates.length > 0) {
+                    handleLogMessage(`✅ Ready to view ${allCandidates.length} developers`);
+                }
+
+            } catch (error: any) {
+                if (error.message !== 'User stopped') {
+                    handleLogMessage(`❌ Error: ${error.message}`);
+                    console.error('Search error:', error);
+                }
+            } finally {
+                // Search complete - mark as inactive
+                TabGuard.setSearchActive(false);
+                setLoading(false);
+                setIsStoppable(false);
             }
-
-            handleLogMessage(`✨ Found ${results.length} developers in GitHub search`);
-            handleLogMessage(`✅ Added ${newCount} new (${results.length - newCount} were duplicates)`);
-            handleLogMessage(`📊 Total accumulated: ${allCandidates.length} developers`);
-
-            // Save all to localStorage
-            localStorage.setItem(localStorageKey, JSON.stringify(allCandidates));
-            handleLogMessage(`💾 Synced ${allCandidates.length} candidates to localStorage`);
-
-            // Update state with all candidates
-            setCandidates([...allCandidates]); // Force new array reference to ensure re-render
-            
-            if (allCandidates.length > 0) {
-                handleLogMessage(`✅ Ready to view ${allCandidates.length} developers`);
-            }
-
-        } catch (error: any) {
-            handleLogMessage(`❌ Error: ${error.message}`);
-            console.error('Search error:', error);
-        } finally {
+        }).catch(err => {
+            console.error('Unbreakable execution failed:', err);
+            handleLogMessage(`❌ Execution failed: ${err.message}`);
+            TabGuard.setSearchActive(false);
             setLoading(false);
             setIsStoppable(false);
-        }
+        });
     };
 
     const handleStartCrossSearch = async () => {

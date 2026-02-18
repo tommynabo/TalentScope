@@ -102,11 +102,21 @@ export class TabGuard {
     }
   };
 
+  /**
+   * Signal that a search is active (can't close/reload tab safely)
+   */
   static setSearchActive(active: boolean) {
     if (active) {
       sessionStorage.setItem('ts_active_search', 'true');
     } else {
       sessionStorage.removeItem('ts_active_search');
     }
+  }
+
+  /**
+   * Get current search status
+   */
+  static isSearchActive(): boolean {
+    return sessionStorage.getItem('ts_active_search') === 'true';
   }
 }
