@@ -214,6 +214,13 @@ export interface GitHubMetrics {
 
     // AI Research Data
     ai_summary?: string[]; // Bullet points analysis
+
+    // Deep Research 4-Card Analysis
+    analysis_psychological?: string;
+    analysis_business?: string;
+    analysis_sales_angle?: string;
+    analysis_bottleneck?: string;
+
     outreach_icebreaker?: string;
     outreach_pitch?: string;
 }
