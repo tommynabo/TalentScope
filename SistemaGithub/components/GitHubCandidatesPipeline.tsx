@@ -24,11 +24,27 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
     const [selectedCandidate, setSelectedCandidate] = useState<GitHubMetrics | null>(null);
     const [showModal, setShowModal] = useState(false);
     const [copiedField, setCopiedField] = useState<string | null>(null);
+    const [messageModalOpen, setMessageModalOpen] = useState(false);
+    const [editingMessage, setEditingMessage] = useState<{
+        type: 'icebreaker' | 'pitch' | 'followup';
+        value: string;
+    } | null>(null);
 
     const handleCopy = (text: string, fieldId: string) => {
         navigator.clipboard.writeText(text);
         setCopiedField(fieldId);
         setTimeout(() => setCopiedField(null), 2000);
+    };
+
+    const handleMessageEdit = (type: 'icebreaker' | 'pitch' | 'followup') => {
+        if (!selectedCandidate) return;
+        let value = '';
+        if (type === 'icebreaker') value = selectedCandidate.outreach_icebreaker || '';
+        if (type === 'pitch') value = selectedCandidate.outreach_pitch || '';
+        if (type === 'followup') value = 'Solo quería asegurarme de que viste mi mensaje anterior sobre...';
+
+        setEditingMessage({ type, value });
+        setMessageModalOpen(true);
     };
 
     const toggleSort = (field: SortField) => {
@@ -410,7 +426,7 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                                 </div>
                             </div>
 
-                            {/* Messages Section */}
+                                {/* Messages Section */}
                             <div className="border-t border-slate-800 pt-6">
                                 <div className="flex justify-between items-center mb-4">
                                     <h4 className="text-base font-bold text-white">Estrategia de Outreach</h4>
@@ -424,16 +440,25 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                                             </div>
                                             <span className="text-xs font-bold text-blue-400 uppercase">1. Invitación</span>
                                         </div>
-                                        <p className="text-slate-300 text-xs leading-relaxed flex-1 mb-4 italic">
+                                        <p className="text-slate-300 text-sm leading-relaxed flex-1 mb-4 line-clamp-4 hover:line-clamp-none">
                                             "{selectedCandidate.outreach_icebreaker || `Hola ${selectedCandidate.name || 'Antonio'}, impresionado con tu trabajo en ${selectedCandidate.most_used_language}...`}"
                                         </p>
-                                        <button
-                                            onClick={() => handleCopy(selectedCandidate.outreach_icebreaker || '', 'msg1')}
-                                            className="w-full py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition-colors flex items-center justify-center gap-2"
-                                        >
-                                            {copiedField === 'msg1' ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                                            Copiar
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleCopy(selectedCandidate.outreach_icebreaker || '', 'msg1')}
+                                                className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                {copiedField === 'msg1' ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                                                Copiar
+                                            </button>
+                                            <button
+                                                onClick={() => handleMessageEdit('icebreaker')}
+                                                className="flex-1 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg text-xs font-medium text-blue-400 transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Eye className="h-3 w-3" />
+                                                Ver/Editar
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Message 2 */}
@@ -444,16 +469,25 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                                             </div>
                                             <span className="text-xs font-bold text-emerald-400 uppercase">2. Post-Aceptación</span>
                                         </div>
-                                        <p className="text-slate-300 text-xs leading-relaxed flex-1 mb-4 italic">
+                                        <p className="text-slate-300 text-sm leading-relaxed flex-1 mb-4 line-clamp-4 hover:line-clamp-none">
                                             "{selectedCandidate.outreach_pitch || `Gracias por conectar. Me gustaría comentarte sobre un reto técnico en...`}"
                                         </p>
-                                        <button
-                                            onClick={() => handleCopy(selectedCandidate.outreach_pitch || '', 'msg2')}
-                                            className="w-full py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition-colors flex items-center justify-center gap-2"
-                                        >
-                                            {copiedField === 'msg2' ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                                            Copiar
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleCopy(selectedCandidate.outreach_pitch || '', 'msg2')}
+                                                className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                {copiedField === 'msg2' ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                                                Copiar
+                                            </button>
+                                            <button
+                                                onClick={() => handleMessageEdit('pitch')}
+                                                className="flex-1 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-xs font-medium text-emerald-400 transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Eye className="h-3 w-3" />
+                                                Ver/Editar
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Message 3 */}
@@ -464,19 +498,110 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                                             </div>
                                             <span className="text-xs font-bold text-purple-400 uppercase">3. Seguimiento</span>
                                         </div>
-                                        <p className="text-slate-300 text-xs leading-relaxed flex-1 mb-4 italic">
+                                        <p className="text-slate-300 text-sm leading-relaxed flex-1 mb-4 line-clamp-4 hover:line-clamp-none">
                                             "Solo quería asegurarme de que viste mi mensaje anterior sobre..."
                                         </p>
-                                        <button
-                                            onClick={() => handleCopy("Solo quería asegurarme de que viste mi mensaje anterior sobre...", 'msg3')}
-                                            className="w-full py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition-colors flex items-center justify-center gap-2"
-                                        >
-                                            {copiedField === 'msg3' ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                                            Copiar
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleCopy("Solo quería asegurarme de que viste mi mensaje anterior sobre...", 'msg3')}
+                                                className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                {copiedField === 'msg3' ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                                                Copiar
+                                            </button>
+                                            <button
+                                                onClick={() => handleMessageEdit('followup')}
+                                                className="flex-1 py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-lg text-xs font-medium text-purple-400 transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Eye className="h-3 w-3" />
+                                                Ver/Editar
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Message Modal - Expandible para ver/editar mensajes completos */}
+            {messageModalOpen && editingMessage && (
+                <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl p-8 max-w-2xl w-full my-8 shadow-2xl">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h3 className="text-2xl font-bold text-white">
+                                    {editingMessage.type === 'icebreaker' && '1️⃣ Mensaje de Invitación'}
+                                    {editingMessage.type === 'pitch' && '2️⃣ Mensaje Post-Aceptación'}
+                                    {editingMessage.type === 'followup' && '3️⃣ Mensaje de Seguimiento'}
+                                </h3>
+                                <p className="text-slate-400 text-sm mt-1">Ver y editar el mensaje completo para este candidato</p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setMessageModalOpen(false);
+                                    setEditingMessage(null);
+                                }}
+                                className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+                            >
+                                <X className="h-6 w-6 text-slate-400" />
+                            </button>
+                        </div>
+
+                        {/* Message Content */}
+                        <div className="mb-6 bg-slate-950 border border-slate-800 rounded-lg p-6">
+                            <textarea
+                                value={editingMessage.value}
+                                onChange={(e) =>
+                                    setEditingMessage({ ...editingMessage, value: e.target.value })
+                                }
+                                className="w-full h-64 bg-slate-900 border border-slate-700 rounded-lg p-4 text-slate-200 text-base leading-relaxed resize-none focus:outline-none focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20"
+                                placeholder="Escribe o edita el mensaje aquí..."
+                            />
+                            <p className="text-xs text-slate-500 mt-3">
+                                {editingMessage.value.length} caracteres
+                            </p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => {
+                                    handleCopy(editingMessage.value, 'modal-copy');
+                                    setTimeout(() => setCopiedField(null), 2000);
+                                }}
+                                className="flex-1 py-3 bg-green-600/20 hover:bg-green-600/30 border border-green-600/50 rounded-lg text-green-400 font-semibold transition-colors flex items-center justify-center gap-2"
+                            >
+                                {copiedField === 'modal-copy' ? (
+                                    <>
+                                        <Check className="h-4 w-4" />
+                                        ¡Copiado!
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy className="h-4 w-4" />
+                                        Copiar Mensaje
+                                    </>
+                                )}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setMessageModalOpen(false);
+                                    setEditingMessage(null);
+                                }}
+                                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 font-semibold transition-colors"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+
+                        {/* Info */}
+                        <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                            <p className="text-blue-400 text-sm">
+                                💡 <strong>Tip:</strong> Puedes editar el mensaje directamente aquí. Haz clic en "Copiar Mensaje" cuando esté listo.
+                            </p>
                         </div>
                     </div>
                 </div>
