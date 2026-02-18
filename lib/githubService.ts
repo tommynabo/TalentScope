@@ -47,7 +47,7 @@ export class GitHubService {
         try {
             onLog('🔍 Starting GitHub developer search...');
             onLog(`📋 Token configured: ${this.octokit ? 'YES ✅' : 'NO (public API)'}`);
-            
+
             if (!this.octokit) {
                 onLog('⚠️ No GitHub token. Using public API (60 req/hour limit). Results may be limited.');
                 this.octokit = new Octokit();
@@ -155,7 +155,7 @@ export class GitHubService {
                     try {
                         onLog(`  📊 [${candidatesFoundInSearch + 1}/${maxResults}] Analyzing @${user.login}...`);
                         const metrics = await this.analyzeUser(user.login, criteria, onLog);
-                        
+
                         if (metrics) {
                             // Check for duplicates before adding
                             if (githubDeduplicationService.isDuplicate(
@@ -214,7 +214,7 @@ export class GitHubService {
             onLog(`\n🎉 Search complete!`);
             onLog(`✅ Found: ${candidates.length} qualified developers`);
             onLog(`📊 Analyzed: ${totalUsersAnalyzed} users, Skipped: ${totalUsersSkipped}`);
-            
+
             return candidates;
 
         } catch (error: any) {
@@ -288,7 +288,7 @@ export class GitHubService {
 
             // 9. Detect languages
             const languages = this.detectLanguages(topRepos);
-            
+
             // Check language match
             if (criteria.languages.length > 0) {
                 const hasMatchingLanguage = languages.some(lang =>
@@ -326,17 +326,45 @@ export class GitHubService {
             // Search for LinkedIn and additional contact info
             onLog(`  🔗 Searching for contact info...`);
             const contactInfo = await githubContactService.findContactInfo(username, topRepos);
-            
+
             if (contactInfo.email) {
                 onLog(`  ✅ Found email: ${contactInfo.email}`);
             } else {
                 onLog(`  ⚠️ No email found in commits, gists, or events`);
             }
-            
+
             if (contactInfo.linkedin) {
                 onLog(`  ✅ Found LinkedIn: ${contactInfo.linkedin}`);
             } else {
                 onLog(`  ⚠️ No LinkedIn profile found in bio or repositories`);
+            }
+
+            // 12. Generar análisis AI (Solo si pasa el filtro de calidad)
+            let aiAnalysis = null;
+            if (scoreBreakdown.normalized >= (criteria.score_threshold || 60)) {
+                onLog(`  🤖 Generating AI analysis...`);
+                try {
+                    // Import dinámico para evitar dependencias circulares si las hubiera
+                    const { generateCandidateAnalysis } = await import('./openai');
+
+                    const profileData = {
+                        name: user.name,
+                        username: user.login,
+                        bio: user.bio,
+                        languages: languages.slice(0, 5),
+                        topRepos: topRepos.slice(0, 5).map(r => ({
+                            name: r.name,
+                            description: r.description
+                        }))
+                    };
+
+                    aiAnalysis = await generateCandidateAnalysis(profileData);
+                    if (aiAnalysis) {
+                        onLog(`  ✅ AI Analysis generated successfully`);
+                    }
+                } catch (err) {
+                    onLog(`  ⚠️ Failed to generate AI analysis: ${err}`);
+                }
             }
 
             const linkedinUrl = contactInfo.linkedin;
@@ -368,7 +396,16 @@ export class GitHubService {
                 personal_website: websiteUrl || null,
                 linkedin_url: linkedinUrl || null,
                 github_score: scoreBreakdown.normalized,
-                score_breakdown: scoreBreakdown
+                score_breakdown: scoreBreakdown,
+
+                // AI Analysis Data
+                ai_summary: aiAnalysis?.ai_summary,
+                analysis_psychological: aiAnalysis?.analysis_psychological,
+                analysis_business: aiAnalysis?.analysis_business,
+                analysis_sales_angle: aiAnalysis?.analysis_sales_angle,
+                analysis_bottleneck: aiAnalysis?.analysis_bottleneck,
+                outreach_icebreaker: aiAnalysis?.outreach_icebreaker,
+                outreach_pitch: aiAnalysis?.outreach_pitch
             };
 
             return metrics;
@@ -415,7 +452,7 @@ export class GitHubService {
                     });
 
                     const content = Buffer.from(readmeResponse.data.content, 'base64').toString();
-                    
+
                     for (const keyword of APP_STORE_KEYWORDS) {
                         if (content.toLowerCase().includes(keyword)) {
                             // Extract URL

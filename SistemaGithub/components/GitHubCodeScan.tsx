@@ -35,15 +35,15 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
     // Load Product Engineers preset and restore candidates from Supabase
     useEffect(() => {
         setCriteria(PRESET_PRODUCT_ENGINEERS);
-        
+
         // Load previous logs from localStorage (persists across tab changes)
         loadPersistentLogs();
-        
+
         // Get current user and load candidates from SUPABASE or Memory
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session?.user?.id) {
                 setUserId(session.user.id);
-                
+
                 // Load from Supabase if campaign context available
                 if (campaignId) {
                     // Try to load from Supabase
@@ -204,7 +204,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         await executor.run(async () => {
             try {
                 handleLogMessage('🔄 Loading existing candidates from Supabase...');
-                
+
                 // Search with campaign context - persistence happens automatically in githubService
                 const results = await githubService.searchDevelopers(
                     criteria,
@@ -219,7 +219,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                 // Get current candidates from localStorage as source of truth
                 const localStorageKey = `github_candidates_${campaignId}`;
                 let previousCandidates: GitHubMetrics[] = [];
-                
+
                 try {
                     const stored = localStorage.getItem(localStorageKey);
                     if (stored) {
@@ -234,7 +234,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                 // Combine: previous + new, with deduplication by username
                 const allCandidates = [...previousCandidates];
                 let newCount = 0;
-                
+
                 for (const candidate of results) {
                     const exists = allCandidates.some(c => c.github_username.toLowerCase() === candidate.github_username.toLowerCase());
                     if (!exists) {
@@ -253,7 +253,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
 
                 // Update state with all candidates
                 setCandidates([...allCandidates]); // Force new array reference to ensure re-render
-                
+
                 if (allCandidates.length > 0) {
                     handleLogMessage(`✅ Ready to view ${allCandidates.length} developers`);
                 }
@@ -347,18 +347,23 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                 </div>
             )}
 
-            {criteria && !showFilterConfig && (
+            {criteria && (
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
-                    <div>
-                        <h3 className="text-lg font-semibold text-white mb-2">Criterios Configurados</h3>
-                        <p className="text-slate-400 text-sm">
-                            {criteria.languages.join(', ')} • Score ≥ {criteria.score_threshold} • 
-                            {criteria.require_app_store_link ? ' App Store Required' : ' Any App Type'}
-                        </p>
-                    </div>
+                    {!showFilterConfig ? (
+                        <div>
+                            <h3 className="text-lg font-semibold text-white mb-2">Criterios Configurados</h3>
+                            <p className="text-slate-400 text-sm">
+                                {criteria.languages.join(', ')} • Score ≥ {criteria.score_threshold} •
+                                {criteria.require_app_store_link ? ' App Store Required' : ' Any App Type'}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="text-orange-400 font-medium pb-2">Editando filtros...</div>
+                    )}
+
                     <div className="flex flex-wrap gap-3 items-center pt-2">
                         <div className="flex items-center gap-2">
-                            <label className="text-sm font-medium text-slate-300">Límite de búsqueda:</label>
+                            <label className="text-sm font-medium text-slate-300">Límite:</label>
                             <input
                                 type="number"
                                 value={maxResults}
@@ -387,12 +392,15 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                                 Iniciar Búsqueda
                             </button>
                         )}
-                        <button
-                            onClick={() => setShowFilterConfig(true)}
-                            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300"
-                        >
-                            Editar
-                        </button>
+
+                        {!loading && (
+                            <button
+                                onClick={() => setShowFilterConfig(!showFilterConfig)}
+                                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300"
+                            >
+                                {showFilterConfig ? 'Cerrar' : 'Editar'}
+                            </button>
+                        )}
                     </div>
                 </div>
             )}
@@ -458,7 +466,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
                                     <Columns3 className="h-4 w-4" />
                                 </button>
                             </div>
-                            
+
                             {/* View Full Pipeline Button */}
                             {candidates.length > 0 && (
                                 <button

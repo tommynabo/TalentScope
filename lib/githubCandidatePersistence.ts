@@ -29,8 +29,14 @@ export const GitHubCandidatePersistence = {
                 email: candidate.mentioned_email,
                 linkedin_url: candidate.linkedin_url,
                 score: candidate.github_score,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
+                // created_at: Let Supabase handle default or preserve existing
+                updated_at: new Date().toISOString(),
+
+                // Add AI fields if they exist in metrics
+                analysis_psychological: candidate.analysis_psychological,
+                analysis_business: candidate.analysis_business,
+                analysis_sales_angle: candidate.analysis_sales_angle,
+                analysis_bottleneck: candidate.analysis_bottleneck
             }));
 
             // Upsert - si existe con mismo github_username, actualizar; si no, insertar
