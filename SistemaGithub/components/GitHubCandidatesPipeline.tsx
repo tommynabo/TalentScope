@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { GitHubMetrics } from '../../types/database';
-import { ChevronUp, ChevronDown, ExternalLink, Trophy, Eye, X, Copy, Check, Calendar, Linkedin, Mail, BrainCircuit, Target, TrendingUp, AlertTriangle, Zap, MessageSquare, Send } from 'lucide-react';
+import { ChevronUp, ChevronDown, ExternalLink, Trophy, Eye, X, Copy, Check, Calendar, Linkedin, Mail, BrainCircuit, Target, TrendingUp, AlertTriangle, Zap, MessageSquare, Send, Save, Loader } from 'lucide-react';
+import { GitHubCandidatePersistence } from '../../lib/githubCandidatePersistence';
 
 interface GitHubCandidatesPipelineProps {
     candidates: GitHubMetrics[];
     formatNumber: (num: number) => string;
     getScoreBadgeColor: (score: number) => string;
+    campaignId?: string;
 }
 
 type SortField = 'github_username' | 'github_score' | 'followers' | 'public_repos' | 'total_contributions';
@@ -14,7 +16,8 @@ type SortDirection = 'asc' | 'desc';
 export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> = ({
     candidates,
     formatNumber,
-    getScoreBadgeColor
+    getScoreBadgeColor,
+    campaignId
 }) => {
     const [sortConfig, setSortConfig] = useState<{ field: SortField; direction: SortDirection }>({
         field: 'github_score',
@@ -29,6 +32,8 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
         type: 'icebreaker' | 'pitch' | 'followup';
         value: string;
     } | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
     const handleCopy = (text: string, fieldId: string) => {
         navigator.clipboard.writeText(text);
@@ -41,10 +46,53 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
         let value = '';
         if (type === 'icebreaker') value = selectedCandidate.outreach_icebreaker || '';
         if (type === 'pitch') value = selectedCandidate.outreach_pitch || '';
-        if (type === 'followup') value = 'Solo quería asegurarme de que viste mi mensaje anterior sobre...';
+        if (type === 'followup') value = selectedCandidate.outreach_followup || 'Solo quería asegurarme de que viste mi mensaje anterior sobre...';
 
         setEditingMessage({ type, value });
         setMessageModalOpen(true);
+    };
+
+    const handleSaveMessage = async () => {
+        if (!editingMessage || !selectedCandidate || !campaignId) return;
+
+        setIsSaving(true);
+        setSaveStatus('saving');
+
+        try {
+            const messagesToSave: any = {
+                [editingMessage.type === 'icebreaker' ? 'outreach_icebreaker' : 
+                 editingMessage.type === 'pitch' ? 'outreach_pitch' : 
+                 'outreach_followup']: editingMessage.value
+            };
+
+            const success = await GitHubCandidatePersistence.saveOutreachMessages(
+                campaignId,
+                selectedCandidate.github_username,
+                messagesToSave
+            );
+
+            if (success) {
+                setSaveStatus('saved');
+                // Update local candidate state
+                if (editingMessage.type === 'icebreaker') {
+                    selectedCandidate.outreach_icebreaker = editingMessage.value;
+                } else if (editingMessage.type === 'pitch') {
+                    selectedCandidate.outreach_pitch = editingMessage.value;
+                } else {
+                    selectedCandidate.outreach_followup = editingMessage.value;
+                }
+                setTimeout(() => setSaveStatus('idle'), 2000);
+            } else {
+                setSaveStatus('error');
+                setTimeout(() => setSaveStatus('idle'), 3000);
+            }
+        } catch (err) {
+            console.error('Error saving message:', err);
+            setSaveStatus('error');
+            setTimeout(() => setSaveStatus('idle'), 3000);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const toggleSort = (field: SortField) => {
@@ -499,11 +547,11 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                                             <span className="text-xs font-bold text-purple-400 uppercase">3. Seguimiento</span>
                                         </div>
                                         <p className="text-slate-300 text-sm leading-relaxed flex-1 mb-4 line-clamp-4 hover:line-clamp-none">
-                                            "Solo quería asegurarme de que viste mi mensaje anterior sobre..."
+                                            "{selectedCandidate.outreach_followup || 'Solo quería asegurarme de que viste mi mensaje anterior sobre...'}"
                                         </p>
                                         <div className="flex gap-2">
                                             <button
-                                                onClick={() => handleCopy("Solo quería asegurarme de que viste mi mensaje anterior sobre...", 'msg3')}
+                                                onClick={() => handleCopy(selectedCandidate.outreach_followup || "Solo quería asegurarme de que viste mi mensaje anterior sobre...", 'msg3')}
                                                 className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-lg text-xs font-medium text-slate-300 hover:text-white transition-colors flex items-center justify-center gap-2"
                                             >
                                                 {copiedField === 'msg3' ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
@@ -586,6 +634,43 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                                     </>
                                 )}
                             </button>
+
+                            {campaignId && (
+                                <button
+                                    onClick={handleSaveMessage}
+                                    disabled={isSaving}
+                                    className={`flex-1 py-3 rounded-lg text-white font-semibold transition-colors flex items-center justify-center gap-2 border ${
+                                        saveStatus === 'saved'
+                                            ? 'bg-green-600/30 border-green-600/50'
+                                            : saveStatus === 'error'
+                                            ? 'bg-red-600/30 border-red-600/50'
+                                            : 'bg-orange-600/20 hover:bg-orange-600/30 border-orange-600/50'
+                                    }`}
+                                >
+                                    {isSaving ? (
+                                        <>
+                                            <Loader className="h-4 w-4 animate-spin" />
+                                            Guardando...
+                                        </>
+                                    ) : saveStatus === 'saved' ? (
+                                        <>
+                                            <Check className="h-4 w-4" />
+                                            ¡Guardado!
+                                        </>
+                                    ) : saveStatus === 'error' ? (
+                                        <>
+                                            <X className="h-4 w-4" />
+                                            Error
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save className="h-4 w-4" />
+                                            Guardar Cambios
+                                        </>
+                                    )}
+                                </button>
+                            )}
+
                             <button
                                 onClick={() => {
                                     setMessageModalOpen(false);

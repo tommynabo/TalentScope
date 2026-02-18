@@ -36,6 +36,11 @@ CREATE TABLE public.github_candidates (
     analysis_sales_angle TEXT,
     analysis_bottleneck TEXT,
     
+    -- Outreach Messages (AI-generated, can be edited by user)
+    outreach_icebreaker TEXT,
+    outreach_pitch TEXT,
+    outreach_followup TEXT,
+    
     -- Timestamps (when discovered globally, not per campaign)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

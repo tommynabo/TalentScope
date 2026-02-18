@@ -284,5 +284,50 @@ export const GitHubCandidatePersistence = {
             console.error('Error in countCandidates:', err);
             return 0;
         }
+    },
+
+    /**
+     * Guardar mensajes de outreach editados para un candidato
+     */
+    async saveOutreachMessages(
+        campaignId: string,
+        githubUsername: string,
+        messages: {
+            outreach_icebreaker?: string;
+            outreach_pitch?: string;
+            outreach_followup?: string;
+        }
+    ): Promise<boolean> {
+        try {
+            const updateData: any = {
+                updated_at: new Date().toISOString()
+            };
+
+            if (messages.outreach_icebreaker !== undefined) {
+                updateData.outreach_icebreaker = messages.outreach_icebreaker;
+            }
+            if (messages.outreach_pitch !== undefined) {
+                updateData.outreach_pitch = messages.outreach_pitch;
+            }
+            if (messages.outreach_followup !== undefined) {
+                updateData.outreach_followup = messages.outreach_followup;
+            }
+
+            const { error } = await supabase
+                .from('github_search_results')
+                .update(updateData)
+                .eq('campaign_id', campaignId)
+                .eq('github_username', githubUsername);
+
+            if (error) {
+                console.error('Error saving outreach messages:', error);
+                return false;
+            }
+
+            return true;
+        } catch (err) {
+            console.error('Error in saveOutreachMessages:', err);
+            return false;
+        }
     }
 };

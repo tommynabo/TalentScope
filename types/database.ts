@@ -272,6 +272,11 @@ export interface GitHubCandidateProfile {
     analysis_sales_angle: string | null;
     analysis_bottleneck: string | null;
     
+    // Outreach Messages (AI-generated, user can edit)
+    outreach_icebreaker: string | null;
+    outreach_pitch: string | null;
+    outreach_followup: string | null;
+    
     // Timestamps
     created_at: string; // When discovered globally
     updated_at: string;

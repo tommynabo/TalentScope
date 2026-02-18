@@ -71,6 +71,7 @@ export const generateCandidateAnalysis = async (profileData: any): Promise<any> 
             - All output must be in SPANISH (Español).
             - Ensure ALL sentences are grammatically COMPLETE. Do not cut off sentences.
             - Be professional, sharp, and insightful.
+            - Outreach messages must be PERSONALIZED and SHORT (max 1-2 sentences each).
             
             Return PRECISELY this JSON structure:
             {
@@ -78,8 +79,9 @@ export const generateCandidateAnalysis = async (profileData: any): Promise<any> 
                 "analysis_business": "1 complete sentence on career momentum.",
                 "analysis_sales_angle": "1 complete sentence hook.",
                 "analysis_bottleneck": "1 complete sentence on potential rejection reason.",
-                "outreach_icebreaker": "A hyper-personalized 1-sentence opening message referencing specific repos.",
-                "outreach_pitch": "A 1-sentence value proposition.",
+                "outreach_icebreaker": "A hyper-personalized opening message referencing specific projects or skills. Start with 'Hola [name],' or similar. Max 2 sentences.",
+                "outreach_pitch": "A value proposition pitch explaining why this opportunity fits THEM. Mention tech stack or specific challenge. Max 1-2 sentences.",
+                "outreach_followup": "A soft follow-up message saying you wanted to touch base about opportunity. Max 1 sentence.",
                 "ai_summary": ["Bullet 1 (Strength)", "Bullet 2 (Achievement)", "Bullet 3 (Risk/Oddity)"]
             }
         `;
