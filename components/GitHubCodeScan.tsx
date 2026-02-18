@@ -184,7 +184,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         console.log(`✅ Contact enrichment complete: ${emailsFound} emails, ${linkedinsFound} LinkedIn URLs`);
     };
 
-    const handleStartSearch = async () => {
+    const handleStartSearch = () => {
         if (!criteria) {
             alert('Please configure filter criteria first');
             return;
@@ -207,8 +207,8 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
         const executor = new UnbreakableExecutor(`github_search_${campaignId}`);
         executorRef.current = executor;
 
-        // Run the search in background (NOT awaited - allows executor to run independently)
-        // This is key: don't await, let executor manage its own lifecycle
+        // ✅ KEY FIX: Don't await, let executor run independently
+        // This fires immediately and returns
         executor.run(async () => {
             try {
                 handleLogMessage('🔄 Loading existing candidates from Supabase...');
@@ -285,9 +285,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
             setIsStoppable(false);
         });
         
-        // DON'T AWAIT - let executor run in background
-        // Return immediately so UI isn't blocked
-        return;
+        // ✅ Return immediately - executor runs in background
     };
 
     const handleStartCrossSearch = async () => {
