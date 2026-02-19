@@ -6,6 +6,14 @@ export { RaidCandidatesList } from './components/RaidCandidatesList';
 export { MarketplaceSearchAndFilters } from './components/MarketplaceSearchAndFilters';
 export { MarketplaceCandidatesList } from './components/MarketplaceCandidatesList';
 
+// Campaign System Components
+export { CampaignDashboard } from './components/CampaignDashboard';
+export { CampaignsList } from './components/CampaignsList';
+export { CreateCampaignModal } from './components/CreateCampaignModal';
+export { KanbanBoard } from './components/KanbanBoard';
+export { PipelineList } from './components/PipelineList';
+export { ManualEnrichmentModal } from './components/ManualEnrichmentModal';
+
 export { MarketplaceRaidService } from './services/marketplaceRaidService';
 export { ApifyService } from './services/apifyService';
 export { ClayEnrichmentService } from './services/clayEnrichmentService';
@@ -24,3 +32,11 @@ export type {
   OutreachRecord,
   FreelancePlatform,
 } from './types/marketplace';
+
+export type {
+  Campaign,
+  EnrichedCandidateInCampaign,
+  CampaignStats,
+  UpworkSearchTerms,
+  FiverrSearchTerms,
+} from './types/campaigns';
