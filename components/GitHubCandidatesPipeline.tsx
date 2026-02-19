@@ -9,39 +9,44 @@ interface GitHubCandidatesPipelineProps {
     onViewCandidate?: (candidate: GitHubMetrics) => void;
 }
 
-const getTimeGroupLabel = (dateString: string): string => {
-    const date = new Date(dateString);
+/**
+ * Returns a user-friendly label for a date key (YYYY-MM-DD).
+ * - Today → "Hoy"
+ * - Any other day → full date like "17 de febrero"
+ */
+const getTimeGroupLabel = (dateKey: string): string => {
+    const [year, month, day] = dateKey.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
     const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
 
-    if (date.toDateString() === today.toDateString()) {
+    // Compare only year/month/day (ignore time)
+    if (
+        date.getFullYear() === today.getFullYear() &&
+        date.getMonth() === today.getMonth() &&
+        date.getDate() === today.getDate()
+    ) {
         return 'Hoy';
-    } else if (date.toDateString() === yesterday.toDateString()) {
-        return 'Ayer';
-    } else {
-        return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
     }
+
+    // All other days: show concrete date (e.g. "17 de febrero")
+    return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
 };
-const getTimeGroupLabel = (dateString: string): string => {
-    const date = new Date(dateString);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
 
-    if (date.toDateString() === today.toDateString()) {
-        return 'Hoy';
-    } else if (date.toDateString() === yesterday.toDateString()) {
-        return 'Ayer';
-    } else {
-        return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
-    }
+/**
+ * Converts a date string to a stable YYYY-MM-DD key for grouping.
+ */
+const toDateKey = (dateString: string): string => {
+    const d = new Date(dateString);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 };
 
 const detectDeveloperRole = (metrics: GitHubMetrics): string => {
     const lang = metrics.most_used_language || 'Developer';
     if (!lang) return 'Developer';
-    
+
     const lower = lang.toLowerCase();
     if (['react', 'typescript', 'javascript', 'vue'].some(t => lower.includes(t))) {
         return 'Frontend Engineer';
@@ -68,20 +73,26 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
     getScoreBadgeColor,
     onViewCandidate
 }) => {
-    // Group candidates by date (newest first)
-    const candidatesByDate = candidates.reduce((groups, candidate) => {
-        const date = new Date(candidate.created_at).toDateString();
-        if (!groups[date]) {
-            groups[date] = [];
+    // 1. Sort ALL candidates by date descending (newest first), then by score descending
+    const sortedCandidates = [...candidates].sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        if (dateB !== dateA) return dateB - dateA;
+        return (b.github_score || 0) - (a.github_score || 0);
+    });
+
+    // 2. Group by stable YYYY-MM-DD key (prevents duplicate groups)
+    const candidatesByDate = sortedCandidates.reduce((groups, candidate) => {
+        const key = toDateKey(candidate.created_at);
+        if (!groups[key]) {
+            groups[key] = [];
         }
-        groups[date].push(candidate);
+        groups[key].push(candidate);
         return groups;
     }, {} as Record<string, GitHubMetrics[]>);
 
-    // Sort dates (newest first)
-    const sortedDates = Object.keys(candidatesByDate).sort(
-        (a, b) => new Date(b).getTime() - new Date(a).getTime()
-    );
+    // 3. Sort date keys descending (newest first) — "2026-02-19" > "2026-02-17"
+    const sortedDates = Object.keys(candidatesByDate).sort((a, b) => b.localeCompare(a));
 
     if (candidates.length === 0) {
         return (
@@ -94,7 +105,6 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
     return (
         <div className="space-y-6">
             {sortedDates.map((dateStr) => {
-                const date = new Date(dateStr);
                 const dayLeads = candidatesByDate[dateStr];
                 const label = getTimeGroupLabel(dateStr);
 
