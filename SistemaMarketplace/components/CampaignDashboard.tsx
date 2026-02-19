@@ -239,13 +239,20 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       }
 
       const scrapedCount = raidAfterScraping.scrapedCandidates.length;
-      const isRealScrape = connections.apify;
-      setLogs(prev => [...prev, `${isRealScrape ? '🎯' : '📌'} Scraping completado: ${scrapedCount} ${isRealScrape ? 'candidatos REALES' : 'candidatos SIMULADOS'} encontrados`]);
       
-      // Show source
-      if (!isRealScrape) {
-        setLogs(prev => [...prev, `⚠️ Nota: Los datos son simulados porque Apify no está conectado`]);
+      // Check if we actually got candidates
+      if (scrapedCount === 0) {
+        setLogs(prev => [...prev, `❌ No se encontraron candidatos`]);
+        setLogs(prev => [...prev, `⚠️ MOTIVOS POSIBLES:`]);
+        setLogs(prev => [...prev, `   1. Los Actor IDs de Apify no están configurados correctamente`]);
+        setLogs(prev => [...prev, `   2. La API key de Apify no tiene permisos o créditos`]);
+        setLogs(prev => [...prev, `   3. El actor especificado no existe en tu cuenta de Apify`]);
+        setLogs(prev => [...prev, `📋 SOLUCIÓN: Ve a https://apify.com/store, busca "Fiverr" o "Upwork", y actualiza los Actor IDs en apifyService.ts`]);
+        setSearching(false);
+        return;
       }
+      
+      setLogs(prev => [...prev, `🎯 Scraping completado: ${scrapedCount} candidatos REALES encontrados de ${campaign.platform}`]);
       
       setLogs(prev => [...prev, `📊 FASE 2: Enriquecimiento de datos con IA...`]);
 
@@ -289,9 +296,9 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
 
       onUpdateCampaign({ ...campaign, candidates: updatedCandidates, stats });
 
-      setLogs(prev => [...prev, `✅ ${newCandidates.length} candidatos añadidos al pipeline`]);
-      setLogs(prev => [...prev, `${isRealScrape && isRealEnrichment ? '🚀' : '⚙️'} Búsqueda COMPLETADA${isRealScrape && isRealEnrichment ? ' - DATOS 100% REALES' : ' - ALGUNOS DATOS SIMULADOS'}`]);
-      setToast({ show: true, message: `✅ ${newCandidates.length} nuevos candidatos añadidos` });
+      setLogs(prev => [...prev, `✅ ${newCandidates.length} candidatos REALES añadidos al pipeline exitosamente`]);
+      setLogs(prev => [...prev, `🚀 Búsqueda completada con éxito`]);
+      setToast({ show: true, message: `✅ ${newCandidates.length} nuevos candidatos REALES añadidos` });
     } catch (error) {
       console.error('Search error:', error);
       setLogs(prev => [...prev, `❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`]);
@@ -299,6 +306,32 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
     } finally {
       setSearching(false);
     }
+  };
+
+  // ─── Clear all candidates ──────────────────────────────────────────────
+  const handleClearAllCandidates = () => {
+    if (campaign.candidates.length === 0) {
+      setToast({ show: true, message: 'No hay candidatos para limpiar' });
+      return;
+    }
+    
+    if (!confirm(`⚠️ ¿Seguro de que quieres BORRAR todos los ${campaign.candidates.length} candidatos? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    const stats = {
+      total: 0,
+      inTodo: 0,
+      inContacted: 0,
+      inReplied: 0,
+      inRejected: 0,
+      inHired: 0,
+      contactRate: 0,
+      responseRate: 0,
+    };
+
+    onUpdateCampaign({ ...campaign, candidates: [], stats });
+    setToast({ show: true, message: `✅ ${campaign.candidates.length} candidatos borrados` });
   };
 
   const handleStopSearch = () => {

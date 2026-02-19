@@ -4,11 +4,15 @@ export class ApifyService {
   private apiKey: string;
   private baseUrl = 'https://api.apify.com/v2';
   
-  // Apify Actor IDs for real scraping
+  // ⚠️ CRITICAL: Update these Actor IDs with the actual ones from your Apify account
+  // Go to: https://apify.com/store and search for "Fiverr" or "Upwork"
+  // Copy the EXACT Actor ID of a working scraper and paste it below
   private actors = {
-    upwork: 'VG1L6L4E9X4K4', // Upwork Freelancers Scraper
-    fiverr: 'TJ16L3EXMM9S2', // Fiverr Sellers Scraper
-    googleSearch: 'google-search-results-scraper', // Generic search as fallback
+    // TODO: Find the correct Fiverr actor in your Apify store and replace this
+    fiverr: 'CONFIGURE_APIFY_FIVERR_ACTOR_ID', 
+    
+    // TODO: Find the correct Upwork actor in your Apify store and replace this  
+    upwork: 'CONFIGURE_APIFY_UPWORK_ACTOR_ID',
   };
 
   constructor(apiKey: string) {
@@ -31,31 +35,29 @@ export class ApifyService {
 
   async scrapeUpwork(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
     if (!this.apiKey || this.apiKey === 'mock') {
-      console.warn('⚠️ No valid Apify key - returning mock data');
-      return this.generateMockCandidates(filter, 'Upwork');
+      console.error('❌ ERROR: No valid Apify key - cannot scrape');
+      return []; // Return empty array - NO MOCK DATA
     }
 
     try {
       return await this.runUpworkActor(filter);
     } catch (error) {
-      console.error('Upwork scraping error:', error);
-      console.warn('⚠️ Falling back to mock data');
-      return this.generateMockCandidates(filter, 'Upwork');
+      console.error('❌ Upwork scraping error:', error);
+      return []; // Return empty - NO FALLBACK TO MOCK
     }
   }
 
   async scrapeFiverr(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
     if (!this.apiKey || this.apiKey === 'mock') {
-      console.warn('⚠️ No valid Apify key - returning mock data');
-      return this.generateMockCandidates(filter, 'Fiverr');
+      console.error('❌ ERROR: No valid Apify key - cannot scrape');
+      return []; // Return empty array - NO MOCK DATA
     }
 
     try {
       return await this.runFiverrActor(filter);
     } catch (error) {
-      console.error('Fiverr scraping error:', error);
-      console.warn('⚠️ Falling back to mock data');
-      return this.generateMockCandidates(filter, 'Fiverr');
+      console.error('❌ Fiverr scraping error:', error);
+      return []; // Return empty - NO FALLBACK TO MOCK
     }
   }
 
