@@ -158,7 +158,7 @@ const App: React.FC = () => {
 
         {/* Scrollable Content Area with Responsive Padding */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden w-full flex justify-center">
-          <div className="w-full max-w-[1600px] min-h-full px-2 sm:px-3 md:px-4 lg:px-6 xl:px-8 py-3 md:py-4">
+          <div className="w-full max-w-[95%] min-h-full px-2 sm:px-3 md:px-4 lg:px-6 xl:px-8 py-3 md:py-4">
             <Routes>
               {/* Redirect root to dashboard since we are already authenticated */}
               <Route path="/" element={<Navigate to="/dashboard" replace />} />

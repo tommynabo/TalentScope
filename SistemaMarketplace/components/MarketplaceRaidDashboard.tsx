@@ -76,7 +76,7 @@ export const MarketplaceRaidDashboard: React.FC<MarketplaceRaidDashboardProps> =
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
           {campaigns.map((campaign) => (
             <div
               key={campaign.id}
@@ -92,8 +92,8 @@ export const MarketplaceRaidDashboard: React.FC<MarketplaceRaidDashboardProps> =
                     {campaign.platform}
                   </span>
                   <div className={`px-3 py-1 rounded-full text-xs font-medium border ${campaign.status === 'active' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' :
-                      campaign.status === 'paused' ? 'bg-yellow-950/30 text-yellow-400 border-yellow-900/50' :
-                        'bg-slate-800 text-slate-400 border-slate-700'
+                    campaign.status === 'paused' ? 'bg-yellow-950/30 text-yellow-400 border-yellow-900/50' :
+                      'bg-slate-800 text-slate-400 border-slate-700'
                     }`}>
                     {campaign.status === 'active' ? 'ACTIVA' : campaign.status === 'paused' ? 'PAUSA' : 'COMPLETADA'}
                   </div>
