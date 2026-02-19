@@ -17,8 +17,8 @@ export class MarketplaceRaidService {
   }
 
   static getInstance(
-    apifyKey: string = 'mock',
-    openaiKey: string = 'mock'
+    apifyKey: string = '',
+    openaiKey: string = ''
   ): MarketplaceRaidService {
     if (!MarketplaceRaidService.instance) {
       MarketplaceRaidService.instance = new MarketplaceRaidService(

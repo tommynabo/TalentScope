@@ -3,14 +3,14 @@ import { ScrapingFilter, ScrapedCandidate, FreelancePlatform } from '../types/ma
 export class ApifyService {
   private apiKey: string;
   private baseUrl = 'https://api.apify.com/v2';
-  
+
   // ⚠️ CRITICAL: Update these Actor IDs with the actual ones from your Apify account
   // Go to: https://apify.com/store and search for "Fiverr" or "Upwork"
   // Copy the EXACT Actor ID of a working scraper and paste it below
   private actors = {
     // TODO: Find the correct Fiverr actor in your Apify store and replace this
-    fiverr: 'CONFIGURE_APIFY_FIVERR_ACTOR_ID', 
-    
+    fiverr: 'CONFIGURE_APIFY_FIVERR_ACTOR_ID',
+
     // TODO: Find the correct Upwork actor in your Apify store and replace this  
     upwork: 'CONFIGURE_APIFY_UPWORK_ACTOR_ID',
   };
@@ -24,7 +24,7 @@ export class ApifyService {
 
   async validateConnection(): Promise<boolean> {
     if (!this.apiKey || this.apiKey === 'mock') return false;
-    
+
     try {
       const response = await fetch(`${this.baseUrl}/users/me?token=${this.apiKey}`);
       return response.ok;
@@ -73,9 +73,10 @@ export class ApifyService {
     };
 
     const runResult = await this.executeActor(this.actors.upwork, input);
-    
-    if (!runResult || !runResult.items) {
-      return this.generateMockCandidates(filter, 'Upwork');
+
+    if (!runResult || !runResult.items || runResult.items.length === 0) {
+      console.error('❌ Upwork: No se obtuvieron resultados reales del actor de Apify');
+      return [];
     }
 
     return runResult.items.map((item: any) => ({
@@ -103,9 +104,10 @@ export class ApifyService {
     };
 
     const runResult = await this.executeActor(this.actors.fiverr, input);
-    
-    if (!runResult || !runResult.items) {
-      return this.generateMockCandidates(filter, 'Fiverr');
+
+    if (!runResult || !runResult.items || runResult.items.length === 0) {
+      console.error('❌ Fiverr: No se obtuvieron resultados reales del actor de Apify');
+      return [];
     }
 
     return runResult.items.map((item: any) => ({
@@ -128,6 +130,13 @@ export class ApifyService {
     actorId: string,
     input: Record<string, any>
   ): Promise<{ items: any[] } | null> {
+    // Validate actor ID is properly configured
+    if (actorId.includes('CONFIGURE_')) {
+      console.error(`❌ Actor ID no configurado: "${actorId}". Debes configurar el Actor ID real de Apify.`);
+      console.error('📋 Ve a https://apify.com/store, busca el scraper correspondiente, y actualiza el ID en apifyService.ts');
+      return null;
+    }
+
     try {
       // Call Apify to run the actor
       const runResponse = await fetch(
@@ -153,7 +162,7 @@ export class ApifyService {
 
       while (!completed && attempts < maxAttempts) {
         await this.sleep(500);
-        
+
         const statusResponse = await fetch(
           `${this.baseUrl}/acts/${actorId}/runs/${runId}?token=${this.apiKey}`
         );
@@ -193,26 +202,5 @@ export class ApifyService {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  private generateMockCandidates(filter: ScrapingFilter, platform: FreelancePlatform): ScrapedCandidate[] {
-    console.log(`⚠️ Generating mock candidates for ${platform} (using mock data instead of real scraping)`);
-    
-    const names = ['Juan', 'Maria', 'Carlos', 'Ana', 'Pedro', 'Sofia', 'Luis', 'Isabella', 'Miguel', 'Elena', 'Diego', 'Lucia'];
-    const countries = ['España', 'Argentina', 'México', 'Colombia', 'Chile', 'Peru', 'Ecuador', 'Venezuela'];
-    const companies = ['Tech Solutions', 'Dev Studio', 'Digital Agency', 'Software House', 'WebDev Co', 'Creative Labs'];
-
-    return Array.from({ length: 15 }, (_, i) => ({
-      id: `${platform}-mock-${i}`,
-      name: `${names[i % names.length]} ${names[(i + 1) % names.length]}`,
-      platform: platform as FreelancePlatform,
-      platformUsername: `${filter.keyword.toLowerCase()}dev${i}_${platform.toLowerCase()}`,
-      profileUrl: `https://${platform.toLowerCase()}.com/freelancers/${filter.keyword.toLowerCase()}dev${i}`,
-      title: `Senior ${filter.keyword} Developer`,
-      country: countries[i % countries.length],
-      hourlyRate: filter.minHourlyRate + Math.random() * 100,
-      jobSuccessRate: filter.minJobSuccessRate + Math.random() * (100 - filter.minJobSuccessRate),
-      certifications: filter.certifications.length > 0 ? filter.certifications : ['Certified Developer'],
-      bio: `Experienced ${filter.keyword} developer with 5+ years of proven expertise in ${filter.keyword} development and project delivery.`,
-      scrapedAt: new Date().toISOString(),
-    }));
-  }
+  // generateMockCandidates ELIMINADO — NO MOCK DATA, SOLO DATOS REALES
 }

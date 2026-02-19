@@ -195,23 +195,27 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
 
       // Initialize service with real keys
       const raidService = MarketplaceRaidService.getInstance(apifyKey, openaiKey);
-      
+
       setLogs(prev => [...prev, `✅ Servicio marketplace inicializado`]);
 
       // Validate connections
       setLogs(prev => [...prev, `🔗 Validando conexiones a APIs...`]);
       const connections = await raidService.validateAllConnections();
-      
+
       if (connections.apify) {
         setLogs(prev => [...prev, `✅✅✅ APIFY CONECTADO - SCRAPING EN VIVO`]);
       } else {
-        setLogs(prev => [...prev, `❌ Apify no responde - usando datos simulados`]);
+        setLogs(prev => [...prev, `❌ Apify no responde - verifica tu API key y los Actor IDs configurados en apifyService.ts`]);
+        setLogs(prev => [...prev, `📋 SOLUCIÓN: Ve a https://apify.com/store, busca scrapers de "Upwork" o "Fiverr", y configura los Actor IDs reales`]);
+        setLogs(prev => [...prev, `⛔ Búsqueda cancelada: no se pueden obtener candidatos sin conexión a Apify`]);
+        setSearching(false);
+        return;
       }
 
       if (connections.openai) {
         setLogs(prev => [...prev, `✅✅✅ OPENAI CONECTADO - ENRIQUECIMIENTO EN VIVO`]);
       } else {
-        setLogs(prev => [...prev, `❌ OpenAI no responde - usará emails generados`]);
+        setLogs(prev => [...prev, `⚠️ OpenAI no conectado - los candidatos se añadirán sin enriquecimiento IA`]);
       }
 
       // Create scraping filter from campaign search terms
@@ -227,7 +231,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
 
       // Start raid
       const raid = await raidService.startRaid(`Campaign: ${campaign.name}`, filter);
-      
+
       setLogs(prev => [...prev, `🆔 Raid ID: ${raid.id.substring(0, 12)}...`]);
 
       // Execute scraping
@@ -239,7 +243,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       }
 
       const scrapedCount = raidAfterScraping.scrapedCandidates.length;
-      
+
       // Check if we actually got candidates
       if (scrapedCount === 0) {
         setLogs(prev => [...prev, `❌ No se encontraron candidatos`]);
@@ -251,9 +255,9 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         setSearching(false);
         return;
       }
-      
+
       setLogs(prev => [...prev, `🎯 Scraping completado: ${scrapedCount} candidatos REALES encontrados de ${campaign.platform}`]);
-      
+
       setLogs(prev => [...prev, `📊 FASE 2: Enriquecimiento de datos con IA...`]);
 
       // Execute enrichment
@@ -314,7 +318,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       setToast({ show: true, message: 'No hay candidatos para limpiar' });
       return;
     }
-    
+
     if (!confirm(`⚠️ ¿Seguro de que quieres BORRAR todos los ${campaign.candidates.length} candidatos? Esta acción no se puede deshacer.`)) {
       return;
     }
@@ -594,7 +598,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
                   <span className="hidden xs:inline">Exportar</span>
                 </button>
               )}
-              
+
               {/* Clear all candidates button */}
               {campaign.candidates.length > 0 && (
                 <button
