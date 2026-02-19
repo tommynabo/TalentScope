@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   ChevronLeft, Target, Send, MessageSquare, Calendar,
   Search, Play, Loader2, ExternalLink, Terminal,
-  ChevronDown, ChevronUp, X, Columns, List, Download,
+  ChevronDown, ChevronUp, X, Columns, List, Download, Trash2,
   DollarSign, Award, Globe, User
 } from 'lucide-react';
 import { Campaign, EnrichedCandidateInCampaign } from '../types/campaigns';
@@ -592,6 +592,18 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
                 >
                   <Download className="h-3.5 w-3.5" />
                   <span className="hidden xs:inline">Exportar</span>
+                </button>
+              )}
+              
+              {/* Clear all candidates button */}
+              {campaign.candidates.length > 0 && (
+                <button
+                  onClick={handleClearAllCandidates}
+                  className="px-2.5 py-1.5 text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-colors flex items-center gap-1.5"
+                  title={`Borrar los ${campaign.candidates.length} candidatos`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span className="hidden xs:inline">Limpiar ({campaign.candidates.length})</span>
                 </button>
               )}
             </div>
