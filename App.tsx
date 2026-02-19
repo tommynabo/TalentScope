@@ -15,6 +15,8 @@ import { GitHubCampaignList } from './SistemaGithub/components/GitHubCampaignLis
 import { GitHubCodeScan } from './SistemaGithub/components/GitHubCodeScan';
 // Sistema LinkedIn imports
 import DetailView from './SistemaLinkedin/components/DetailView';
+// Sistema Marketplace imports
+import { MarketplaceRaidDashboard } from './SistemaMarketplace/components/MarketplaceRaidDashboard';
 import { User, Campaign } from './types';
 import { supabase } from './lib/supabase';
 import { CampaignService } from './lib/services';
@@ -106,6 +108,14 @@ const App: React.FC = () => {
   };
 
   const handleLockedClick = (moduleName: string) => {
+    // Allow Marketplace Raid to unlock
+    if (moduleName === 'Mercados Freelance') {
+      navigate('/marketplace-raid');
+      setToastMessage('¡Marketplace Raid desbloqueado!');
+      setShowToast(true);
+      return;
+    }
+    
     setToastMessage(`El módulo ${moduleName} está en desarrollo (Fase 2).`);
     setShowToast(true);
   };
@@ -209,6 +219,11 @@ const App: React.FC = () => {
                 </ProtectedRoute>
               } />
 
+              <Route path="/marketplace-raid" element={
+                <ProtectedRoute>
+                  <MarketplaceRaidDashboard onBack={() => navigate('/dashboard')} />
+                </ProtectedRoute>
+              } />
 
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
