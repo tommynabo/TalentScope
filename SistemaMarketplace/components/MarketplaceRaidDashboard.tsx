@@ -1,20 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Plus, ChevronLeft } from 'lucide-react';
+import { Target, Plus, ChevronLeft, Trash2, Search, Globe } from 'lucide-react';
 import { Campaign } from '../types/campaigns';
-import { CampaignsList } from './CampaignsList';
 import { CreateCampaignModal } from './CreateCampaignModal';
 import { CampaignDashboard } from './CampaignDashboard';
-import { SearchGenerator } from './SearchGenerator';
 
 interface MarketplaceRaidDashboardProps {
   onBack: () => void;
 }
 
-type ViewState = 
+type ViewState =
   | { type: 'list' }
   | { type: 'creating' }
-  | { type: 'dashboard'; campaignId: string }
-  | { type: 'search'; campaignId: string };
+  | { type: 'dashboard'; campaignId: string };
 
 const CAMPAIGNS_STORAGE_KEY = 'marketplace_campaigns_v1';
 
@@ -44,161 +41,142 @@ export const MarketplaceRaidDashboard: React.FC<MarketplaceRaidDashboardProps> =
   };
 
   const handleDeleteCampaign = (campaignId: string) => {
-    setCampaigns(campaigns.filter(c => c.id !== campaignId));
-    if (view.type === 'dashboard' && view.campaignId === campaignId) {
-      setView({ type: 'list' });
+    if (confirm('¿Estás seguro de que deseas eliminar esta campaña?')) {
+      setCampaigns(campaigns.filter(c => c.id !== campaignId));
+      if (view.type === 'dashboard' && view.campaignId === campaignId) {
+        setView({ type: 'list' });
+      }
     }
   };
 
-  const selectedCampaign = view.type === 'dashboard' || view.type === 'search' 
+  const selectedCampaign = view.type === 'dashboard'
     ? campaigns.find(c => c.id === view.campaignId)
     : null;
-
-  // Render List View (also shown when creating campaign modal is open)
-  if (view.type === 'list' || view.type === 'creating') {
-    return (
-      <div className="flex h-screen flex-col bg-slate-950">
-        {/* Header */}
-        <div className="border-b border-slate-700 bg-slate-900 p-6 flex items-center justify-between">
-          <div>
-            <button
-              onClick={onBack}
-              className="flex items-center gap-2 text-slate-400 hover:text-slate-200 mb-3"
-            >
-              <ChevronLeft className="h-5 w-5" />
-              Atrás
-            </button>
-            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-              <Target className="h-8 w-8 text-emerald-400" />
-              Marketplace Raid
-            </h1>
-            <p className="text-slate-400 text-sm mt-1">Gestiona tus campañas de búsqueda de talento</p>
-          </div>
-          <button
-            onClick={() => setView({ type: 'creating' })}
-            className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium transition-colors"
-          >
-            <Plus className="h-5 w-5" />
-            Nueva Campaña
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {campaigns.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full">
-              <Target className="h-16 w-16 text-slate-600 mb-4" />
-              <h2 className="text-2xl font-bold text-slate-300 mb-2">Sin campañas yet</h2>
-              <p className="text-slate-500 mb-6">Crea tu primera campaña para comenzar</p>
-              <button
-                onClick={() => setView({ type: 'creating' })}
-                className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium transition-colors"
-              >
-                <Plus className="h-5 w-5" />
-                Nueva Campaña
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {campaigns.map(campaign => (
-                <button
-                  key={campaign.id}
-                  onClick={() => setView({ type: 'dashboard', campaignId: campaign.id })}
-                  className="group p-6 bg-slate-900 border border-slate-700 rounded-xl hover:border-emerald-600 hover:bg-slate-800/50 transition-all text-left cursor-pointer"
-                >
-                  {/* Status Badge */}
-                  <div className="flex items-start justify-between mb-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      campaign.status === 'active' ? 'bg-emerald-500/20 text-emerald-300' :
-                      campaign.status === 'paused' ? 'bg-yellow-500/20 text-yellow-300' :
-                      'bg-slate-500/20 text-slate-300'
-                    }`}>
-                      {campaign.status === 'active' ? 'Activa' : campaign.status === 'paused' ? 'Pausa' : 'Completada'}
-                    </span>
-                    <span className="px-2 py-1 rounded text-xs text-slate-400 bg-slate-800">
-                      {campaign.platform}
-                    </span>
-                  </div>
-
-                  {/* Title */}
-                  <h3 className="font-bold text-lg text-white mb-2 group-hover:text-emerald-400 transition-colors">
-                    {campaign.name}
-                  </h3>
-
-                  {/* Keywords */}
-                  <p className="text-sm text-slate-400 mb-4 line-clamp-2">
-                    Keywords: {campaign.searchTerms.keyword}
-                  </p>
-
-                  {/* Stats Grid */}
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="bg-slate-800/50 rounded-lg p-3">
-                      <div className="text-xs text-slate-500">Total</div>
-                      <div className="text-xl font-bold text-white">{campaign.stats.total}</div>
-                    </div>
-                    <div className="bg-slate-800/50 rounded-lg p-3">
-                      <div className="text-xs text-slate-500">Contactados</div>
-                      <div className="text-xl font-bold text-blue-400">{campaign.stats.inContacted}</div>
-                    </div>
-                    <div className="bg-slate-800/50 rounded-lg p-3">
-                      <div className="text-xs text-slate-500">Respondieron</div>
-                      <div className="text-xl font-bold text-emerald-400">{campaign.stats.inReplied}</div>
-                    </div>
-                    <div className="bg-slate-800/50 rounded-lg p-3">
-                      <div className="text-xs text-slate-500">Respuesta %</div>
-                      <div className="text-xl font-bold text-green-400">{campaign.stats.responseRate.toFixed(0)}%</div>
-                    </div>
-                  </div>
-
-                  {/* Created Date */}
-                  <p className="text-xs text-slate-500">
-                    📅 {new Date(campaign.createdAt).toLocaleDateString('es-ES')}
-                  </p>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Create Campaign Modal */}
-        <CreateCampaignModal
-          isOpen={view.type === 'creating'}
-          onClose={() => setView({ type: 'list' })}
-          onCreate={handleCreateCampaign}
-        />
-      </div>
-    );
-  }
-
-  // Render Search Generator View
-  if (view.type === 'search' && selectedCampaign) {
-    return (
-      <>
-        <SearchGenerator
-          campaignName={selectedCampaign.name}
-          onStart={(leadCount) => {
-            alert(`Buscando ${leadCount} leads...`);
-            setView({ type: 'dashboard', campaignId: selectedCampaign.id });
-          }}
-        />
-      </>
-    );
-  }
 
   // Render Campaign Dashboard View
   if (view.type === 'dashboard' && selectedCampaign) {
     return (
-      <div className="flex h-screen flex-col bg-slate-950">
-        <CampaignDashboard
-          campaign={selectedCampaign}
-          onUpdateCampaign={handleUpdateCampaign}
-          onOpenSearch={() => setView({ type: 'search', campaignId: selectedCampaign.id })}
-          onBack={() => setView({ type: 'list' })}
-        />
-      </div>
+      <CampaignDashboard
+        campaign={selectedCampaign}
+        onUpdateCampaign={handleUpdateCampaign}
+        onBack={() => setView({ type: 'list' })}
+      />
     );
   }
 
-  return null;
-};
+  // Render List View (also shown when creating campaign modal is open)
+  return (
+    <div className="p-3 md:p-4 lg:p-6 animate-in slide-in-from-right duration-300">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 mb-5 md:mb-6">
+        <button
+          onClick={onBack}
+          className="p-1 md:p-1.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors flex-shrink-0"
+        >
+          <ChevronLeft className="h-4 md:h-5 w-4 md:w-5" />
+        </button>
+        <div className="flex-1">
+          <h1 className="text-lg md:text-xl lg:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            <Target className="h-5 w-5 text-emerald-400" />
+            Marketplace Raid
+          </h1>
+          <p className="text-slate-400 text-xs md:text-sm">Gestiona tus campañas de búsqueda en Upwork y Fiverr.</p>
+        </div>
+        <button
+          onClick={() => setView({ type: 'creating' })}
+          className="ml-auto bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 md:px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 font-medium shadow-lg shadow-emerald-900/20 text-xs md:text-sm flex-shrink-0"
+        >
+          <Plus className="h-3.5 md:h-4 w-3.5 md:w-4" /> <span className="hidden sm:inline">Nueva Campaña</span>
+        </button>
+      </div>
 
+      {/* Campaign Grid */}
+      {campaigns.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+          <Target className="h-12 w-12 mb-4 opacity-20" />
+          <p className="text-sm mb-2">No hay campañas creadas aún.</p>
+          <button
+            onClick={() => setView({ type: 'creating' })}
+            className="text-emerald-400 hover:text-emerald-300 text-xs mt-2"
+          >
+            Crea tu primera campaña para comenzar
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {campaigns.map((campaign) => (
+            <div
+              key={campaign.id}
+              onClick={() => setView({ type: 'dashboard', campaignId: campaign.id })}
+              className="group bg-slate-900/50 border border-slate-800 rounded-2xl p-6 cursor-pointer hover:border-emerald-500/50 hover:bg-slate-900/80 transition-all relative"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-emerald-950/30 rounded-xl text-emerald-400 border border-emerald-900/50">
+                  <Globe className="h-6 w-6" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] text-slate-400 bg-slate-800 border border-slate-700">
+                    {campaign.platform}
+                  </span>
+                  <div className={`px-3 py-1 rounded-full text-xs font-medium border ${campaign.status === 'active' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' :
+                      campaign.status === 'paused' ? 'bg-yellow-950/30 text-yellow-400 border-yellow-900/50' :
+                        'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}>
+                    {campaign.status === 'active' ? 'ACTIVA' : campaign.status === 'paused' ? 'PAUSA' : 'COMPLETADA'}
+                  </div>
+                </div>
+              </div>
+
+              <h3 className="text-xl font-bold text-white mb-2 group-hover:text-emerald-400 transition-colors">{campaign.name}</h3>
+              <p className="text-sm text-slate-400 mb-6 line-clamp-2">
+                Keywords: {campaign.searchTerms.keyword || 'Sin keywords'}
+              </p>
+
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                  <div className="text-[10px] text-slate-500 uppercase">Total</div>
+                  <div className="text-lg font-bold text-white">{campaign.stats.total}</div>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                  <div className="text-[10px] text-slate-500 uppercase">Contactados</div>
+                  <div className="text-lg font-bold text-blue-400">{campaign.stats.inContacted}</div>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                  <div className="text-[10px] text-slate-500 uppercase">Respondieron</div>
+                  <div className="text-lg font-bold text-emerald-400">{campaign.stats.inReplied}</div>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                  <div className="text-[10px] text-slate-500 uppercase">Respuesta %</div>
+                  <div className="text-lg font-bold text-green-400">{campaign.stats.responseRate.toFixed(0)}%</div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between mt-auto">
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <Search className="h-4 w-4" />
+                  <span className="text-xs">📅 {new Date(campaign.createdAt).toLocaleDateString('es-ES')}</span>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteCampaign(campaign.id);
+                  }}
+                  className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-950/30 rounded-lg transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create Campaign Modal */}
+      <CreateCampaignModal
+        isOpen={view.type === 'creating'}
+        onClose={() => setView({ type: 'list' })}
+        onCreate={handleCreateCampaign}
+      />
+    </div>
+  );
+};

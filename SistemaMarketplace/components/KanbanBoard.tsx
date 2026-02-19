@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { GripVertical } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { MoreHorizontal, MessageSquare, Calendar, DollarSign } from 'lucide-react';
 import { Campaign, EnrichedCandidateInCampaign } from '../types/campaigns';
 
 interface KanbanBoardProps {
@@ -7,72 +7,103 @@ interface KanbanBoardProps {
   onUpdateCandidate: (candidate: EnrichedCandidateInCampaign, newLane: string) => void;
 }
 
+const COLUMNS: { id: string; label: string; color: string }[] = [
+  { id: 'todo', label: 'Por Contactar', color: 'bg-slate-500' },
+  { id: 'contacted', label: 'Contactado', color: 'bg-blue-500' },
+  { id: 'replied', label: 'Respondió', color: 'bg-yellow-500' },
+  { id: 'rejected', label: 'Rechazó', color: 'bg-red-500' },
+  { id: 'hired', label: 'Contratado', color: 'bg-emerald-500' },
+];
+
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ campaign, onUpdateCandidate }) => {
-  const lanes = [
-    { id: 'todo', title: 'Por Contactar', color: 'slate' },
-    { id: 'contacted', title: 'Contactado', color: 'blue' },
-    { id: 'replied', title: 'Respondió', color: 'emerald' },
-    { id: 'rejected', title: 'Rechazó', color: 'red' },
-    { id: 'hired', title: 'Contratado', color: 'purple' },
-  ];
+  const [boardState, setBoardState] = useState(campaign.candidates);
 
-  const getCandidatesInLane = (laneId: string) => {
-    return campaign.candidates.filter(c => c.kanbanLane === laneId);
-  };
+  useEffect(() => {
+    setBoardState(campaign.candidates);
+  }, [campaign.candidates]);
 
-  const handleDragStart = (candidate: EnrichedCandidateInCampaign, e: React.DragEvent) => {
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('candidate', JSON.stringify(candidate));
+  const handleDragStart = (e: React.DragEvent, candidateId: string) => {
+    e.dataTransfer.setData('candidateId', candidateId);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = (targetLane: string, e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent, laneId: string) => {
     e.preventDefault();
-    const candidateData = e.dataTransfer.getData('candidate');
-    if (candidateData) {
-      const candidate = JSON.parse(candidateData);
-      onUpdateCandidate(candidate, targetLane);
+    const candidateId = e.dataTransfer.getData('candidateId');
+    if (candidateId) {
+      const candidate = boardState.find(c => c.candidateId === candidateId);
+      if (candidate) {
+        onUpdateCandidate(candidate, laneId);
+      }
     }
   };
 
+  const getColumnCandidates = (laneId: string) => {
+    return boardState.filter(c => c.kanbanLane === laneId);
+  };
+
   return (
-    <div className="grid grid-cols-5 gap-4 p-4">
-      {lanes.map(lane => (
+    <div className="flex h-full overflow-x-auto gap-4 p-4 pb-2">
+      {COLUMNS.map(col => (
         <div
-          key={lane.id}
+          key={col.id}
           onDragOver={handleDragOver}
-          onDrop={(e) => handleDrop(lane.id, e)}
-          className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 min-h-[600px] flex flex-col"
+          onDrop={(e) => handleDrop(e, col.id)}
+          className="min-w-[280px] w-[280px] bg-slate-900/50 rounded-xl border border-slate-800 flex flex-col max-h-full"
         >
-          <div className="mb-4">
-            <h3 className="font-semibold text-slate-200">{lane.title}</h3>
-            <p className="text-xs text-slate-500 mt-1">
-              {getCandidatesInLane(lane.id).length} candidatos
-            </p>
+          {/* Column Header */}
+          <div className="p-3 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900/95 backdrop-blur z-10 rounded-t-xl">
+            <div className="flex items-center gap-2">
+              <div className={`w-2.5 h-2.5 rounded-full ${col.color}`}></div>
+              <span className="font-semibold text-slate-200 text-sm">{col.label}</span>
+              <span className="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.5 rounded-full">
+                {getColumnCandidates(col.id).length}
+              </span>
+            </div>
+            <MoreHorizontal className="h-4 w-4 text-slate-500 cursor-pointer hover:text-white" />
           </div>
 
-          <div className="flex-1 space-y-2">
-            {getCandidatesInLane(lane.id).map(candidate => (
+          {/* Cards Container */}
+          <div className="flex-1 p-2 overflow-y-auto space-y-2 custom-scrollbar">
+            {getColumnCandidates(col.id).map(candidate => (
               <div
                 key={candidate.candidateId}
                 draggable
-                onDragStart={(e) => handleDragStart(candidate, e)}
-                className={`bg-slate-700 border border-slate-600 rounded-lg p-3 cursor-grab hover:bg-slate-600 transition-colors`}
+                onDragStart={(e) => handleDragStart(e, candidate.candidateId)}
+                className="p-3 rounded-lg bg-slate-800 border border-slate-700/50 cursor-grab active:cursor-grabbing hover:border-emerald-500/50 transition-all hover:shadow-md hover:bg-slate-800/80 group"
               >
-                <div className="flex items-start gap-2">
-                  <GripVertical className="h-4 w-4 text-slate-500 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-100 text-sm truncate">{candidate.name}</p>
-                    <p className="text-xs text-slate-400 mt-1">${candidate.hourlyRate.toFixed(0)}/h</p>
-                    <p className="text-xs text-slate-500 mt-0.5">{candidate.jobSuccessRate.toFixed(0)}% success</p>
-                    {candidate.email && (
-                      <p className="text-xs text-blue-400 mt-1 truncate">{candidate.email}</p>
-                    )}
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src={`https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.name)}&background=0F172A&color=94A3B8`}
+                      alt={candidate.name}
+                      className="h-6 w-6 rounded-full object-cover ring-1 ring-slate-700"
+                    />
+                    <div className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${candidate.jobSuccessRate > 90
+                        ? 'text-emerald-400 bg-emerald-950/30 border-emerald-900/50'
+                        : 'text-slate-400 bg-slate-900/50 border-slate-800'
+                      }`}>
+                      {candidate.jobSuccessRate.toFixed(0)}% Success
+                    </div>
                   </div>
+                </div>
+                <h4 className="font-semibold text-slate-200 text-sm mb-0.5 truncate">{candidate.name}</h4>
+                <p className="text-xs text-slate-400 mb-1 truncate flex items-center gap-1">
+                  <DollarSign className="h-3 w-3" />{candidate.hourlyRate.toFixed(0)}/h
+                </p>
+                <p className="text-[10px] text-slate-500 truncate mb-2">
+                  {candidate.platform} • {candidate.email || 'Sin email'}
+                </p>
+
+                <div className="flex items-center justify-between text-slate-500 pt-2 border-t border-slate-700/50">
+                  <div className="flex gap-2">
+                    <MessageSquare className="h-3 w-3" />
+                    <Calendar className="h-3 w-3" />
+                  </div>
+                  <span className="text-[10px]">{candidate.addedAt ? new Date(candidate.addedAt).toLocaleDateString() : ''}</span>
                 </div>
               </div>
             ))}
