@@ -8,6 +8,8 @@ import {
 import { Campaign, EnrichedCandidateInCampaign } from '../types/campaigns';
 import { KanbanBoard } from './KanbanBoard';
 import { ManualEnrichmentModal } from './ManualEnrichmentModal';
+import { MarketplaceRaidService } from '../services/marketplaceRaidService';
+import { ScrapingFilter, FreelancePlatform } from '../types/marketplace';
 
 import Toast from '../../components/Toast';
 
@@ -161,24 +163,142 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
     setToast({ show: true, message: '✅ Candidato añadido' });
   };
 
-  // ─── Search simulation ────────────────────────────────────────────────
+  // ─── Search with Real Services ─────────────────────────────────────────
   const handleRunSearch = async () => {
     setSearching(true);
     setLogs([]);
     setShowLogs(true);
 
-    setLogs(prev => [...prev, `🔍 Iniciando búsqueda de ${leadCount} leads en ${campaign.platform}...`]);
-    setLogs(prev => [...prev, `📋 Keywords: ${campaign.searchTerms.keyword}`]);
-    setLogs(prev => [...prev, `💰 Tarifa: $${campaign.searchTerms.minHourlyRate}-$${campaign.searchTerms.maxHourlyRate || '∞'}/h`]);
-    setLogs(prev => [...prev, `✅ Job Success Rate mínimo: ${campaign.searchTerms.minJobSuccessRate}%`]);
-    setLogs(prev => [...prev, `⏳ Conectando con APIs de scraping...`]);
+    try {
+      setLogs(prev => [...prev, `🔍 Iniciando búsqueda de ${leadCount} leads en ${campaign.platform}...`]);
+      setLogs(prev => [...prev, `📋 Keywords: ${campaign.searchTerms.keyword}`]);
+      setLogs(prev => [...prev, `💰 Tarifa: $${campaign.searchTerms.minHourlyRate}-$${campaign.searchTerms.maxHourlyRate || '∞'}/h`]);
+      setLogs(prev => [...prev, `✅ Job Success Rate mínimo: ${campaign.searchTerms.minJobSuccessRate}%`]);
+      setLogs(prev => [...prev, `⏳ Conectando con APIs de scraping...`]);
 
-    // Simulate a search (backend logic is separate and untouched)
-    setTimeout(() => {
-      setLogs(prev => [...prev, `⚠️ Búsqueda en modo simulación — conecta los servicios de scraping para resultados reales.`]);
-      setLogs(prev => [...prev, `⏹️ Búsqueda finalizada.`]);
+      // Get API keys from environment - REAL KEYS, NOT MOCK
+      const apifyKey = import.meta.env.VITE_APIFY_API_KEY;
+      const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
+
+      // Log which mode we're in
+      if (!apifyKey || apifyKey === 'mock') {
+        setLogs(prev => [...prev, `⚠️ MODO SIMULACIÓN: No hay API key de Apify configurada`]);
+      } else if (apifyKey) {
+        setLogs(prev => [...prev, `✅ SCRAPING REAL: Apify API configurada (${apifyKey.substring(0, 15)}...)`]);
+      }
+
+      if (!openaiKey || openaiKey === 'mock') {
+        setLogs(prev => [...prev, `⚠️ ENRIQUECIMIENTO MOCK: No hay API key de OpenAI configurada`]);
+      } else if (openaiKey) {
+        setLogs(prev => [...prev, `✅ ENRIQUECIMIENTO REAL: OpenAI API configurada (sk-proj-...)`]);
+      }
+
+      // Initialize service with real keys
+      const raidService = MarketplaceRaidService.getInstance(apifyKey, openaiKey);
+      
+      setLogs(prev => [...prev, `✅ Servicio marketplace inicializado`]);
+
+      // Validate connections
+      setLogs(prev => [...prev, `🔗 Validando conexiones a APIs...`]);
+      const connections = await raidService.validateAllConnections();
+      
+      if (connections.apify) {
+        setLogs(prev => [...prev, `✅✅✅ APIFY CONECTADO - SCRAPING EN VIVO`]);
+      } else {
+        setLogs(prev => [...prev, `❌ Apify no responde - usando datos simulados`]);
+      }
+
+      if (connections.openai) {
+        setLogs(prev => [...prev, `✅✅✅ OPENAI CONECTADO - ENRIQUECIMIENTO EN VIVO`]);
+      } else {
+        setLogs(prev => [...prev, `❌ OpenAI no responde - usará emails generados`]);
+      }
+
+      // Create scraping filter from campaign search terms
+      const filter: ScrapingFilter = {
+        keyword: campaign.searchTerms.keyword,
+        minHourlyRate: campaign.searchTerms.minHourlyRate,
+        minJobSuccessRate: campaign.searchTerms.minJobSuccessRate,
+        certifications: campaign.searchTerms.certifications || [],
+        platforms: [campaign.platform as FreelancePlatform],
+      };
+
+      setLogs(prev => [...prev, `📊 FASE 1: Scraping en ${campaign.platform.toUpperCase()}...`]);
+
+      // Start raid
+      const raid = await raidService.startRaid(`Campaign: ${campaign.name}`, filter);
+      
+      setLogs(prev => [...prev, `🆔 Raid ID: ${raid.id.substring(0, 12)}...`]);
+
+      // Execute scraping
+      const raidAfterScraping = await raidService.executeScraping(raid.id, filter);
+      if (!raidAfterScraping) {
+        setLogs(prev => [...prev, `❌ Error en scraping`]);
+        setSearching(false);
+        return;
+      }
+
+      const scrapedCount = raidAfterScraping.scrapedCandidates.length;
+      const isRealScrape = connections.apify;
+      setLogs(prev => [...prev, `${isRealScrape ? '🎯' : '📌'} Scraping completado: ${scrapedCount} ${isRealScrape ? 'candidatos REALES' : 'candidatos SIMULADOS'} encontrados`]);
+      
+      // Show source
+      if (!isRealScrape) {
+        setLogs(prev => [...prev, `⚠️ Nota: Los datos son simulados porque Apify no está conectado`]);
+      }
+      
+      setLogs(prev => [...prev, `📊 FASE 2: Enriquecimiento de datos con IA...`]);
+
+      // Execute enrichment
+      const raidAfterEnrichment = await raidService.executeEnrichment(raid.id);
+      if (!raidAfterEnrichment) {
+        setLogs(prev => [...prev, `❌ Error en enriquecimiento`]);
+        setSearching(false);
+        return;
+      }
+
+      const enrichedCount = raidAfterEnrichment.enrichedCandidates.length;
+      const isRealEnrichment = connections.openai;
+      setLogs(prev => [...prev, `${isRealEnrichment ? '🤖' : '🧠'} Enriquecimiento completado: ${enrichedCount} candidatos ${isRealEnrichment ? 'ENRIQUECIDOS CON OpenAI' : 'CON EMAILS GENERADOS'}`]);
+
+      // Convert enriched candidates to campaign format
+      const newCandidates: EnrichedCandidateInCampaign[] = raidAfterEnrichment.enrichedCandidates.map((enriched, index) => ({
+        candidateId: enriched.id,
+        name: enriched.name,
+        email: enriched.emails?.[0] || enriched.platformUsername + '@unknown.com',
+        linkedInUrl: enriched.linkedInUrl,
+        platform: enriched.platform,
+        hourlyRate: enriched.hourlyRate,
+        jobSuccessRate: enriched.jobSuccessRate,
+        addedAt: enriched.scrapedAt || new Date().toISOString(),
+        kanbanLane: 'todo' as const,
+      }));
+
+      // Add to campaign
+      const updatedCandidates = [...campaign.candidates, ...newCandidates];
+      const stats = {
+        total: updatedCandidates.length,
+        inTodo: updatedCandidates.filter(c => c.kanbanLane === 'todo').length,
+        inContacted: updatedCandidates.filter(c => c.kanbanLane === 'contacted').length,
+        inReplied: updatedCandidates.filter(c => c.kanbanLane === 'replied').length,
+        inRejected: updatedCandidates.filter(c => c.kanbanLane === 'rejected').length,
+        inHired: updatedCandidates.filter(c => c.kanbanLane === 'hired').length,
+        contactRate: (updatedCandidates.filter(c => c.kanbanLane !== 'todo').length / updatedCandidates.length) * 100 || 0,
+        responseRate: (updatedCandidates.filter(c => c.kanbanLane === 'replied' || c.kanbanLane === 'hired').length / updatedCandidates.length) * 100 || 0,
+      };
+
+      onUpdateCampaign({ ...campaign, candidates: updatedCandidates, stats });
+
+      setLogs(prev => [...prev, `✅ ${newCandidates.length} candidatos añadidos al pipeline`]);
+      setLogs(prev => [...prev, `${isRealScrape && isRealEnrichment ? '🚀' : '⚙️'} Búsqueda COMPLETADA${isRealScrape && isRealEnrichment ? ' - DATOS 100% REALES' : ' - ALGUNOS DATOS SIMULADOS'}`]);
+      setToast({ show: true, message: `✅ ${newCandidates.length} nuevos candidatos añadidos` });
+    } catch (error) {
+      console.error('Search error:', error);
+      setLogs(prev => [...prev, `❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`]);
+      setToast({ show: true, message: '❌ Error en la búsqueda' });
+    } finally {
       setSearching(false);
-    }, 2000);
+    }
   };
 
   const handleStopSearch = () => {

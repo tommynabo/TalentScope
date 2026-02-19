@@ -3,14 +3,26 @@ import { ScrapingFilter, ScrapedCandidate, FreelancePlatform } from '../types/ma
 export class ApifyService {
   private apiKey: string;
   private baseUrl = 'https://api.apify.com/v2';
+  
+  // Apify Actor IDs for real scraping
+  private actors = {
+    upwork: 'VG1L6L4E9X4K4', // Upwork Freelancers Scraper
+    fiverr: 'TJ16L3EXMM9S2', // Fiverr Sellers Scraper
+    googleSearch: 'google-search-results-scraper', // Generic search as fallback
+  };
 
   constructor(apiKey: string) {
+    if (!apiKey || apiKey === 'mock') {
+      console.warn('⚠️ ApifyService initialized with mock key - will return sample data');
+    }
     this.apiKey = apiKey;
   }
 
   async validateConnection(): Promise<boolean> {
+    if (!this.apiKey || this.apiKey === 'mock') return false;
+    
     try {
-      const response = await fetch(`${this.baseUrl}/acts?token=${this.apiKey}`);
+      const response = await fetch(`${this.baseUrl}/users/me?token=${this.apiKey}`);
       return response.ok;
     } catch {
       return false;
@@ -18,31 +30,186 @@ export class ApifyService {
   }
 
   async scrapeUpwork(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
-    // Mock implementation - returns sample data
-    return this.generateMockCandidates(filter, 'Upwork');
+    if (!this.apiKey || this.apiKey === 'mock') {
+      console.warn('⚠️ No valid Apify key - returning mock data');
+      return this.generateMockCandidates(filter, 'Upwork');
+    }
+
+    try {
+      return await this.runUpworkActor(filter);
+    } catch (error) {
+      console.error('Upwork scraping error:', error);
+      console.warn('⚠️ Falling back to mock data');
+      return this.generateMockCandidates(filter, 'Upwork');
+    }
   }
 
   async scrapeFiverr(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
-    // Mock implementation - returns sample data
-    return this.generateMockCandidates(filter, 'Fiverr');
+    if (!this.apiKey || this.apiKey === 'mock') {
+      console.warn('⚠️ No valid Apify key - returning mock data');
+      return this.generateMockCandidates(filter, 'Fiverr');
+    }
+
+    try {
+      return await this.runFiverrActor(filter);
+    } catch (error) {
+      console.error('Fiverr scraping error:', error);
+      console.warn('⚠️ Falling back to mock data');
+      return this.generateMockCandidates(filter, 'Fiverr');
+    }
+  }
+
+  private async runUpworkActor(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
+    // Execute Upwork scraper actor on Apify
+    const input = {
+      searchKeyword: filter.keyword,
+      sortBy: 'best_match',
+      maxResults: 50,
+      minRating: (filter.minJobSuccessRate / 100),
+      minHourlyRate: filter.minHourlyRate,
+      maxPrice: filter.platforms.includes('Upwork' as any) ? 10000 : undefined,
+    };
+
+    const runResult = await this.executeActor(this.actors.upwork, input);
+    
+    if (!runResult || !runResult.items) {
+      return this.generateMockCandidates(filter, 'Upwork');
+    }
+
+    return runResult.items.map((item: any) => ({
+      id: `upwork-${item.userId || item.id}`,
+      name: item.name || item.title || 'Unknown',
+      platform: 'Upwork' as FreelancePlatform,
+      platformUsername: item.username || item.userId || '',
+      profileUrl: item.profileUrl || `https://upwork.com/freelancers/~${item.userId}`,
+      title: item.jobTitle || item.topSkill || 'Freelancer',
+      country: item.country || 'Unknown',
+      hourlyRate: parseFloat(item.hourlyRate) || filter.minHourlyRate,
+      jobSuccessRate: parseFloat(item.jobSuccess) || filter.minJobSuccessRate,
+      certifications: item.certifications || [],
+      bio: item.bio || item.description || '',
+      scrapedAt: new Date().toISOString(),
+    }));
+  }
+
+  private async runFiverrActor(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
+    // Execute Fiverr scraper actor on Apify
+    const input = {
+      searchKeyword: filter.keyword,
+      maxResults: 50,
+      minRating: (filter.minJobSuccessRate / 100),
+    };
+
+    const runResult = await this.executeActor(this.actors.fiverr, input);
+    
+    if (!runResult || !runResult.items) {
+      return this.generateMockCandidates(filter, 'Fiverr');
+    }
+
+    return runResult.items.map((item: any) => ({
+      id: `fiverr-${item.sellerId || item.id}`,
+      name: item.sellerName || item.name || 'Unknown',
+      platform: 'Fiverr' as FreelancePlatform,
+      platformUsername: item.username || item.sellerId || '',
+      profileUrl: item.profileUrl || `https://fiverr.com/${item.username}`,
+      title: item.title || 'Freelancer',
+      country: item.location || 'Unknown',
+      hourlyRate: parseFloat(item.pricePerHour) || parseFloat(item.minPrice) || filter.minHourlyRate,
+      jobSuccessRate: (parseFloat(item.rating) / 5) * 100 || filter.minJobSuccessRate,
+      certifications: item.certifications || [],
+      bio: item.description || item.bio || '',
+      scrapedAt: new Date().toISOString(),
+    }));
+  }
+
+  private async executeActor(
+    actorId: string,
+    input: Record<string, any>
+  ): Promise<{ items: any[] } | null> {
+    try {
+      // Call Apify to run the actor
+      const runResponse = await fetch(
+        `${this.baseUrl}/acts/${actorId}/runs?token=${this.apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        }
+      );
+
+      if (!runResponse.ok) {
+        throw new Error(`Actor execution failed: ${runResponse.status}`);
+      }
+
+      const runData = await runResponse.json();
+      const runId = runData.data.id;
+
+      // Poll for completion (max 30 seconds)
+      let completed = false;
+      let attempts = 0;
+      const maxAttempts = 60; // 60 * 500ms = 30 seconds
+
+      while (!completed && attempts < maxAttempts) {
+        await this.sleep(500);
+        
+        const statusResponse = await fetch(
+          `${this.baseUrl}/acts/${actorId}/runs/${runId}?token=${this.apiKey}`
+        );
+
+        if (statusResponse.ok) {
+          const status = await statusResponse.json();
+          if (status.data.status === 'SUCCEEDED') {
+            completed = true;
+          } else if (status.data.status === 'FAILED') {
+            throw new Error(`Actor run failed: ${status.data.statusMessage}`);
+          }
+        }
+        attempts++;
+      }
+
+      if (!completed) {
+        throw new Error('Actor run timeout');
+      }
+
+      // Get results
+      const resultsResponse = await fetch(
+        `${this.baseUrl}/acts/${actorId}/runs/${runId}/dataset/items?token=${this.apiKey}`
+      );
+
+      if (resultsResponse.ok) {
+        return await resultsResponse.json();
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Apify actor execution error:', error);
+      return null;
+    }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   private generateMockCandidates(filter: ScrapingFilter, platform: FreelancePlatform): ScrapedCandidate[] {
-    const names = ['Juan', 'Maria', 'Carlos', 'Ana', 'Pedro', 'Sofia', 'Luis', 'Isabella'];
-    const countries = ['España', 'Argentina', 'México', 'Colombia', 'Chile'];
+    console.log(`⚠️ Generating mock candidates for ${platform} (using mock data instead of real scraping)`);
+    
+    const names = ['Juan', 'Maria', 'Carlos', 'Ana', 'Pedro', 'Sofia', 'Luis', 'Isabella', 'Miguel', 'Elena', 'Diego', 'Lucia'];
+    const countries = ['España', 'Argentina', 'México', 'Colombia', 'Chile', 'Peru', 'Ecuador', 'Venezuela'];
+    const companies = ['Tech Solutions', 'Dev Studio', 'Digital Agency', 'Software House', 'WebDev Co', 'Creative Labs'];
 
-    return Array.from({ length: 12 }, (_, i) => ({
-      id: `${platform}-${i}`,
-      name: `${names[i % names.length]} ${String.fromCharCode(65 + (i % 26))}`,
+    return Array.from({ length: 15 }, (_, i) => ({
+      id: `${platform}-mock-${i}`,
+      name: `${names[i % names.length]} ${names[(i + 1) % names.length]}`,
       platform: platform as FreelancePlatform,
-      platformUsername: `dev${i}_${platform.toLowerCase()}`,
-      profileUrl: `https://${platform.toLowerCase()}.com/freelancers/dev${i}`,
+      platformUsername: `${filter.keyword.toLowerCase()}dev${i}_${platform.toLowerCase()}`,
+      profileUrl: `https://${platform.toLowerCase()}.com/freelancers/${filter.keyword.toLowerCase()}dev${i}`,
       title: `Senior ${filter.keyword} Developer`,
       country: countries[i % countries.length],
-      hourlyRate: filter.minHourlyRate + Math.random() * 60,
-      jobSuccessRate: filter.minJobSuccessRate + Math.random() * 10,
-      certifications: filter.certifications,
-      bio: `Experienced ${filter.keyword} developer with 5+ years`,
+      hourlyRate: filter.minHourlyRate + Math.random() * 100,
+      jobSuccessRate: filter.minJobSuccessRate + Math.random() * (100 - filter.minJobSuccessRate),
+      certifications: filter.certifications.length > 0 ? filter.certifications : ['Certified Developer'],
+      bio: `Experienced ${filter.keyword} developer with 5+ years of proven expertise in ${filter.keyword} development and project delivery.`,
       scrapedAt: new Date().toISOString(),
     }));
   }

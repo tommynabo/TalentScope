@@ -61,31 +61,30 @@ Profile Name: ${candidate.name}
 Platform: ${candidate.platform}
 Username: ${candidate.platformUsername}
 Title: ${candidate.title}
-Rating: ${candidate.rating}
-Reviews: ${candidate.reviewsCount}
+Job Success Rate: ${candidate.jobSuccessRate}%
 Bio: ${candidate.bio}
-Hourly Rate: ${candidate.hourlyRate}
-Skills: ${candidate.skills}
+Hourly Rate: $${candidate.hourlyRate}
+Country: ${candidate.country}
+Certifications: ${candidate.certifications?.join(', ') || 'None'}
 
 Please provide:
-1. Probable LinkedIn profile URL or ID
-2. Plausible business emails (format: {firstname}.{lastname}@domain.com or firstname@company.com)
-3. Assessment of photo validation (true/false - does the profile look legit?)
+1. Probable LinkedIn profile URL or ID (infer from name and profile)
+2. Plausible business/professional emails (format: firstname.lastname@domain or firstname@company)
+3. Assessment of profile legitimacy (true/false)
 4. Confidence score (0-1) of identity verification
-5. Extracted core skills and specializations
-6. Years of experience if detectable
+5. Core skills and specializations based on title and certifications
+6. Estimated years of experience based on success rate
 
 Respond ONLY as valid JSON, no markdown:
 {
   "linkedInUrl": "string or null",
   "linkedInId": "string or null",
-  "businessEmails": ["email1", "email2"],
-  "personalEmails": ["personal_email"],
+  "businessEmails": ["email1@domain.com", "email2@domain.com"],
+  "personalEmails": ["personal@email.com"],
   "photoValidated": boolean,
   "confidenceScore": number,
-  "skills": ["skill1", "skill2"],
-  "experience": "XYZ years or null",
-  "notes": "brief assessment"
+  "skills": ["skill1", "skill2", "skill3"],
+  "experience": "X years or null"
 }`;
   }
 
@@ -149,7 +148,7 @@ Respond ONLY as valid JSON, no markdown:
         ].filter((e: string) => e && this.isValidEmail(e)),
         photoValidated: parsed.photoValidated || false,
         confidenceScore: Math.max(0, Math.min(1, parsed.confidenceScore || 0.5)),
-        skills: parsed.skills || fallback.skills,
+        skills: parsed.skills || [],
         experience: parsed.experience,
       };
     } catch (error) {
