@@ -28,7 +28,7 @@ export interface ContactResearchResult {
     location: string | null;
     company: string | null;
     bio: string | null;
-    
+
     // Metadata de la búsqueda
     search_quality: 'excellent' | 'good' | 'fair' | 'poor'; // Confianza en los resultados
     sources_found: string[];              // Fuentes donde encontró info
@@ -100,7 +100,7 @@ export class GitHubDeepContactResearch {
 
             onProgress?.(`🔍 [1/8] Fetching GitHub profile for @${username}...`);
             const userProfile = await this.fetchUserProfile(username);
-            
+
             if (!userProfile) {
                 result.search_quality = 'poor';
                 result.research_errors.push('Could not fetch user profile');
@@ -142,14 +142,23 @@ export class GitHubDeepContactResearch {
             // ESTRATEGIA 3: Website personal
             onProgress?.(`🔍 [4/8] Checking personal website...`);
             if (userProfile.blog) {
-                const websiteEmails = await this.searchEmailInWebsite(userProfile.blog);
-                if (websiteEmails.length > 0) {
+                const websiteData = await this.searchEmailInWebsite(userProfile.blog);
+
+                if (websiteData.emails.length > 0) {
                     if (!result.primary_email) {
-                        result.primary_email = websiteEmails[0];
+                        result.primary_email = websiteData.emails[0];
                         result.sources_found.push('Personal website');
                     } else {
-                        result.secondary_emails.push(...websiteEmails);
+                        result.secondary_emails.push(...websiteData.emails);
                     }
+                }
+
+                if (websiteData.linkedins.length > 0) {
+                    if (!result.linkedin_url) {
+                        result.linkedin_url = websiteData.linkedins[0];
+                        result.sources_found.push('Personal website - LinkedIn');
+                    }
+                    result.linkedin_alternatives.push(...websiteData.linkedins);
                 }
             }
             result.research_depth++;
@@ -253,8 +262,8 @@ export class GitHubDeepContactResearch {
             result.search_quality = this.determineSearchQuality(result);
 
             // Validar emails encontrados
-            result.primary_email = result.primary_email && this.isValidEmail(result.primary_email) 
-                ? result.primary_email 
+            result.primary_email = result.primary_email && this.isValidEmail(result.primary_email)
+                ? result.primary_email
                 : null;
             result.secondary_emails = result.secondary_emails.filter(e => this.isValidEmail(e));
 
@@ -364,10 +373,10 @@ export class GitHubDeepContactResearch {
                         // Check if user appears in commit body/message or is mentioned as author
                         const message = commit.commit.message || '';
                         const authorName = commit.commit.author?.name || '';
-                        
+
                         if (
                             (message.toLowerCase().includes(username.toLowerCase()) ||
-                             authorName.toLowerCase().includes(username.toLowerCase())) &&
+                                authorName.toLowerCase().includes(username.toLowerCase())) &&
                             commit.commit.author?.email &&
                             this.isValidEmail(commit.commit.author.email)
                         ) {
@@ -387,74 +396,95 @@ export class GitHubDeepContactResearch {
     }
 
     /**
-     * Search email in personal website (mejorado)
+     * Search email AND LinkedIn in personal website (improved with subpaths)
      */
-    private async searchEmailInWebsite(websiteUrl: string): Promise<string[]> {
+    private async searchEmailInWebsite(websiteUrl: string): Promise<{ emails: string[], linkedins: string[] }> {
         const emails: string[] = [];
-        
+        const linkedins: string[] = [];
+
         try {
             // Normalize URL
-            let url = websiteUrl.trim();
-            if (!url.includes('://')) {
-                url = `https://${url}`;
+            let baseUrl = websiteUrl.trim();
+            if (!baseUrl.includes('://')) {
+                baseUrl = `https://${baseUrl}`;
             }
 
-            // Set timeout for fetch
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            // Remove trailing slash
+            baseUrl = baseUrl.replace(/\/$/, '');
 
-            const response = await fetch(url, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (compatible; TalentScope/1.0; +http://talentscope.local)',
-                },
-                signal: controller.signal,
-            }).catch(() => null);
+            // Paths to check
+            const pathsToCheck = [
+                '', // home
+                '/about',
+                '/contact',
+                '/resume',
+                '/cv',
+                '/pages/contact',
+                '/pages/about'
+            ];
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds total timeout for all pages (increased)
+
+            for (const path of pathsToCheck) {
+                try {
+                    const url = `${baseUrl}${path}`;
+
+                    const response = await fetch(url, {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (compatible; TalentScope/1.0; +http://talentscope.local)',
+                        },
+                        signal: controller.signal,
+                    }).catch(() => null);
+
+                    if (!response || !response.ok) continue;
+
+                    const html = await response.text().catch(() => '');
+                    if (!html) continue;
+
+                    // Look for emails
+                    const emailMatches = html.match(this.emailPatterns[0]);
+                    if (emailMatches) {
+                        // Explicitly cast to string[] to avoid TS errors
+                        const matches: string[] = Array.from(emailMatches);
+                        const uniqueEmails = [...new Set(matches)];
+                        emails.push(...uniqueEmails.filter((e: string) => this.isValidEmail(e)));
+                    }
+
+                    // Look for mailto
+                    const mailtoMatches = html.match(/mailto:([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi);
+                    if (mailtoMatches) {
+                        // Explicitly cast to string[]
+                        const matches: string[] = Array.from(mailtoMatches);
+                        const uniqueMailtos = [...new Set(matches.map((m: string) => m.replace('mailto:', '')))];
+                        emails.push(...uniqueMailtos.filter((e: string) => this.isValidEmail(e)));
+                    }
+
+                    // Look for LinkedIn URLs in the website body
+                    for (const pattern of this.linkedinPatterns) {
+                        const match = html.match(pattern);
+                        if (match) {
+                            const username = match[1] || match[0];
+                            const linkedinUrl = `https://linkedin.com/in/${username}`;
+                            linkedins.push(linkedinUrl);
+                        }
+                    }
+
+                } catch (err) {
+                    continue;
+                }
+            }
 
             clearTimeout(timeoutId);
 
-            if (!response || !response.ok) return [];
-
-            const html = await response.text().catch(() => '');
-            
-            // Look for emails in common contact page patterns
-            const emailMatches = html.match(this.emailPatterns[0]);
-            if (emailMatches) {
-                const uniqueEmails = [...new Set(emailMatches)];
-                emails.push(
-                    ...uniqueEmails.filter(e => this.isValidEmail(e))
-                );
-            }
-
-            // Look in href="mailto:" links
-            const mailtoMatches = html.match(/mailto:([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi);
-            if (mailtoMatches) {
-                const uniqueMailtos = [...new Set(mailtoMatches.map(m => m.replace('mailto:', '')))];
-                emails.push(
-                    ...uniqueMailtos.filter(e => this.isValidEmail(e))
-                );
-            }
-
-            // Look in common contact formats
-            const contactPatterns = [
-                /contact[^<]*?[\s:=]+([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi,
-                /email[^<]*?[\s:=]+([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi,
-                /reach[^<]*?[\s:=]+([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi,
-            ];
-
-            for (const pattern of contactPatterns) {
-                const matches = html.match(pattern);
-                if (matches) {
-                    emails.push(...matches.map(m => {
-                        const emailMatch = m.match(/[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+/);
-                        return emailMatch ? emailMatch[0] : null;
-                    }).filter((e): e is string => e !== null && this.isValidEmail(e)));
-                }
-            }
         } catch (error) {
-            // Silently fail - website may not be accessible
+            // Silently fail
         }
 
-        return [...new Set(emails)];
+        return {
+            emails: [...new Set(emails)],
+            linkedins: [...new Set(linkedins)]
+        };
     }
 
     /**

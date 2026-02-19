@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { githubContactService } from './githubContactService';
 import { githubDeduplicationService } from './githubDeduplication';
 import { GitHubCandidatePersistence } from './githubCandidatePersistence';
+import { githubDeepContactResearch } from './githubDeepContactResearch';
 
 export type GitHubLogCallback = (message: string) => void;
 
@@ -111,7 +112,7 @@ export class GitHubService {
             // === LOOP PAGINADO ===
             const candidates: GitHubMetrics[] = [];
             let page = 1;
-            const maxPages = 10; // Límite para evitar demasiadas llamadas API
+            const maxPages = 15; // Increased limit to allow for higher skip rates due to strict filtering
             let totalUsersAnalyzed = 0;
             let totalUsersSkipped = 0;
             let candidatesFoundInSearch = 0; // Track candidates found in THIS search session
@@ -183,7 +184,7 @@ export class GitHubService {
                                 onLog(`    ✅ Added @${user.login} (Score: ${metrics.github_score})`);
                             }
                         } else {
-                            onLog(`    ⏭️ Skipped - doesn't match quality criteria`);
+                            // Already logged reason in analyzeUser
                             totalUsersSkipped++;
                         }
                     } catch (err: any) {
@@ -205,6 +206,7 @@ export class GitHubService {
             // SAVE TO SUPABASE if campaign context available
             if (campaignId && userId && candidates.length > 0) {
                 onLog(`\n💾 Saving ${candidates.length} candidates to Supabase...`);
+                // Note: Candidates are already enriched with everything we have
                 const saved = await GitHubCandidatePersistence.saveCandidates(
                     campaignId,
                     candidates,
@@ -332,25 +334,40 @@ export class GitHubService {
             // 11. ⚡ Contact search + AI analysis in PARALLEL (only for qualifying candidates)
             onLog(`  🔗 Searching for contact info + AI analysis...`);
 
-            const [contactInfo, aiAnalysis] = await Promise.all([
-                githubContactService.findContactInfoFast(username, topRepos, user),
-                this.generateAIAnalysis(user, languages, topRepos, criteria, onLog)
-            ]);
+            // 11.1 INITIAL CONTACT SEARCH (Fast)
+            let contactInfo = await githubContactService.findContactInfoFast(username, topRepos, user);
+
+            // 11.2 🛡️ STRICT VALIDATION: If no email/linkedin, trigger DEEP RESEARCH
+            if (!contactInfo.email && !contactInfo.linkedin) {
+                onLog(`  🕵️ No easy contact info found. Triggering DEEP RESEARCH...`);
+
+                const deepResult = await githubDeepContactResearch.deepResearchContact(username, topRepos, (msg) => {
+                    // Filter out verbose progress messages, only log key events
+                    if (msg.includes('Found') || msg.includes('Error')) onLog(`    ${msg}`);
+                });
+
+                if (deepResult.primary_email || deepResult.linkedin_url) {
+                    onLog(`  ✅ DEEP RESEARCH SUCCESS! Found: ${deepResult.primary_email || 'No Email'} | ${deepResult.linkedin_url || 'No LinkedIn'}`);
+
+                    contactInfo = {
+                        email: deepResult.primary_email,
+                        linkedin: deepResult.linkedin_url,
+                        website: deepResult.personal_website
+                    };
+                } else {
+                    onLog(`  ⏭️ DEEP RESEARCH FAILED. No contact info found. SKIPPING CANDIDATE.`);
+                    return null; // DISCARD CANDIDATE
+                }
+            }
+
+            // 11.3 AI ANALYSIS (Only generate if we have a contact and are keeping the candidate)
+            const aiAnalysis = await this.generateAIAnalysis(user, languages, topRepos, criteria, onLog);
 
             if (contactInfo.email) {
                 onLog(`  ✅ Found email: ${contactInfo.email}`);
-            } else {
-                onLog(`  ⚠️ No email found`);
             }
-
             if (contactInfo.linkedin) {
                 onLog(`  ✅ Found LinkedIn: ${contactInfo.linkedin}`);
-            } else {
-                onLog(`  ⚠️ No LinkedIn found`);
-            }
-
-            if (aiAnalysis) {
-                onLog(`  ✅ AI Analysis generated`);
             }
 
             const linkedinUrl = contactInfo.linkedin;
