@@ -152,16 +152,25 @@ export class ApifyService {
     return Math.round((num / 5) * 100);
   }
 
+  /**
+   * Apify API uses ~ instead of / in actor IDs for URL paths
+   * e.g. powerai/upwork-talent-search-scraper => powerai~upwork-talent-search-scraper
+   */
+  private encodeActorId(actorId: string): string {
+    return actorId.replace(/\//g, '~');
+  }
+
   private async executeActor(
     actorId: string,
     input: Record<string, any>
   ): Promise<any[] | null> {
+    const encodedActorId = this.encodeActorId(actorId);
     try {
-      console.log(`🚀 Ejecutando actor: ${actorId}`);
+      console.log(`🚀 Ejecutando actor: ${actorId} (API path: ${encodedActorId})`);
 
       // Call Apify to run the actor
       const runResponse = await fetch(
-        `${this.baseUrl}/acts/${actorId}/runs?token=${this.apiKey}`,
+        `${this.baseUrl}/acts/${encodedActorId}/runs?token=${this.apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -189,7 +198,7 @@ export class ApifyService {
         await this.sleep(pollInterval);
 
         const statusResponse = await fetch(
-          `${this.baseUrl}/acts/${actorId}/runs/${runId}?token=${this.apiKey}`
+          `${this.baseUrl}/acts/${encodedActorId}/runs/${runId}?token=${this.apiKey}`
         );
 
         if (statusResponse.ok) {
@@ -217,7 +226,7 @@ export class ApifyService {
       const datasetId = runData.data.defaultDatasetId;
       const resultsUrl = datasetId
         ? `${this.baseUrl}/datasets/${datasetId}/items?token=${this.apiKey}`
-        : `${this.baseUrl}/acts/${actorId}/runs/${runId}/dataset/items?token=${this.apiKey}`;
+        : `${this.baseUrl}/acts/${encodedActorId}/runs/${runId}/dataset/items?token=${this.apiKey}`;
 
       const resultsResponse = await fetch(resultsUrl);
 
