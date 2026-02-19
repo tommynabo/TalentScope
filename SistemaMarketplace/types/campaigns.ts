@@ -12,6 +12,7 @@ export interface Campaign {
   // Búsqueda específica por plataforma
   searchTerms: {
     keyword: string;
+    keywords?: string[]; // Array de múltiples keywords
     minHourlyRate: number;
     maxHourlyRate?: number;
     minJobSuccessRate: number;

@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Plus, Trash2 } from 'lucide-react';
 import { Campaign, FreelancePlatform } from '../types/campaigns';
 
 interface CreateCampaignModalProps {
+  isOpen: boolean;
   onClose: () => void;
   onCreate: (campaign: Campaign) => void;
 }
 
-export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClose, onCreate }) => {
+export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ isOpen, onClose, onCreate }) => {
+  if (!isOpen) return null;
   const [platform, setPlatform] = useState<FreelancePlatform>('Upwork');
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [currentKeyword, setCurrentKeyword] = useState('');
   const [formData, setFormData] = useState({
     name: '',
-    keyword: '',
     minHourlyRate: 40,
     maxHourlyRate: 200,
     minJobSuccessRate: 85,
@@ -22,9 +25,20 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClos
     fiverrlevel: 'top-rated-plus' as const,
   });
 
+  const handleAddKeyword = () => {
+    if (currentKeyword.trim() && !keywords.includes(currentKeyword.trim())) {
+      setKeywords([...keywords, currentKeyword.trim()]);
+      setCurrentKeyword('');
+    }
+  };
+
+  const handleRemoveKeyword = (keyword: string) => {
+    setKeywords(keywords.filter(k => k !== keyword));
+  };
+
   const handleCreateCampaign = () => {
-    if (!formData.name.trim() || !formData.keyword.trim()) {
-      alert('Rellena nombre y keyword');
+    if (!formData.name.trim() || keywords.length === 0) {
+      alert('Rellena nombre y añade al menos un keyword');
       return;
     }
 
@@ -34,7 +48,8 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClos
       platform,
       createdAt: new Date().toISOString(),
       searchTerms: {
-        keyword: formData.keyword,
+        keyword: keywords.join(', '),
+        keywords: keywords,
         minHourlyRate: formData.minHourlyRate,
         maxHourlyRate: formData.maxHourlyRate,
         minJobSuccessRate: formData.minJobSuccessRate,
@@ -59,6 +74,20 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClos
     };
 
     onCreate(newCampaign);
+    // Reset form
+    setFormData({
+      name: '',
+      minHourlyRate: 40,
+      maxHourlyRate: 200,
+      minJobSuccessRate: 85,
+      certifications: [],
+      countries: [],
+      languages: [],
+      upworkCategory: 'Web Development',
+      fiverrlevel: 'top-rated-plus',
+    });
+    setKeywords([]);
+    setCurrentKeyword('');
     onClose();
   };
 
@@ -111,18 +140,54 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ onClos
             </div>
           </div>
 
-          {/* Common Fields */}
+          {/* Keywords/Skills */}
           <div>
             <label className="block text-sm font-semibold text-slate-300 mb-2">
-              Keyword/Skill *
+              Keywords/Skills * (Añade múltiples)
             </label>
-            <input
-              type="text"
-              value={formData.keyword}
-              onChange={(e) => setFormData({ ...formData, keyword: e.target.value })}
-              placeholder="ej: Flutter Developer, React, Node.js"
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white"
-            />
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={currentKeyword}
+                onChange={(e) => setCurrentKeyword(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddKeyword();
+                  }
+                }}
+                placeholder="ej: Flutter, React, Node.js..."
+                className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+              />
+              <button
+                onClick={handleAddKeyword}
+                className="px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Añadir
+              </button>
+            </div>
+
+            {/* Keywords List */}
+            <div className="flex flex-wrap gap-2">
+              {keywords.map(keyword => (
+                <div
+                  key={keyword}
+                  className="flex items-center gap-2 px-3 py-2 bg-emerald-500/20 border border-emerald-500/30 rounded-lg"
+                >
+                  <span className="text-emerald-300 text-sm font-medium">{keyword}</span>
+                  <button
+                    onClick={() => handleRemoveKeyword(keyword)}
+                    className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {keywords.length === 0 && (
+              <p className="text-slate-500 text-sm mt-2">Sin words aún. Añade al menos una.</p>
+            )}
           </div>
 
           {/* Hourly Rate Range */}
