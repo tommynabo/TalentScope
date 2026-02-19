@@ -5,6 +5,7 @@ import { deduplicationService } from '../../lib/deduplication';
 import { SearchService } from '../../lib/search';
 import { normalizeLinkedInUrl } from '../../lib/normalization';
 import { UnbreakableExecutor, initializeUnbreakableMarker } from '../../lib/UnbreakableExecution';
+import { isLikelySpanishSpeaker } from './spanishLanguageFilter';
 
 export type LogCallback = (message: string) => void;
 
@@ -19,7 +20,7 @@ export class LinkedInSearchEngine {
     // UNBREAKABLE EXECUTION MODE
     private isRunning = false;
     private userIntentedStop = false;
-    
+
     private apiKey = '';
     private openaiKey = '';
     private abortController: AbortController | null = null;
@@ -44,8 +45,8 @@ export class LinkedInSearchEngine {
     public async startSearch(
         query: string,
         maxResults: number,
-        options: { 
-            language: string; 
+        options: {
+            language: string;
             maxAge: number;
             filters?: SearchFilterCriteria;
             scoreThreshold?: number;
@@ -129,8 +130,8 @@ export class LinkedInSearchEngine {
     private async startFastSearch(
         query: string,
         maxResults: number,
-        options: { 
-            language: string; 
+        options: {
+            language: string;
             maxAge: number;
             filters?: SearchFilterCriteria;
             scoreThreshold?: number;
@@ -171,16 +172,37 @@ export class LinkedInSearchEngine {
                     continue;
                 }
 
-                onLog(`[ANALYSIS] 🧠 Generando análisis personalizado (${uniqueCandidates.length} candidatos)...`);
+                // ═══ SPANISH LANGUAGE FILTER (Fast Search path) ═══
+                let languageFiltered = uniqueCandidates;
+                if (options.language === 'Spanish') {
+                    const beforeCount = languageFiltered.length;
+                    languageFiltered = uniqueCandidates.filter(c => {
+                        const result = isLikelySpanishSpeaker(
+                            c.full_name,
+                            c.job_title,
+                            c.ai_analysis || null,
+                            c.location
+                        );
+                        if (!result.isSpanish) {
+                            onLog(`[LANG-FILTER] ❌ ${c.full_name} no parece hispanohablante (conf: ${result.confidence})`);
+                        }
+                        return result.isSpanish;
+                    });
+                    if (beforeCount !== languageFiltered.length) {
+                        onLog(`[LANG-FILTER] 🌐 ${beforeCount - languageFiltered.length} candidatos filtrados por idioma español`);
+                    }
+                }
+
+                onLog(`[ANALYSIS] 🧠 Generando análisis personalizado (${languageFiltered.length} candidatos)...`);
 
                 const analyzedCandidates = await Promise.all(
-                    uniqueCandidates.map(c => this.enrichCandidateWithAnalysis(c))
+                    languageFiltered.map(c => this.enrichCandidateWithAnalysis(c))
                 );
 
                 let scoredCandidates = analyzedCandidates;
                 if (options.filters) {
                     onLog(`[SCORING] 📊 Aplicando filtro Flutter Developer...`);
-                    
+
                     scoredCandidates = analyzedCandidates
                         .map(candidate => {
                             const scoring = calculateFlutterDeveloperScore(candidate, options.filters!);
@@ -192,7 +214,7 @@ export class LinkedInSearchEngine {
                         })
                         .filter(c => c.symmetry_score >= (options.scoreThreshold || 70))
                         .sort((a, b) => (b.symmetry_score || 0) - (a.symmetry_score || 0));
-                    
+
                     onLog(`[SCORING] ✅ ${scoredCandidates.length} candidatos cumplen threshold de ${options.scoreThreshold || 70}/100`);
                 }
 
@@ -237,19 +259,21 @@ export class LinkedInSearchEngine {
 
         const variations = [
             baseQuery,
-            `"${core}" Spain OR España`,
-            `${core} startup OR scaleup`,
-            `${core} freelance OR contractor OR autónomo`,
-            `${core} remote OR remoto`,
-            `"senior" ${core}`,
+            `"${core}" Spain OR España OR México OR Colombia OR Argentina`,
+            `${core} startup OR scaleup OR emprendimiento`,
+            `${core} freelance OR contractor OR autónomo OR independiente`,
+            `${core} remote OR remoto OR "trabajo remoto"`,
+            `"senior" ${core} español OR hispano`,
             `"head" OR "lead" OR "principal" ${coreTerms[0] || core}`,
             `"CTO" OR "VP" OR "director" ${coreTerms[0] || core}`,
             `${coreTerms[0] || core} "full stack" OR "backend" OR "frontend"`,
             `${core} Barcelona OR Madrid OR Valencia OR Sevilla`,
+            `${core} "Buenos Aires" OR Bogotá OR Lima OR Santiago OR Monterrey`,
+            `${core} "Ciudad de México" OR Medellín OR Quito OR Guadalajara`,
         ];
 
         const variation = variations[Math.min(attempt - 1, variations.length - 1)];
-        
+
         if (attempt > 1 && exclusions) {
             return `${variation} ${exclusions}`;
         }
@@ -442,7 +466,9 @@ export class LinkedInSearchEngine {
 
             try {
                 const siteOperator = 'site:linkedin.com/in';
-                const langKeywords = options.language === 'Spanish' ? '(España OR Spanish OR Español)' : '';
+                const langKeywords = options.language === 'Spanish'
+                    ? '(España OR México OR Colombia OR Argentina OR Chile OR Perú OR "habla española" OR Español)'
+                    : '';
 
                 const searchInput = {
                     queries: `${siteOperator} ${currentQuery} ${langKeywords}`,
@@ -477,10 +503,10 @@ export class LinkedInSearchEngine {
                 const newProfiles = profiles.filter((p: any) => {
                     const url = normalizeLinkedInUrl(p.url);
                     const normalizedForCheck = url.toLowerCase().replace(/^https?:\/\//i, '').replace(/^www\./, '').replace(/\/$/, '').trim();
-                    
+
                     if (existingLinkedin.has(normalizedForCheck)) return false;
                     if (seenUrls.has(normalizedForCheck)) return false;
-                    
+
                     seenUrls.add(normalizedForCheck);
                     return true;
                 });
@@ -507,13 +533,24 @@ export class LinkedInSearchEngine {
                         const name = p.title.split('-')[0].trim() || 'Candidato';
                         const role = p.title.split('-')[1]?.trim() || currentQuery;
 
+                        // ═══ SPANISH LANGUAGE FILTER (pre-analysis) ═══
+                        if (options.language === 'Spanish') {
+                            const langCheck = isLikelySpanishSpeaker(name, role, p.description || null, null);
+                            if (!langCheck.isSpanish) {
+                                processedCount++;
+                                onLog(`[LANG-FILTER] ❌ ${name} no parece hispanohablante (señales: ${langCheck.signals.length === 0 ? 'ninguna' : langCheck.signals.join(', ')})`);
+                                return null;
+                            }
+                        }
+
                         const analysis = await this.generateAIAnalysis({
                             name,
                             company: 'Linkedin Search',
                             role,
                             snippet: p.description,
                             query: currentQuery,
-                            maxAge: options.maxAge
+                            maxAge: options.maxAge,
+                            requireSpanish: options.language === 'Spanish'
                         });
 
                         processedCount++;
@@ -644,7 +681,9 @@ export class LinkedInSearchEngine {
                             - FOLLOWUP debe ser más profesional y completo, describe oportunidad sin vender directamente
                             - SEGUNDO FOLLOWUP es para seguimiento después de X días sin respuesta, ofrece valor adicional
                             - Los 3 mensajes deben ser super personalizados basados en el perfil
-                            - If snippet implies user is > ${context.maxAge || 40} years old, PENALIZE SCORE (<50)`
+                            - If snippet implies user is > ${context.maxAge || 40} years old, PENALIZE SCORE (<50)
+                            ${context.requireSpanish ? `- FILTRO IDIOMA OBLIGATORIO: Si el nombre, ubicación o texto del perfil NO muestran señales claras de hablar español (nombre hispano, ubicación en España/Latinoamérica, texto en español), PENALIZAR SCORE severamente (poner <30)
+                            - TODOS los mensajes DEBEN estar escritos en español` : ''}`
                         },
                         { role: 'user', content: JSON.stringify(context) }
                     ],
@@ -666,11 +705,11 @@ export class LinkedInSearchEngine {
             const cleanContent = content?.replace(/```json/g, '').replace(/```/g, '').trim();
 
             const parsed = JSON.parse(cleanContent || '{}');
-            
+
             parsed.icebreaker = parsed.icebreaker || `Hola ${context.name}, me encantaría conectar contigo.`;
             parsed.followup_message = parsed.followup_message || `${context.name}, tras revisar tu perfil sabemos que eres el perfil ideal.`;
             parsed.second_followup = parsed.second_followup || `${context.name}, viendo tu trayectoria creemos que hay una gran alineación.`;
-            
+
             return parsed;
         } catch (e: any) {
             return {
