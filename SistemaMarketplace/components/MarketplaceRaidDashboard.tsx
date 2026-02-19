@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Target, Plus, ChevronLeft } from 'lucide-react';
 import { Campaign } from '../types/campaigns';
 import { CampaignsList } from './CampaignsList';
@@ -16,9 +16,23 @@ type ViewState =
   | { type: 'dashboard'; campaignId: string }
   | { type: 'search'; campaignId: string };
 
+const CAMPAIGNS_STORAGE_KEY = 'marketplace_campaigns_v1';
+
 export const MarketplaceRaidDashboard: React.FC<MarketplaceRaidDashboardProps> = ({ onBack }) => {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>(() => {
+    try {
+      const stored = localStorage.getItem(CAMPAIGNS_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const [view, setView] = useState<ViewState>({ type: 'list' });
+
+  // Persist campaigns to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem(CAMPAIGNS_STORAGE_KEY, JSON.stringify(campaigns));
+  }, [campaigns]);
 
   const handleCreateCampaign = (newCampaign: Campaign) => {
     setCampaigns([...campaigns, newCampaign]);
@@ -40,8 +54,8 @@ export const MarketplaceRaidDashboard: React.FC<MarketplaceRaidDashboardProps> =
     ? campaigns.find(c => c.id === view.campaignId)
     : null;
 
-  // Render List View
-  if (view.type === 'list') {
+  // Render List View (also shown when creating campaign modal is open)
+  if (view.type === 'list' || view.type === 'creating') {
     return (
       <div className="flex h-screen flex-col bg-slate-950">
         {/* Header */}
