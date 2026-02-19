@@ -17,6 +17,7 @@ import { GitHubCodeScan } from './SistemaGithub/components/GitHubCodeScan';
 import DetailView from './SistemaLinkedin/components/DetailView';
 // Sistema Marketplace imports
 import { MarketplaceRaidDashboard } from './SistemaMarketplace/components/MarketplaceRaidDashboard';
+import { CampaignDashboard as MarketplaceCampaignDashboard } from './SistemaMarketplace/components/CampaignDashboard';
 import { User, Campaign } from './types';
 import { supabase } from './lib/supabase';
 import { CampaignService } from './lib/services';
@@ -115,7 +116,7 @@ const App: React.FC = () => {
       setShowToast(true);
       return;
     }
-    
+
     setToastMessage(`El módulo ${moduleName} está en desarrollo (Fase 2).`);
     setShowToast(true);
   };
@@ -157,7 +158,7 @@ const App: React.FC = () => {
 
         {/* Scrollable Content Area with Responsive Padding */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden w-full flex justify-center">
-          <div className="w-full max-w-7xl min-h-full px-2 sm:px-3 md:px-4 lg:px-6 xl:px-8 py-3 md:py-4">
+          <div className="w-full max-w-[1600px] min-h-full px-2 sm:px-3 md:px-4 lg:px-6 xl:px-8 py-3 md:py-4">
             <Routes>
               {/* Redirect root to dashboard since we are already authenticated */}
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -222,6 +223,12 @@ const App: React.FC = () => {
               <Route path="/marketplace-raid" element={
                 <ProtectedRoute>
                   <MarketplaceRaidDashboard onBack={() => navigate('/dashboard')} />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/marketplace-raid/:campaignId" element={
+                <ProtectedRoute>
+                  <MarketplaceCampaignWrapper />
                 </ProtectedRoute>
               } />
 
@@ -310,5 +317,51 @@ const CampaignDetailWrapper = ({ onBack }: { onBack: () => void }) => {
 
   return <DetailView campaign={campaign} onBack={onBack} />;
 }
+
+// ─── Marketplace Campaign Detail Wrapper ─────────────────────────────
+const MARKETPLACE_CAMPAIGNS_KEY = 'marketplace_campaigns_v1';
+
+const MarketplaceCampaignWrapper = () => {
+  const { campaignId } = useParams();
+  const navigate = useNavigate();
+  const [campaigns, setCampaigns] = useState<any[]>(() => {
+    try {
+      const stored = localStorage.getItem(MARKETPLACE_CAMPAIGNS_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const campaign = campaigns.find((c: any) => c.id === campaignId);
+
+  if (!campaign) {
+    return (
+      <div className="p-8 text-center text-slate-400">
+        <p className="mb-4">Campaña no encontrada</p>
+        <button
+          onClick={() => navigate('/marketplace-raid')}
+          className="text-emerald-400 hover:text-emerald-300 text-sm"
+        >
+          ← Volver al Marketplace
+        </button>
+      </div>
+    );
+  }
+
+  const handleUpdateCampaign = (updated: any) => {
+    const newCampaigns = campaigns.map((c: any) => c.id === updated.id ? updated : c);
+    setCampaigns(newCampaigns);
+    localStorage.setItem(MARKETPLACE_CAMPAIGNS_KEY, JSON.stringify(newCampaigns));
+  };
+
+  return (
+    <MarketplaceCampaignDashboard
+      campaign={campaign}
+      onUpdateCampaign={handleUpdateCampaign}
+      onBack={() => navigate('/marketplace-raid')}
+    />
+  );
+};
 
 export default App;

@@ -1,21 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Target, Plus, ChevronLeft, Trash2, Search, Globe } from 'lucide-react';
 import { Campaign } from '../types/campaigns';
 import { CreateCampaignModal } from './CreateCampaignModal';
-import { CampaignDashboard } from './CampaignDashboard';
 
 interface MarketplaceRaidDashboardProps {
   onBack: () => void;
 }
 
-type ViewState =
-  | { type: 'list' }
-  | { type: 'creating' }
-  | { type: 'dashboard'; campaignId: string };
-
 const CAMPAIGNS_STORAGE_KEY = 'marketplace_campaigns_v1';
 
 export const MarketplaceRaidDashboard: React.FC<MarketplaceRaidDashboardProps> = ({ onBack }) => {
+  const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[]>(() => {
     try {
       const stored = localStorage.getItem(CAMPAIGNS_STORAGE_KEY);
@@ -24,7 +20,7 @@ export const MarketplaceRaidDashboard: React.FC<MarketplaceRaidDashboardProps> =
       return [];
     }
   });
-  const [view, setView] = useState<ViewState>({ type: 'list' });
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Persist campaigns to localStorage whenever they change
   useEffect(() => {
@@ -33,38 +29,15 @@ export const MarketplaceRaidDashboard: React.FC<MarketplaceRaidDashboardProps> =
 
   const handleCreateCampaign = (newCampaign: Campaign) => {
     setCampaigns([...campaigns, newCampaign]);
-    setView({ type: 'list' });
-  };
-
-  const handleUpdateCampaign = (updated: Campaign) => {
-    setCampaigns(campaigns.map(c => c.id === updated.id ? updated : c));
+    setShowCreateModal(false);
   };
 
   const handleDeleteCampaign = (campaignId: string) => {
     if (confirm('¿Estás seguro de que deseas eliminar esta campaña?')) {
       setCampaigns(campaigns.filter(c => c.id !== campaignId));
-      if (view.type === 'dashboard' && view.campaignId === campaignId) {
-        setView({ type: 'list' });
-      }
     }
   };
 
-  const selectedCampaign = view.type === 'dashboard'
-    ? campaigns.find(c => c.id === view.campaignId)
-    : null;
-
-  // Render Campaign Dashboard View
-  if (view.type === 'dashboard' && selectedCampaign) {
-    return (
-      <CampaignDashboard
-        campaign={selectedCampaign}
-        onUpdateCampaign={handleUpdateCampaign}
-        onBack={() => setView({ type: 'list' })}
-      />
-    );
-  }
-
-  // Render List View (also shown when creating campaign modal is open)
   return (
     <div className="p-3 md:p-4 lg:p-6 animate-in slide-in-from-right duration-300">
       {/* Header */}
@@ -83,7 +56,7 @@ export const MarketplaceRaidDashboard: React.FC<MarketplaceRaidDashboardProps> =
           <p className="text-slate-400 text-xs md:text-sm">Gestiona tus campañas de búsqueda en Upwork y Fiverr.</p>
         </div>
         <button
-          onClick={() => setView({ type: 'creating' })}
+          onClick={() => setShowCreateModal(true)}
           className="ml-auto bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 md:px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 font-medium shadow-lg shadow-emerald-900/20 text-xs md:text-sm flex-shrink-0"
         >
           <Plus className="h-3.5 md:h-4 w-3.5 md:w-4" /> <span className="hidden sm:inline">Nueva Campaña</span>
@@ -96,7 +69,7 @@ export const MarketplaceRaidDashboard: React.FC<MarketplaceRaidDashboardProps> =
           <Target className="h-12 w-12 mb-4 opacity-20" />
           <p className="text-sm mb-2">No hay campañas creadas aún.</p>
           <button
-            onClick={() => setView({ type: 'creating' })}
+            onClick={() => setShowCreateModal(true)}
             className="text-emerald-400 hover:text-emerald-300 text-xs mt-2"
           >
             Crea tu primera campaña para comenzar
@@ -107,7 +80,7 @@ export const MarketplaceRaidDashboard: React.FC<MarketplaceRaidDashboardProps> =
           {campaigns.map((campaign) => (
             <div
               key={campaign.id}
-              onClick={() => setView({ type: 'dashboard', campaignId: campaign.id })}
+              onClick={() => navigate(`/marketplace-raid/${campaign.id}`)}
               className="group bg-slate-900/50 border border-slate-800 rounded-2xl p-6 cursor-pointer hover:border-emerald-500/50 hover:bg-slate-900/80 transition-all relative"
             >
               <div className="flex justify-between items-start mb-4">
@@ -173,8 +146,8 @@ export const MarketplaceRaidDashboard: React.FC<MarketplaceRaidDashboardProps> =
 
       {/* Create Campaign Modal */}
       <CreateCampaignModal
-        isOpen={view.type === 'creating'}
-        onClose={() => setView({ type: 'list' })}
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
         onCreate={handleCreateCampaign}
       />
     </div>
