@@ -13,6 +13,7 @@ export { CreateCampaignModal } from './components/CreateCampaignModal';
 export { KanbanBoard } from './components/KanbanBoard';
 export { PipelineList } from './components/PipelineList';
 export { ManualEnrichmentModal } from './components/ManualEnrichmentModal';
+export { SearchGenerator } from './components/SearchGenerator';
 
 export { MarketplaceRaidService } from './services/marketplaceRaidService';
 export { ApifyService } from './services/apifyService';

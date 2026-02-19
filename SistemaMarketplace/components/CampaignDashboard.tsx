@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, Plus, LayoutGrid, List, Download } from 'lucide-react';
+import { ChevronDown, Plus, LayoutGrid, List, Download, Zap } from 'lucide-react';
 import { Campaign, EnrichedCandidateInCampaign } from '../types/campaigns';
 import { KanbanBoard } from './KanbanBoard';
 import { PipelineList } from './PipelineList';
@@ -8,12 +8,14 @@ import { ManualEnrichmentModal } from './ManualEnrichmentModal';
 interface CampaignDashboardProps {
   campaign: Campaign;
   onUpdateCampaign: (campaign: Campaign) => void;
+  onOpenSearch: () => void;
   onBack: () => void;
 }
 
 export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
   campaign,
   onUpdateCampaign,
+  onOpenSearch,
   onBack,
 }) => {
   const [viewMode, setViewMode] = useState<'kanban' | 'pipeline'>('pipeline');
@@ -85,6 +87,14 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={onOpenSearch}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm transition-colors"
+            >
+              <Zap className="h-4 w-4" />
+              Buscar
+            </button>
+
             <div className="flex gap-2 bg-slate-800 rounded-lg p-1">
               <button
                 onClick={() => setViewMode('pipeline')}
