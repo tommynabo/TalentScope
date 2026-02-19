@@ -60,9 +60,9 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
 
         try {
             const messagesToSave: any = {
-                [editingMessage.type === 'icebreaker' ? 'outreach_icebreaker' : 
-                 editingMessage.type === 'pitch' ? 'outreach_pitch' : 
-                 'outreach_followup']: editingMessage.value
+                [editingMessage.type === 'icebreaker' ? 'outreach_icebreaker' :
+                    editingMessage.type === 'pitch' ? 'outreach_pitch' :
+                        'outreach_followup']: editingMessage.value
             };
 
             const success = await GitHubCandidatePersistence.saveOutreachMessages(
@@ -81,7 +81,7 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                 } else {
                     selectedCandidate.outreach_followup = editingMessage.value;
                 }
-                
+
                 // Close modal after successful save
                 setTimeout(() => {
                     setMessageModalOpen(false);
@@ -124,42 +124,73 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
     });
 
     // Helper to format date labels
-    const formatDateLabel = (dateStr: string): string => {
-        if (!dateStr) return 'Fecha desconocida';
-        const date = new Date(dateStr);
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-        const diffDays = Math.round((today.getTime() - target.getTime()) / (1000 * 60 * 60 * 24));
+    const formatDateLabel = (dateKey: string): string => {
+        const [year, month, day] = dateKey.split('-').map(Number);
+        const date = new Date(year, month - 1, day);
+        const today = new Date();
 
-        if (diffDays === 0) return 'Hoy';
-        if (diffDays === 1) return 'Ayer';
-
-        return target.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
-    };
-
-    // Group candidates by date
-    const groupedCandidates = React.useMemo(() => {
-        const groups: { label: string; count: number; candidates: GitHubMetrics[] }[] = [];
-        let currentKey = '';
-
-        for (const c of sortedCandidates) {
-            const dateStr = c.updated_at || c.created_at || new Date().toISOString(); // Use insertion date, not GitHub account creation
-            const date = new Date(dateStr);
-            const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-
-            if (dayKey !== currentKey) {
-                currentKey = dayKey;
-                groups.push({ label: formatDateLabel(dateStr), count: 0, candidates: [] });
-            }
-
-            const group = groups[groups.length - 1];
-            group.candidates.push(c);
-            group.count++;
+        // Only "Hoy" for today — all other days show concrete date
+        if (
+            date.getFullYear() === today.getFullYear() &&
+            date.getMonth() === today.getMonth() &&
+            date.getDate() === today.getDate()
+        ) {
+            return 'Hoy';
         }
 
-        return groups;
-    }, [sortedCandidates]);
+        return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+    };
+
+    // Stable date key from ISO string
+    const toDateKey = (dateString: string): string => {
+        const d = new Date(dateString);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    // Group candidates by date FIRST, then sort within each group
+    const groupedCandidates = React.useMemo(() => {
+        // 1. Collect candidates into a Map<dateKey, GitHubMetrics[]>
+        const dateMap = new Map<string, GitHubMetrics[]>();
+
+        for (const c of candidates) {
+            const dateStr = c.updated_at || c.created_at || new Date().toISOString();
+            const key = toDateKey(dateStr);
+            if (!dateMap.has(key)) {
+                dateMap.set(key, []);
+            }
+            dateMap.get(key)!.push(c);
+        }
+
+        // 2. Sort date keys descending (newest first): "2026-02-19" > "2026-02-17"
+        const sortedKeys = Array.from(dateMap.keys()).sort((a, b) => b.localeCompare(a));
+
+        // 3. Build final groups, sorting candidates WITHIN each group by the active sort
+        return sortedKeys.map(key => {
+            const groupCandidates = dateMap.get(key)!;
+
+            // Apply user sort within this date group
+            groupCandidates.sort((a, b) => {
+                let aVal: any = a[sortConfig.field];
+                let bVal: any = b[sortConfig.field];
+                if (typeof aVal === 'string') {
+                    aVal = aVal.toLowerCase();
+                    bVal = (bVal as string || '').toLowerCase();
+                }
+                if (aVal === bVal) return 0;
+                const comparison = aVal < bVal ? -1 : 1;
+                return sortConfig.direction === 'desc' ? -comparison : comparison;
+            });
+
+            return {
+                label: formatDateLabel(key),
+                count: groupCandidates.length,
+                candidates: groupCandidates
+            };
+        });
+    }, [candidates, sortConfig]);
 
     if (candidates.length === 0) {
         return (
@@ -228,7 +259,7 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                         <React.Fragment key={group.label}>
                             {/* Date SECTION Row */}
                             <tr>
-                                <td colSpan={6} className="px-0 py-0">
+                                <td colSpan={7} className="px-0 py-0">
                                     <div className="flex items-center gap-3 px-4 py-2 bg-orange-950/20 border-y border-orange-500/10 backdrop-blur-sm mt-2 first:mt-0">
                                         <div className="flex items-center gap-2">
                                             <Calendar className="h-3.5 w-3.5 text-orange-400/80" />
@@ -480,7 +511,7 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                                 </div>
                             </div>
 
-                                {/* Messages Section */}
+                            {/* Messages Section */}
                             <div className="border-t border-slate-800 pt-6">
                                 <div className="flex justify-between items-center mb-4">
                                     <h4 className="text-base font-bold text-white">Estrategia de Outreach</h4>
@@ -644,15 +675,14 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
                             <button
                                 onClick={handleSaveMessage}
                                 disabled={isSaving || !campaignId}
-                                className={`flex-1 py-3 rounded-lg text-white font-semibold transition-colors flex items-center justify-center gap-2 border ${
-                                    !campaignId
-                                        ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
-                                        : saveStatus === 'saved'
+                                className={`flex-1 py-3 rounded-lg text-white font-semibold transition-colors flex items-center justify-center gap-2 border ${!campaignId
+                                    ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+                                    : saveStatus === 'saved'
                                         ? 'bg-green-600/30 border-green-600/50 text-green-300'
                                         : saveStatus === 'error'
-                                        ? 'bg-red-600/30 border-red-600/50 text-red-300'
-                                        : 'bg-orange-600/20 hover:bg-orange-600/30 border-orange-600/50 text-orange-300'
-                                }`}
+                                            ? 'bg-red-600/30 border-red-600/50 text-red-300'
+                                            : 'bg-orange-600/20 hover:bg-orange-600/30 border-orange-600/50 text-orange-300'
+                                    }`}
                                 title={!campaignId ? 'Abre desde un contexto de campaña para guardar' : ''}
                             >
                                 {isSaving ? (
