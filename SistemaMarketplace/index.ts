@@ -17,9 +17,7 @@ export { SearchGenerator } from './components/SearchGenerator';
 
 export { MarketplaceRaidService } from './services/marketplaceRaidService';
 export { ApifyService } from './services/apifyService';
-export { ClayEnrichmentService } from './services/clayEnrichmentService';
-export { WaleadService } from './services/waleadService';
-export { InstantlyService } from './services/instantlyService';
+export { AIEnrichmentService } from './services/aiEnrichmentService';
 export { FreeEnrichmentService } from './services/freeEnrichmentService';
 
 export { MarketplaceCSVExport } from './utils/csvExport';

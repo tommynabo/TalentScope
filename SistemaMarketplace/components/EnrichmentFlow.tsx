@@ -44,11 +44,11 @@ export const EnrichmentFlow: React.FC<EnrichmentFlowProps> = ({
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
         <h3 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2">
           <Brain className="h-5 w-5 text-purple-400" />
-          Clay Enrichment
+          AI Enrichment (OpenAI)
         </h3>
         <p className="text-slate-400 text-sm">
-          Se enriquecerán los datos de cada candidato con: LinkedIn profile, emails extraídos,
-          validación de fotos e identity confidence score.
+          Se enriquecerán los datos de cada candidato con: LinkedIn profile inference, email extraction,
+          photo validation e identity confidence score usando OpenAI.
         </p>
       </div>
 

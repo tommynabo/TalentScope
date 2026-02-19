@@ -1,44 +1,29 @@
 import { MarketplaceRaid, ScrapingFilter, EnrichedCandidate, OutreachCampaign } from '../types/marketplace';
 import { ApifyService } from './apifyService';
-import { ClayEnrichmentService } from './clayEnrichmentService';
-import { WaleadService } from './waleadService';
-import { InstantlyService } from './instantlyService';
+import { AIEnrichmentService } from './aiEnrichmentService';
 
 export class MarketplaceRaidService {
   private static instance: MarketplaceRaidService;
   private raids: Map<string, MarketplaceRaid> = new Map();
   private apifyService: ApifyService;
-  private clayService: ClayEnrichmentService;
-  private waleadService: WaleadService;
-  private instantlyService: InstantlyService;
+  private aiEnrichmentService: AIEnrichmentService;
 
   private constructor(
     apifyKey: string,
-    clayKey: string,
-    prospeoKey: string,
-    waleadKey: string,
-    instantlyKey: string
+    openaiKey: string
   ) {
     this.apifyService = new ApifyService(apifyKey);
-    this.clayService = new ClayEnrichmentService(clayKey, prospeoKey);
-    this.waleadService = new WaleadService(waleadKey);
-    this.instantlyService = new InstantlyService(instantlyKey);
+    this.aiEnrichmentService = new AIEnrichmentService(openaiKey);
   }
 
   static getInstance(
     apifyKey: string = 'mock',
-    clayKey: string = 'mock',
-    prospeoKey: string = 'mock',
-    waleadKey: string = 'mock',
-    instantlyKey: string = 'mock'
+    openaiKey: string = 'mock'
   ): MarketplaceRaidService {
     if (!MarketplaceRaidService.instance) {
       MarketplaceRaidService.instance = new MarketplaceRaidService(
         apifyKey,
-        clayKey,
-        prospeoKey,
-        waleadKey,
-        instantlyKey
+        openaiKey
       );
     }
     return MarketplaceRaidService.instance;
@@ -46,15 +31,11 @@ export class MarketplaceRaidService {
 
   async validateAllConnections(): Promise<{
     apify: boolean;
-    clay: boolean;
-    walead: boolean;
-    instantly: boolean;
+    openai: boolean;
   }> {
     return {
       apify: await this.apifyService.validateConnection(),
-      clay: await this.clayService.validateConnection(),
-      walead: await this.waleadService.validateConnection(),
-      instantly: await this.instantlyService.validateConnection(),
+      openai: await this.aiEnrichmentService.validateConnection(),
     };
   }
 
@@ -107,12 +88,8 @@ export class MarketplaceRaidService {
     if (!raid) return null;
 
     try {
-      const enriched: EnrichedCandidate[] = [];
-
-      for (const candidate of raid.scrapedCandidates) {
-        const enrichedCandidate = await this.clayService.enrichCandidate(candidate);
-        enriched.push(enrichedCandidate);
-      }
+      // Use AI Enrichment Service with batch processing
+      const enriched = await this.aiEnrichmentService.enrichBatch(raid.scrapedCandidates);
 
       raid.enrichedCandidates = enriched;
       raid.enrichmentProgress = {
@@ -121,7 +98,7 @@ export class MarketplaceRaidService {
         failed: 0,
       };
       raid.stats.totalEnriched = enriched.length;
-      raid.status = 'Phase 3: Outreach';
+      raid.status = 'Ready to Export';
 
       this.raids.set(raidId, raid);
       return raid;
@@ -131,40 +108,19 @@ export class MarketplaceRaidService {
     }
   }
 
-  async executeOutreach(raidId: string, campaign: OutreachCampaign): Promise<MarketplaceRaid | null> {
-    const raid = this.raids.get(raidId);
-    if (!raid) return null;
-
-    try {
-      for (const candidate of raid.enrichedCandidates) {
-        if (campaign.platforms === 'LinkedIn' || campaign.platforms === 'Both') {
-          const record = await this.waleadService.sendLinkedInMessage(
-            candidate,
-            campaign.messageTemplate
-          );
-          raid.outreachRecords.push(record);
-        }
-
-        if (campaign.platforms === 'Email' || campaign.platforms === 'Both') {
-          const record = await this.instantlyService.sendOutreachEmail(
-            candidate,
-            campaign.name,
-            campaign.messageTemplate
-          );
-          raid.outreachRecords.push(record);
-        }
-      }
-
-      raid.stats.totalContacted = raid.outreachRecords.length;
-      raid.status = 'Phase 4: Complete';
-
-      this.raids.set(raidId, raid);
-      return raid;
-    } catch (error) {
-      console.error('Outreach error:', error);
-      return raid;
-    }
-  }
+  /**
+   * OUTREACH FUNCTIONALITY REMOVED
+   * 
+   * This version does NOT send automatic messages (No Walead/Instantly).
+   * Enriched candidates are available for manual export, CSV download,
+   * or integration with your own outreach tools.
+   * 
+   * Use enrichedCandidates for:
+   * - CSV export for bulk messaging
+   * - Manual LinkedIn outreach
+   * - Email campaign setup in your preferred platform
+   * - CRM integration
+   */
 
   getRaid(raidId: string): MarketplaceRaid | undefined {
     return this.raids.get(raidId);
