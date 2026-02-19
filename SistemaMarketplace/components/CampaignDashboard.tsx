@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, Plus, LayoutGrid, List } from 'lucide-react';
+import { ChevronDown, Plus, LayoutGrid, List, Download } from 'lucide-react';
 import { Campaign, EnrichedCandidateInCampaign } from '../types/campaigns';
 import { KanbanBoard } from './KanbanBoard';
 import { PipelineList } from './PipelineList';
@@ -16,17 +16,16 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
   onUpdateCampaign,
   onBack,
 }) => {
-  const [viewMode, setViewMode] = useState<'kanban' | 'pipeline'>('kanban');
+  const [viewMode, setViewMode] = useState<'kanban' | 'pipeline'>('pipeline');
   const [showAddModal, setShowAddModal] = useState(false);
 
   const handleUpdateCandidate = (candidate: EnrichedCandidateInCampaign, newLane: string) => {
     const updated = campaign.candidates.map(c =>
       c.candidateId === candidate.candidateId
-        ? { ...c, kanbanLane: newLane }
+        ? { ...c, kanbanLane: newLane as any }
         : c
     );
 
-    // Calculate new stats
     const stats = {
       total: updated.length,
       inTodo: updated.filter(c => c.kanbanLane === 'todo').length,
@@ -34,8 +33,8 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       inReplied: updated.filter(c => c.kanbanLane === 'replied').length,
       inRejected: updated.filter(c => c.kanbanLane === 'rejected').length,
       inHired: updated.filter(c => c.kanbanLane === 'hired').length,
-      contactRate: (updated.filter(c => c.kanbanLane !== 'todo').length / updated.length) * 100,
-      responseRate: (updated.filter(c => c.kanbanLane === 'replied' || c.kanbanLane === 'hired').length / updated.length) * 100,
+      contactRate: (updated.filter(c => c.kanbanLane !== 'todo').length / updated.length) * 100 || 0,
+      responseRate: (updated.filter(c => c.kanbanLane === 'replied' || c.kanbanLane === 'hired').length / updated.length) * 100 || 0,
     };
 
     onUpdateCampaign({
@@ -53,7 +52,6 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
 
     const updated = [...campaign.candidates, newCandidate];
 
-    // Calculate new stats
     const stats = {
       total: updated.length,
       inTodo: updated.filter(c => c.kanbanLane === 'todo').length,
@@ -61,8 +59,8 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       inReplied: updated.filter(c => c.kanbanLane === 'replied').length,
       inRejected: updated.filter(c => c.kanbanLane === 'rejected').length,
       inHired: updated.filter(c => c.kanbanLane === 'hired').length,
-      contactRate: (updated.filter(c => c.kanbanLane !== 'todo').length / updated.length) * 100,
-      responseRate: (updated.filter(c => c.kanbanLane === 'replied' || c.kanbanLane === 'hired').length / updated.length) * 100,
+      contactRate: (updated.filter(c => c.kanbanLane !== 'todo').length / updated.length) * 100 || 0,
+      responseRate: (updated.filter(c => c.kanbanLane === 'replied' || c.kanbanLane === 'hired').length / updated.length) * 100 || 0,
     };
 
     onUpdateCampaign({
@@ -75,101 +73,86 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900">
+    <div className="flex flex-col h-full bg-slate-950">
       {/* Header */}
-      <div className="border-b border-slate-700 p-4">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <button
-              onClick={onBack}
-              className="text-slate-400 hover:text-slate-200 mb-2 text-sm"
-            >
-              ← Volver
-            </button>
-            <h1 className="text-3xl font-bold text-white">{campaign.name}</h1>
-            <p className="text-slate-400 text-sm mt-1">
-              {campaign.platform === 'upwork' ? 'Upwork' : 'Fiverr'} •{' '}
-              {campaign.searchTerms.keyword}
+      <div className="border-b border-slate-700 bg-slate-900 p-6">
+        <div className="flex items-start justify-between mb-6">
+          <div className="flex-1">
+            <h1 className="text-4xl font-bold text-white">{campaign.name}</h1>
+            <p className="text-slate-400 text-sm mt-2">
+              {campaign.platform} • {campaign.searchTerms.keyword || campaign.searchTerms.keywords?.join(', ')}
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* View Toggle */}
             <div className="flex gap-2 bg-slate-800 rounded-lg p-1">
-              <button
-                onClick={() => setViewMode('kanban')}
-                className={`p-2 rounded transition-colors ${
-                  viewMode === 'kanban'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Kanban View"
-              >
-                <LayoutGrid className="h-5 w-5" />
-              </button>
               <button
                 onClick={() => setViewMode('pipeline')}
                 className={`p-2 rounded transition-colors ${
                   viewMode === 'pipeline'
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-emerald-600 text-white'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
-                title="Pipeline View"
+                title="Pipeline List"
               >
                 <List className="h-5 w-5" />
               </button>
+              <button
+                onClick={() => setViewMode('kanban')}
+                className={`p-2 rounded transition-colors ${
+                  viewMode === 'kanban'
+                    ? 'bg-emerald-600 text-white'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Kanban Board"
+              >
+                <LayoutGrid className="h-5 w-5" />
+              </button>
             </div>
 
-            {/* Add Manual Candidate */}
             <button
               onClick={() => setShowAddModal(true)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors"
             >
               <Plus className="h-4 w-4" />
-              Agregar
+              Añadir
             </button>
           </div>
         </div>
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-6 gap-3">
-          <div className="bg-slate-800/50 rounded-lg p-3">
-            <div className="text-xs text-slate-400 mb-1">Total</div>
-            <div className="text-2xl font-bold text-white">{campaign.stats.total}</div>
+        {/* Stats Row - Like the first image */}
+        <div className="grid grid-cols-5 gap-4">
+          <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+            <div className="text-slate-400 text-xs mb-2">TOTAL</div>
+            <div className="text-3xl font-bold text-white">{campaign.stats.total}</div>
           </div>
-          <div className="bg-slate-800/50 rounded-lg p-3">
-            <div className="text-xs text-slate-400 mb-1">Por Contactar</div>
-            <div className="text-2xl font-bold text-slate-300">{campaign.stats.inTodo}</div>
+          <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+            <div className="text-slate-400 text-xs mb-2">POR CONTACTAR</div>
+            <div className="text-3xl font-bold text-slate-300">{campaign.stats.inTodo}</div>
           </div>
-          <div className="bg-slate-800/50 rounded-lg p-3">
-            <div className="text-xs text-slate-400 mb-1">Contactados</div>
-            <div className="text-2xl font-bold text-blue-400">{campaign.stats.inContacted}</div>
+          <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+            <div className="text-slate-400 text-xs mb-2">CONTACTADOS</div>
+            <div className="text-3xl font-bold text-blue-400">{campaign.stats.inContacted}</div>
           </div>
-          <div className="bg-slate-800/50 rounded-lg p-3">
-            <div className="text-xs text-slate-400 mb-1">Respondieron</div>
-            <div className="text-2xl font-bold text-emerald-400">{campaign.stats.inReplied}</div>
+          <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+            <div className="text-slate-400 text-xs mb-2">RESPONDIERON</div>
+            <div className="text-3xl font-bold text-emerald-400">{campaign.stats.inReplied}</div>
           </div>
-          <div className="bg-slate-800/50 rounded-lg p-3">
-            <div className="text-xs text-slate-400 mb-1">Contratados</div>
-            <div className="text-2xl font-bold text-purple-400">{campaign.stats.inHired}</div>
-          </div>
-          <div className="bg-slate-800/50 rounded-lg p-3">
-            <div className="text-xs text-slate-400 mb-1">Tasa Respuesta</div>
-            <div className="text-2xl font-bold text-green-400">
-              {campaign.stats.responseRate.toFixed(0)}%
-            </div>
+          <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+            <div className="text-slate-400 text-xs mb-2">TASA RESPUESTA</div>
+            <div className="text-3xl font-bold text-green-400">{campaign.stats.responseRate.toFixed(0)}%</div>
           </div>
         </div>
       </div>
 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto">
-        {viewMode === 'kanban' ? (
-          <div className="p-4">
+        {viewMode === 'pipeline' ? (
+          <PipelineList campaign={campaign} onUpdateCandidate={handleUpdateCandidate} />
+        ) : (
+          <div className="p-6">
             <KanbanBoard campaign={campaign} onUpdateCandidate={handleUpdateCandidate} />
           </div>
-        ) : (
-          <PipelineList campaign={campaign} onUpdateCandidate={handleUpdateCandidate} />
         )}
       </div>
 
