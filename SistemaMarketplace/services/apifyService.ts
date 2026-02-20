@@ -172,6 +172,10 @@ export class ApifyService {
       jobSuccessRate: parseFloat(item.jobSuccess || item.jobSuccessRate || item.successRate || '0') || 0,
       certifications: item.certifications || item.badges || [],
       bio: item.bio || item.description || item.overview || item.shortOverview || '',
+      scrapedAt: new Date().toISOString(),
+    }));
+  }
+
   private async runFiverrActor(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
     // Build Fiverr search URL
     const keyword = encodeURIComponent(filter.keyword);
