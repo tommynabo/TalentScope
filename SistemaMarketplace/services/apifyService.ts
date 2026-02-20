@@ -137,8 +137,12 @@ export class ApifyService {
 
     console.log(`🔗 Upwork search URL: ${searchUrl}`);
 
+    // Input adaptado para nwtn/upwork-profile-scraper
     const input = {
-      searchUrl,
+      startUrls: [{ url: searchUrl }],
+      maxPages: 2,
+      maxResults: 50,
+      waitUntilContentLoaded: true,
     };
 
     const results = await this.executeActor(this.actors.upwork, input);
@@ -151,21 +155,17 @@ export class ApifyService {
     console.log(`✅ Upwork actor devolvió ${results.length} resultados raw`);
 
     return results.map((item: any, index: number) => ({
-      id: `upwork-${item.userId || item.id || item.ciphertext || index}`,
-      name: item.name || item.freelancerName || item.title || 'Unknown',
+      id: `upwork-${item.id || item.userId || item.ciphertext || index}`,
+      name: item.name || item.title || item.freelancerName || 'Unknown',
       platform: 'Upwork' as FreelancePlatform,
       platformUsername: item.username || item.userId || item.ciphertext || '',
-      profileUrl: item.profileUrl || item.url || item.link || `https://upwork.com/freelancers/~${item.userId || item.ciphertext || ''}`,
-      title: item.jobTitle || item.title || item.topSkill || item.specialization || 'Freelancer',
+      profileUrl: item.profileUrl || item.url || item.link || `https://upwork.com/freelancers/~${item.id || item.userId || ''}`,
+      title: item.title || item.jobTitle || item.topSkill || item.specialization || 'Freelancer',
       country: item.country || item.location || 'Unknown',
       hourlyRate: parseFloat(item.hourlyRate || item.rate || item.price || '0') || filter.minHourlyRate,
       jobSuccessRate: parseFloat(item.jobSuccess || item.jobSuccessRate || item.successRate || '0') || 0,
       certifications: item.certifications || item.badges || [],
       bio: item.bio || item.description || item.overview || item.shortOverview || '',
-      scrapedAt: new Date().toISOString(),
-    }));
-  }
-
   private async runFiverrActor(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
     // Build Fiverr search URL
     const keyword = encodeURIComponent(filter.keyword);
@@ -173,9 +173,38 @@ export class ApifyService {
 
     console.log(`🔗 Fiverr search URL: ${searchUrl}`);
 
+    // Input adaptado para apify/web-scraper (universal)
     const input = {
-      urls: [searchUrl],
-      maxPages: 3,
+      startUrls: [{ url: searchUrl }],
+      maxPages: 2,
+      maxResults: 50,
+      pageFunction: `
+        async function pageFunction(context) {
+          const { page, request, log } = context;
+          const results = [];
+          const gigs = page.querySelectorAll('[data-qa="gig-card"]');
+          
+          gigs.forEach((gig, idx) => {
+            const titleElement = gig.querySelector('[data-qa="gig-card-title"]') || gig.querySelector('h3');
+            const priceElement = gig.querySelector('[data-qa="gig-price"]') || gig.querySelector('.price');
+            const ratingElement = gig.querySelector('[data-qa="star-rating"]') || gig.querySelector('.star-rating');
+            const sellerElement = gig.querySelector('[data-qa="seller-name"]') || gig.querySelector('[data-qa="gig-creator-name"]');
+            const linkElement = gig.querySelector('a[href*="/"]');
+            
+            results.push({
+              id: idx,
+              title: titleElement?.textContent?.trim() || 'Gig',
+              price: priceElement?.textContent?.trim() || '0',
+              rating: ratingElement?.textContent?.trim() || '0',
+              seller: sellerElement?.textContent?.trim() || 'Unknown',
+              url: linkElement?.href || '',
+              description: gig.textContent?.substring(0, 200) || '',
+            });
+          });
+          
+          return results;
+        }
+      `,
     };
 
     const results = await this.executeActor(this.actors.fiverr, input);

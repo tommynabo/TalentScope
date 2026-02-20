@@ -166,7 +166,14 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
   // ─── Search with Real Services ─────────────────────────────────────────
   const handleRunSearch = async () => {
     setSearching(true);
-    setLogs([]);
+    // Crear línea separadora en lugar de limpiar todo
+    setLogs(prev => {
+      const newLogs = [...prev];
+      if (newLogs.length > 0) {
+        newLogs.push(`\n${'═'.repeat(60)}\n🔄 NUEVA BÚSQUEDA INICIADA\n${'═'.repeat(60)}\n`);
+      }
+      return newLogs;
+    });
     setShowLogs(true);
 
     try {
