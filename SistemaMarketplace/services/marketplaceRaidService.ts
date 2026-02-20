@@ -76,10 +76,36 @@ export class MarketplaceRaidService {
     if (!raid) return null;
 
     try {
-      const upworkCandidates = await this.apifyService.scrapeUpwork(filter);
-      const fiverrrCandidates = await this.apifyService.scrapeFiverr(filter);
+      let allCandidates: any[] = [];
 
-      raid.scrapedCandidates = [...upworkCandidates, ...fiverrrCandidates];
+      // Scrape based on selected platforms
+      const platforms = filter.platforms || [];
+
+      if (platforms.includes('Upwork' as any)) {
+        console.log('📊 Scraping Upwork...');
+        const upworkCandidates = await this.apifyService.scrapeUpwork(filter);
+        allCandidates = [...allCandidates, ...upworkCandidates];
+        console.log(`   → Upwork: ${upworkCandidates.length} candidatos`);
+      }
+
+      if (platforms.includes('Fiverr' as any)) {
+        console.log('📊 Scraping Fiverr...');
+        const fiverrCandidates = await this.apifyService.scrapeFiverr(filter);
+        allCandidates = [...allCandidates, ...fiverrCandidates];
+        console.log(`   → Fiverr: ${fiverrCandidates.length} candidatos`);
+      }
+
+      if (platforms.includes('LinkedIn' as any)) {
+        console.log('📊 Scraping LinkedIn...');
+        const linkedinCandidates = await this.apifyService.scrapeLinkedIn(filter);
+        allCandidates = [...allCandidates, ...linkedinCandidates];
+        console.log(`   → LinkedIn: ${linkedinCandidates.length} candidatos`);
+      }
+
+      // Sort all candidates by TalentScore (best first)
+      allCandidates.sort((a, b) => (b.talentScore || 0) - (a.talentScore || 0));
+
+      raid.scrapedCandidates = allCandidates;
       raid.scrapingProgress = {
         total: raid.scrapedCandidates.length,
         completed: raid.scrapedCandidates.length,

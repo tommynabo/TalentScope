@@ -14,7 +14,7 @@ import { ScrapingFilter, FreelancePlatform } from '../types/marketplace';
 import Toast from '../../components/Toast';
 
 // ─── Sort types ─────────────────────────────────────────────────────────
-type SortField = 'addedAt' | 'jobSuccessRate' | 'name' | 'hourlyRate';
+type SortField = 'addedAt' | 'jobSuccessRate' | 'name' | 'hourlyRate' | 'talentScore';
 type SortDirection = 'asc' | 'desc';
 
 interface CampaignDashboardProps {
@@ -29,7 +29,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
   onBack,
 }) => {
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
-  const [sortConfig, setSortConfig] = useState<{ field: SortField; direction: SortDirection }>({ field: 'addedAt', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState<{ field: SortField; direction: SortDirection }>({ field: 'talentScore', direction: 'desc' });
   const [selectedCandidate, setSelectedCandidate] = useState<EnrichedCandidateInCampaign | null>(null);
   const [toast, setToast] = useState({ show: false, message: '' });
   const [showExportOptions, setShowExportOptions] = useState(false);
@@ -73,6 +73,8 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         cmp = a.jobSuccessRate - b.jobSuccessRate;
       } else if (sortConfig.field === 'hourlyRate') {
         cmp = a.hourlyRate - b.hourlyRate;
+      } else if (sortConfig.field === 'talentScore') {
+        cmp = (a.talentScore || 0) - (b.talentScore || 0);
       } else if (sortConfig.field === 'name') {
         cmp = a.name.localeCompare(b.name);
       }
@@ -293,6 +295,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         platform: enriched.platform,
         hourlyRate: enriched.hourlyRate,
         jobSuccessRate: enriched.jobSuccessRate,
+        talentScore: (enriched as any).talentScore || 0,
         addedAt: enriched.scrapedAt || new Date().toISOString(),
         kanbanLane: 'todo' as const,
       }));
@@ -668,6 +671,17 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
                     <th className="px-3 lg:px-4 py-2">Email</th>
                     <th
                       className="px-3 lg:px-4 py-2 cursor-pointer hover:text-slate-300 transition-colors select-none"
+                      onClick={() => toggleSort('talentScore')}
+                    >
+                      <div className="flex items-center gap-1">
+                        <Target className="h-3 w-3" /> Score
+                        {sortConfig.field === 'talentScore' && (
+                          sortConfig.direction === 'desc' ? <ChevronDown className="h-3 w-3 text-emerald-400" /> : <ChevronUp className="h-3 w-3 text-emerald-400" />
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      className="px-3 lg:px-4 py-2 cursor-pointer hover:text-slate-300 transition-colors select-none"
                       onClick={() => toggleSort('jobSuccessRate')}
                     >
                       <div className="flex items-center gap-1">
@@ -685,7 +699,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
                     <React.Fragment key={group.label}>
                       {/* Date Divider Row */}
                       <tr>
-                        <td colSpan={6} className="px-0 py-0">
+                        <td colSpan={7} className="px-0 py-0">
                           <div className="flex items-center gap-3 px-3 lg:px-4 py-1.5 bg-emerald-950/20 border-y border-emerald-500/15 backdrop-blur-sm">
                             <div className="flex items-center gap-1.5">
                               <Calendar className="h-3 w-3 text-emerald-400/70" />
@@ -724,6 +738,19 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
                           </td>
                           <td className="px-3 lg:px-4 py-2">
                             <p className="text-xs text-slate-400 truncate max-w-[150px]">{candidate.email || 'N/A'}</p>
+                          </td>
+                          <td className="px-3 lg:px-4 py-2">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 w-12 bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${(candidate.talentScore || 0) >= 70 ? 'bg-gradient-to-r from-emerald-400 to-teal-300' : (candidate.talentScore || 0) >= 50 ? 'bg-emerald-500' : (candidate.talentScore || 0) >= 30 ? 'bg-yellow-500' : 'bg-slate-500'}`}
+                                  style={{ width: `${Math.min(candidate.talentScore || 0, 100)}%` }}
+                                ></div>
+                              </div>
+                              <span className={`text-xs font-bold ${(candidate.talentScore || 0) >= 70 ? 'text-emerald-400' : (candidate.talentScore || 0) >= 50 ? 'text-teal-400' : 'text-slate-400'}`}>
+                                {(candidate.talentScore || 0).toFixed(0)}
+                              </span>
+                            </div>
                           </td>
                           <td className="px-3 lg:px-4 py-2">
                             <div className="flex items-center gap-2">

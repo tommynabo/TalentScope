@@ -39,8 +39,10 @@ export class AIEnrichmentService {
         emails: parsed.emails,
         photoValidated: parsed.photoValidated,
         identityConfidenceScore: parsed.confidenceScore,
-        skills: parsed.skills,
-        experience: parsed.experience,
+        skills: parsed.skills || candidate.skills || [],
+        yearsExperience: typeof parsed.experience === 'number'
+          ? parsed.experience
+          : (candidate.yearsExperience || 0),
       };
     } catch (error) {
       console.error('Enrichment error:', error);

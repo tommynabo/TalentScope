@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
-import { Campaign, FreelancePlatform } from '../types/campaigns';
+import { Campaign } from '../types/campaigns';
+import { FreelancePlatform } from '../types/marketplace';
 
 interface CreateCampaignModalProps {
   isOpen: boolean;
@@ -124,15 +125,14 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ isOpen
               Plataforma *
             </label>
             <div className="flex gap-3">
-              {(['Upwork', 'Fiverr'] as FreelancePlatform[]).map(p => (
+              {(['Upwork', 'Fiverr', 'LinkedIn'] as FreelancePlatform[]).map(p => (
                 <button
                   key={p}
                   onClick={() => setPlatform(p)}
-                  className={`flex-1 py-3 rounded-lg font-medium transition-all ${
-                    platform === p
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                  }`}
+                  className={`flex-1 py-3 rounded-lg font-medium transition-all ${platform === p
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}
                 >
                   {p}
                 </button>
@@ -239,7 +239,7 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ isOpen
           {platform === 'Upwork' && (
             <div className="space-y-4 p-4 bg-slate-800/30 border border-slate-700 rounded-lg">
               <h3 className="font-semibold text-slate-200">Configuración Upwork</h3>
-              
+
               <div>
                 <label className="block text-sm font-semibold text-slate-300 mb-2">
                   Categoría Upwork
@@ -294,7 +294,7 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ isOpen
           {platform === 'Fiverr' && (
             <div className="space-y-4 p-4 bg-slate-800/30 border border-slate-700 rounded-lg">
               <h3 className="font-semibold text-slate-200">Configuración Fiverr</h3>
-              
+
               <div>
                 <label className="block text-sm font-semibold text-slate-300 mb-2">
                   Nivel Mínimo

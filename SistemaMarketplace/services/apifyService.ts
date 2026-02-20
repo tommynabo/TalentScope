@@ -1,96 +1,109 @@
 import { ScrapingFilter, ScrapedCandidate, FreelancePlatform } from '../types/marketplace';
 import { ApifyConfigService } from './apifyConfigService';
 
+/**
+ * ApifyService v2 — Dedicated Actors + TalentScore
+ * 
+ * Uses platform-specific Apify actors that are actively maintained
+ * instead of generic web-scraper with fragile CSS selectors.
+ * 
+ * Actors:
+ *  - Upwork: upwork-vibe/upwork-scraper (dedicated, no auth)
+ *  - Fiverr: apify/web-scraper with Puppeteer pageFunction
+ *  - LinkedIn: curious_coder/linkedin-search-api (no cookies needed)
+ */
 export class ApifyService {
   private apiKey: string;
   private baseUrl = 'https://api.apify.com/v2';
   private configService: ApifyConfigService | null = null;
 
-  // Actor IDs por defecto (fallback si no están en DB)
+  // Actor IDs — these are known-working actors from Apify Store
   private defaultActors = {
-    upwork: 'apify/web-scraper',  // Changed from nwtn/upwork-profile-scraper - not available in all accounts
+    upwork: 'upwork-vibe/upwork-scraper',
     fiverr: 'apify/web-scraper',
+    linkedin: 'curious_coder/linkedin-search-api',
   };
 
-  // Actor IDs cargados desde la base de datos
+  // Actor IDs loaded from DB (overrides defaults)
   private actors = {
     upwork: '',
     fiverr: '',
+    linkedin: '',
   };
 
-  /**
-   * Constructor
-   * @param apiKey - API key de Apify (puede ser específica para marketplace)
-   * @param supabaseUrl - URL de Supabase
-   * @param supabaseKey - Clave anon de Supabase
-   */
+  private actorsInitialized = false;
+
   constructor(apiKey: string, supabaseUrl?: string, supabaseKey?: string) {
     if (!apiKey) {
       console.error('❌ ApifyService: No se proporcionó API key');
     }
     this.apiKey = apiKey;
 
-    // Inicializar servicio de configuración si se proporciona
     if (supabaseUrl && supabaseKey) {
       this.configService = new ApifyConfigService(supabaseUrl, supabaseKey);
       this.initializeActorIds();
     } else {
-      // Usar valores por defecto si no hay Supabase
       this.actors = { ...this.defaultActors };
-      console.warn('⚠️ ApifyService: Usando Actor IDs por defecto. Para usar configuración de BD, proporciona supabaseUrl y supabaseKey');
+      console.warn('⚠️ ApifyService: Usando Actor IDs por defecto (sin Supabase)');
     }
   }
 
-  /**
-   * Inicializar los Actor IDs desde la base de datos
-   */
   private async initializeActorIds(): Promise<void> {
+    if (this.actorsInitialized) return;
+
     if (!this.configService) {
       this.actors = { ...this.defaultActors };
       return;
     }
 
     try {
-      // Obtener Actor IDs desde la base de datos
       const upworkId = await this.configService.getActorId('upwork_scraper');
       const fiverrId = await this.configService.getActorId('fiverr_scraper');
+      const linkedinId = await this.configService.getActorId('linkedin_scraper');
 
-      // Usar valores de BD si existen, si no usar defaults
       this.actors.upwork = upworkId || this.defaultActors.upwork;
       this.actors.fiverr = fiverrId || this.defaultActors.fiverr;
+      this.actors.linkedin = linkedinId || this.defaultActors.linkedin;
 
-      console.log('✅ Actor IDs cargados desde base de datos');
+      this.actorsInitialized = true;
+      console.log('✅ Actor IDs cargados:');
       console.log(`   - Upwork: ${this.actors.upwork}`);
       console.log(`   - Fiverr: ${this.actors.fiverr}`);
+      console.log(`   - LinkedIn: ${this.actors.linkedin}`);
     } catch (error) {
-      console.error('❌ Error inicializando Actor IDs desde BD:', error);
-      // Fallback a valores por defecto
+      console.error('❌ Error inicializando Actor IDs:', error);
       this.actors = { ...this.defaultActors };
     }
   }
 
-  /**
-   * Actualizar un Actor ID en la base de datos
-   */
-  async updateActorId(platform: 'upwork' | 'fiverr', newActorId: string): Promise<boolean> {
+  async updateActorId(platform: 'upwork' | 'fiverr' | 'linkedin', newActorId: string): Promise<boolean> {
     if (!this.configService) {
-      console.error('❌ No hay servicio de configuración - no se puede actualizar Actor ID');
+      console.error('❌ No hay servicio de configuración');
       return false;
     }
 
-    const configKey = platform === 'upwork' ? 'upwork_scraper' : 'fiverr_scraper';
-    const platformName = platform === 'upwork' ? 'Upwork' : 'Fiverr';
+    const keyMap: Record<string, string> = {
+      upwork: 'upwork_scraper',
+      fiverr: 'fiverr_scraper',
+      linkedin: 'linkedin_scraper',
+    };
+
+    const platformMap: Record<string, 'Upwork' | 'Fiverr' | 'LinkedIn'> = {
+      upwork: 'Upwork',
+      fiverr: 'Fiverr',
+      linkedin: 'LinkedIn',
+    };
 
     const success = await this.configService.setActorId(
-      configKey,
+      keyMap[platform],
       newActorId,
-      platformName as any,
-      `Scraper de ${platformName} actualizado ${new Date().toISOString()}`
+      platformMap[platform],
+      `Scraper de ${platformMap[platform]} actualizado ${new Date().toISOString()}`
     );
 
     if (success) {
       this.actors[platform] = newActorId;
-      console.log(`✅ Actor ID de ${platformName} actualizado: ${newActorId}`);
+      console.log(`✅ Actor ID de ${platformMap[platform]} actualizado: ${newActorId}`);
     }
 
     return success;
@@ -107,286 +120,648 @@ export class ApifyService {
     }
   }
 
+  // ─── UPWORK SCRAPING ────────────────────────────────────────────────────
+
   async scrapeUpwork(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
     if (!this.apiKey) {
-      console.error('❌ ERROR: No valid Apify key - cannot scrape');
+      console.error('❌ No hay API key de Apify');
       return [];
     }
 
+    await this.initializeActorIds();
+
     try {
-      return await this.runUpworkActor(filter);
+      console.log(`🔍 Upwork: Buscando "${filter.keyword}" con actor ${this.actors.upwork}`);
+      return await this.runUpworkDedicated(filter);
     } catch (error) {
       console.error('❌ Upwork scraping error:', error);
       return [];
     }
   }
 
-  async scrapeFiverr(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
-    if (!this.apiKey) {
-      console.error('❌ ERROR: No valid Apify key - cannot scrape');
+  private async runUpworkDedicated(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
+    const keyword = encodeURIComponent(filter.keyword);
+    const rate = filter.minHourlyRate ? `&rate=${filter.minHourlyRate}-` : '';
+    const searchUrl = `https://www.upwork.com/nx/search/talent/?q=${keyword}${rate}&sort=relevance`;
+
+    console.log(`🔗 Upwork URL: ${searchUrl}`);
+
+    // Input for upwork-vibe/upwork-scraper or compatible
+    const actorId = this.actors.upwork;
+    let input: Record<string, any>;
+
+    if (actorId.includes('upwork-vibe')) {
+      // Dedicated upwork-vibe actor — expects these fields
+      input = {
+        searchUrl: searchUrl,
+        maxResults: 50,
+      };
+    } else if (actorId.includes('nwtn')) {
+      // nwtn actor — different input format
+      input = {
+        urls: [searchUrl],
+        maxPages: 3,
+        waitUntilContentLoaded: true,
+      };
+    } else {
+      // Generic web-scraper fallback with Puppeteer
+      input = {
+        startUrls: [{ url: searchUrl }],
+        maxPagesPerCrawl: 3,
+        pageFunction: this.getUpworkPageFunction(),
+        proxyConfiguration: { useApifyProxy: true },
+        waitUntilNetworkIdle: true,
+      };
+    }
+
+    const results = await this.executeActor(actorId, input);
+
+    if (!results || results.length === 0) {
+      console.warn('⚠️ Upwork: Actor dedicado devolvió 0 resultados, intentando fallback...');
+      return await this.runUpworkFallback(filter);
+    }
+
+    console.log(`✅ Upwork: ${results.length} resultados raw del actor`);
+    return this.normalizeUpworkResults(results, filter);
+  }
+
+  /**
+   * Fallback: Use apify/web-scraper with Puppeteer if dedicated actor fails
+   */
+  private async runUpworkFallback(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
+    const keyword = encodeURIComponent(filter.keyword);
+    const rate = filter.minHourlyRate ? `&rate=${filter.minHourlyRate}-` : '';
+    const searchUrl = `https://www.upwork.com/nx/search/talent/?q=${keyword}${rate}&sort=relevance`;
+
+    console.log('🔄 Upwork fallback: Usando apify/web-scraper con Puppeteer...');
+
+    const input = {
+      startUrls: [{ url: searchUrl }],
+      maxPagesPerCrawl: 2,
+      pageFunction: this.getUpworkPageFunction(),
+      proxyConfiguration: { useApifyProxy: true },
+      waitUntilNetworkIdle: true,
+    };
+
+    const results = await this.executeActor('apify/web-scraper', input);
+    if (!results || results.length === 0) {
+      console.error('❌ Upwork fallback: Sin resultados');
       return [];
     }
 
+    console.log(`✅ Upwork fallback: ${results.length} resultados`);
+    return this.normalizeUpworkResults(results, filter);
+  }
+
+  private getUpworkPageFunction(): string {
+    return `
+      async function pageFunction(context) {
+        const { page, request, log } = context;
+        const results = [];
+        
+        // Wait for content to load
+        await new Promise(r => setTimeout(r, 5000));
+        
+        // Try to extract from any JSON data embedded in the page
+        const pageContent = document.body.innerText || '';
+        
+        // Strategy 1: Look for profile links and extract data around them
+        const profileLinks = document.querySelectorAll('a[href*="/freelancers/"], a[href*="/fl/"]');
+        const seen = new Set();
+        
+        profileLinks.forEach(link => {
+          const href = link.href || link.getAttribute('href') || '';
+          if (seen.has(href) || !href) return;
+          seen.add(href);
+          
+          // Walk up to find the container card
+          let container = link.closest('[data-test], [class*="card"], [class*="tile"], [class*="result"]')
+                       || link.parentElement?.parentElement?.parentElement;
+          
+          if (!container) return;
+          
+          const text = container.innerText || '';
+          const name = container.querySelector('h2, h3, [class*="name"]')?.textContent?.trim() || '';
+          const title = container.querySelector('[class*="title"], [class*="headline"]')?.textContent?.trim() || '';
+          
+          // Extract rate from text (pattern: $XX.XX/hr or $XX/hr)
+          const rateMatch = text.match(/\\$(\\d+(?:\\.\\d+)?)\\/hr/);
+          const rate = rateMatch ? parseFloat(rateMatch[1]) : 0;
+          
+          // Extract success rate (pattern: XX% Job Success)
+          const successMatch = text.match(/(\\d+)%\\s*(?:Job\\s*)?Success/i);
+          const success = successMatch ? parseInt(successMatch[1]) : 0;
+          
+          // Extract country
+          const countryEl = container.querySelector('[class*="country"], [class*="location"]');
+          const country = countryEl?.textContent?.trim() || '';
+          
+          if (name || title) {
+            results.push({
+              name,
+              title,
+              rate,
+              success,
+              country,
+              url: href.startsWith('http') ? href : 'https://www.upwork.com' + href,
+              badges: text.includes('Top Rated Plus') ? ['Top Rated Plus'] 
+                    : text.includes('Top Rated') ? ['Top Rated']
+                    : text.includes('Rising Talent') ? ['Rising Talent'] 
+                    : [],
+            });
+          }
+        });
+        
+        return results;
+      }
+    `;
+  }
+
+  private normalizeUpworkResults(results: any[], filter: ScrapingFilter): ScrapedCandidate[] {
+    return results
+      .map((item: any, index: number) => {
+        const name = item.name || item.freelancerName || item.title_name || 'Unknown';
+        const title = item.title || item.headline || item.occupation || 'Freelancer';
+        const rate = this.parseRate(item.rate || item.hourlyRate || item.price || item.chargeRate);
+        const successRate = this.parseSuccessRate(item.success || item.jobSuccess || item.jobSuccessRate);
+        const country = item.country || item.location || 'Unknown';
+        const profileUrl = item.url || item.profileUrl || item.link || '';
+        const badges = item.badges || [];
+        const skills = item.skills || item.topSkills || [];
+        const totalEarnings = this.parseNumber(item.totalEarnings || item.earnings);
+        const totalJobs = this.parseNumber(item.totalJobs || item.jobs);
+        const totalHours = this.parseNumber(item.totalHours || item.hours);
+
+        const candidate: ScrapedCandidate = {
+          id: `upwork-${item.userId || item.id || item.ciphertext || index}-${Date.now()}`,
+          name,
+          platform: 'Upwork' as FreelancePlatform,
+          platformUsername: profileUrl.split('/').filter(Boolean).pop() || `user-${index}`,
+          profileUrl,
+          title,
+          country,
+          hourlyRate: rate,
+          jobSuccessRate: successRate,
+          certifications: badges,
+          bio: item.description || item.bio || item.overview || '',
+          scrapedAt: new Date().toISOString(),
+          talentScore: 0, // Will be calculated below
+          skills: Array.isArray(skills) ? skills : [],
+          badges,
+          yearsExperience: this.estimateExperience(item),
+          totalEarnings,
+          totalJobs,
+          totalHours,
+        };
+
+        // Calculate TalentScore
+        candidate.talentScore = this.calculateTalentScore(candidate, filter);
+        return candidate;
+      })
+      .filter(c => c.name !== 'Unknown' && c.name.trim().length > 0)
+      .filter(c => c.talentScore >= 20) // Minimum quality threshold
+      .sort((a, b) => b.talentScore - a.talentScore); // Best first
+  }
+
+  // ─── FIVERR SCRAPING ────────────────────────────────────────────────────
+
+  async scrapeFiverr(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
+    if (!this.apiKey) {
+      console.error('❌ No hay API key de Apify');
+      return [];
+    }
+
+    await this.initializeActorIds();
+
     try {
-      return await this.runFiverrActor(filter);
+      console.log(`🔍 Fiverr: Buscando "${filter.keyword}" con actor ${this.actors.fiverr}`);
+      return await this.runFiverrScraper(filter);
     } catch (error) {
       console.error('❌ Fiverr scraping error:', error);
       return [];
     }
   }
 
-  private async runUpworkActor(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
-    // Build Upwork search URL with filters
+  private async runFiverrScraper(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
     const keyword = encodeURIComponent(filter.keyword);
-    const rate = filter.minHourlyRate ? `&rate=${filter.minHourlyRate}-` : '';
-    const searchUrl = `https://www.upwork.com/nx/search/talent/?q=${keyword}${rate}&sort=relevance`;
+    // Search for sellers (people), not gigs
+    const searchUrl = `https://www.fiverr.com/search/gigs?query=${keyword}&source=top-bar&ref_ctx_id=2&search_in=everywhere`;
 
-    console.log(`🔗 Upwork search URL: ${searchUrl}`);
+    console.log(`🔗 Fiverr URL: ${searchUrl}`);
 
-    // Usar apify/web-scraper con pageFunction optimizado para Upwork
     const input = {
       startUrls: [{ url: searchUrl }],
-      maxPages: 2,
-      maxResults: 50,
-      pageFunction: `
-        async function pageFunction(context) {
-          const { page, request, log } = context;
-          const results = [];
-          
-          // Selector mejorado para tarjetas de freelancer en Upwork
-          const freelancerCards = page.querySelectorAll('[data-test="freelancer-card"]') || 
-                                 page.querySelectorAll('.freelancer-card') ||
-                                 page.querySelectorAll('[class*="freelancer"]');
-          
-          if (freelancerCards.length === 0) {
-            // Fallback: buscar por estructura HTML común
-            const searchResults = page.querySelectorAll('[data-testid="search-result"]') ||
-                                 page.querySelectorAll('[class*="search"] [class*="result"]');
-            
-            searchResults.forEach((result, idx) => {
-              const nameEl = result.querySelector('h2') || result.querySelector('[class*="name"]');
-              const titleEl = result.querySelector('[class*="title"]') || result.querySelector('p');
-              const rateEl = result.querySelector('[class*="rate"]') || result.querySelector('[class*="price"]');
-              const linkEl = result.querySelector('a[href*="/freelancers/"]') || result.querySelector('a');
-              
-              if (nameEl && linkEl) {
-                results.push({
-                  name: nameEl.textContent?.trim() || 'Unknown',
-                  title: titleEl?.textContent?.trim() || 'Freelancer',
-                  rate: rateEl?.textContent?.trim() || '0',
-                  url: linkEl.href || '',
-                  userId: linkEl.href?.split('/').pop() || idx,
-                });
-              }
-            });
-          } else {
-            // Extracción desde tarjetas de freelancer
-            freelancerCards.forEach((card, idx) => {
-              const nameEl = card.querySelector('[class*="freelancer-name"]') || card.querySelector('h2');
-              const titleEl = card.querySelector('[class*="title"]') || card.querySelector('p:first-of-type');
-              const rateEl = card.querySelector('[class*="hourly-rate"]') || card.querySelector('[class*="rate"]');
-              const ratingEl = card.querySelector('[class*="rating"]') || card.querySelector('[class*="stars"]');
-              const linkEl = card.querySelector('a[href*="/freelancers/"]') || card.querySelector('a');
-              
-              results.push({
-                name: nameEl?.textContent?.trim() || 'Unknown',
-                title: titleEl?.textContent?.trim() || 'Freelancer',
-                rate: rateEl?.textContent?.trim() || '0',
-                rating: ratingEl?.textContent?.trim() || '0',
-                url: linkEl?.href || '',
-                userId: linkEl?.href?.split('/').pop() || idx,
-              });
-            });
-          }
-          
-          return results.length > 0 ? results : [];
-        }
-      `,
+      maxPagesPerCrawl: 3,
+      pageFunction: this.getFiverrPageFunction(),
+      proxyConfiguration: { useApifyProxy: true },
+      waitUntilNetworkIdle: true,
     };
 
-    const results = await this.executeActor(this.actors.upwork, input);
+    const actorId = this.actors.fiverr;
+    const results = await this.executeActor(actorId, input);
 
     if (!results || results.length === 0) {
-      console.error('❌ Upwork: No se obtuvieron resultados reales del actor de Apify');
+      console.error('❌ Fiverr: Sin resultados del actor');
       return [];
     }
 
-    console.log(`✅ Upwork actor devolvió ${results.length} resultados raw`);
-
-    return results.map((item: any, index: number) => ({
-      id: `upwork-${item.userId || item.id || index}`,
-      name: item.name || 'Unknown',
-      platform: 'Upwork' as FreelancePlatform,
-      platformUsername: item.userId || item.username || '',
-      profileUrl: item.url || `https://upwork.com/freelancers/${item.userId || ''}`,
-      title: item.title || 'Freelancer',
-      country: item.country || 'Unknown',
-      hourlyRate: this.parseRate(item.rate) || filter.minHourlyRate,
-      jobSuccessRate: this.parseRating(item.rating) || 0,
-      certifications: [],
-      bio: '',
-      scrapedAt: new Date().toISOString(),
-    }));
+    console.log(`✅ Fiverr: ${results.length} resultados raw`);
+    return this.normalizeFiverrResults(results, filter);
   }
 
-  private async runFiverrActor(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
-    // Build Fiverr search URL
+  private getFiverrPageFunction(): string {
+    return `
+      async function pageFunction(context) {
+        const { page, request, log } = context;
+        const results = [];
+        
+        await new Promise(r => setTimeout(r, 4000));
+        
+        // Strategy: Extract all gig cards and seller info
+        const allLinks = document.querySelectorAll('a[href*="/"]');
+        const processedSellers = new Set();
+        
+        allLinks.forEach(link => {
+          const href = link.href || '';
+          if (!href.includes('fiverr.com') || href.includes('/categories/')) return;
+          
+          const container = link.closest('[class*="gig"], [class*="card"], [class*="listing"]')
+                         || link.parentElement?.parentElement;
+          if (!container) return;
+          
+          const text = container.innerText || '';
+          
+          // Look for seller username patterns
+          const sellerLinks = container.querySelectorAll('a[href*="/"]');
+          let sellerName = '';
+          let sellerUrl = '';
+          
+          sellerLinks.forEach(sl => {
+            const slHref = sl.href || '';
+            // Fiverr seller profile URLs are like /username
+            if (slHref.match(/fiverr\\.com\\/[a-z0-9_]+$/i) && !slHref.includes('/search/') && !slHref.includes('/categories/')) {
+              sellerName = sl.textContent?.trim() || '';
+              sellerUrl = slHref;
+            }
+          });
+          
+          if (!sellerName || processedSellers.has(sellerName)) return;
+          processedSellers.add(sellerName);
+          
+          // Extract gig title
+          const titleEl = container.querySelector('h3, [class*="title"]');
+          const title = titleEl?.textContent?.trim() || '';
+          
+          // Extract price
+          const priceMatch = text.match(/(?:From|Starting at)?\\s*\\$(\\d+)/);
+          const price = priceMatch ? parseInt(priceMatch[1]) : 0;
+          
+          // Extract rating
+          const ratingMatch = text.match(/(\\d+\\.\\d+)\\s*\\(/);
+          const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
+          
+          // Extract review count
+          const reviewMatch = text.match(/\\((\\d+[kK]?\\+?)\\)/);
+          const reviews = reviewMatch ? reviewMatch[1] : '0';
+          
+          // Detect level
+          const isTRS = text.toLowerCase().includes('top rated');
+          const isLvl2 = text.toLowerCase().includes('level 2');
+          const isLvl1 = text.toLowerCase().includes('level 1');
+          
+          results.push({
+            seller: sellerName,
+            sellerUrl: sellerUrl,
+            title: title,
+            price: price,
+            rating: rating,
+            reviews: reviews,
+            level: isTRS ? 'Top Rated Seller' : isLvl2 ? 'Level 2' : isLvl1 ? 'Level 1' : '',
+          });
+        });
+        
+        return results;
+      }
+    `;
+  }
+
+  private normalizeFiverrResults(results: any[], filter: ScrapingFilter): ScrapedCandidate[] {
+    return results
+      .filter((item: any) => {
+        const seller = (item.seller || '').toLowerCase();
+        return seller && seller.length > 2 && !seller.includes('fiverr') && item.title;
+      })
+      .map((item: any, index: number) => {
+        const badges: string[] = [];
+        if (item.level) badges.push(item.level);
+        const reviewCount = parseInt(String(item.reviews || '0').replace(/[kK]/g, '000').replace(/\+/g, ''));
+        if (reviewCount > 100) badges.push('Highly Reviewed');
+
+        const candidate: ScrapedCandidate = {
+          id: `fiverr-${item.sellerUrl?.split('/').pop() || index}-${Date.now()}`,
+          name: item.seller || 'Unknown Seller',
+          platform: 'Fiverr' as FreelancePlatform,
+          platformUsername: item.seller?.toLowerCase().replace(/\s+/g, '') || 'unknown',
+          profileUrl: item.sellerUrl || 'https://www.fiverr.com',
+          title: item.title || 'Gig Provider',
+          country: 'Unknown',
+          hourlyRate: this.parseRate(item.price),
+          jobSuccessRate: this.parseRating(item.rating),
+          certifications: badges,
+          bio: item.reviews ? `${item.reviews} reviews` : '',
+          scrapedAt: new Date().toISOString(),
+          talentScore: 0,
+          skills: [],
+          badges,
+          yearsExperience: 0,
+        };
+
+        candidate.talentScore = this.calculateTalentScore(candidate, filter);
+        return candidate;
+      })
+      .filter(c => c.talentScore >= 20)
+      .sort((a, b) => b.talentScore - a.talentScore);
+  }
+
+  // ─── LINKEDIN SCRAPING ──────────────────────────────────────────────────
+
+  async scrapeLinkedIn(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
+    if (!this.apiKey) {
+      console.error('❌ No hay API key de Apify');
+      return [];
+    }
+
+    await this.initializeActorIds();
+
+    try {
+      console.log(`🔍 LinkedIn: Buscando "${filter.keyword}" con actor ${this.actors.linkedin}`);
+      return await this.runLinkedInSearch(filter);
+    } catch (error) {
+      console.error('❌ LinkedIn scraping error:', error);
+      return [];
+    }
+  }
+
+  private async runLinkedInSearch(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
     const keyword = encodeURIComponent(filter.keyword);
-    const searchUrl = `https://www.fiverr.com/search/gigs?query=${keyword}`;
+    const searchUrl = `https://www.linkedin.com/search/results/people/?keywords=${keyword}&origin=GLOBAL_SEARCH_HEADER`;
 
-    console.log(`🔗 Fiverr search URL: ${searchUrl}`);
+    console.log(`🔗 LinkedIn search URL: ${searchUrl}`);
 
-    // Input optimizado para apify/web-scraper con pageFunction mejorada
-    const input = {
-      startUrls: [{ url: searchUrl }],
-      maxPages: 2,
-      maxResults: 100,
-      pageFunction: `
-        async function pageFunction(context) {
-          const { page, request, log } = context;
-          const results = [];
-          
-          // Estrategia 1: Buscar tarjetas de gig por data-qa
-          let gigs = page.querySelectorAll('[data-qa="gig-card"]');
-          
-          if (gigs.length === 0) {
-            // Estrategia 2: Buscar por clase común
-            gigs = page.querySelectorAll('[class*="gig-card"], [class*="gig"], .s-result-item');
-          }
-          
-          if (gigs.length === 0) {
-            // Estrategia 3: Buscar todos los enlaces que contengan /gigs/
-            const allGigLinks = page.querySelectorAll('a[href*="/gigs/"]');
-            const processedUrls = new Set();
+    const actorId = this.actors.linkedin;
+    let input: Record<string, any>;
+
+    if (actorId.includes('curious_coder')) {
+      // curious_coder/linkedin-search-api — no cookies needed
+      input = {
+        searchUrl: searchUrl,
+        deepScrape: true,
+        limit: 50,
+      };
+    } else if (actorId.includes('linkedin')) {
+      // Generic LinkedIn actor
+      input = {
+        searchUrls: [searchUrl],
+        limit: 50,
+        proxy: { useApifyProxy: true },
+      };
+    } else {
+      // Fallback: web-scraper
+      input = {
+        startUrls: [{ url: searchUrl }],
+        maxPagesPerCrawl: 2,
+        proxyConfiguration: { useApifyProxy: true },
+        waitUntilNetworkIdle: true,
+        pageFunction: `
+          async function pageFunction(context) {
+            const { page } = context;
+            await new Promise(r => setTimeout(r, 5000));
             
-            allGigLinks.forEach((link) => {
-              const href = link.href;
-              if (!processedUrls.has(href) && href.includes('/gigs/')) {
-                const parent = link.closest('[class*="card"]') || link.closest('div[data-qa]') || link.parentElement.parentElement;
-                if (parent) {
-                  const titleEl = link.querySelector('h3, [class*="title"]') || link;
-                  const priceEl = parent.querySelector('[class*="price"], [data-qa*="price"]');
-                  const sellerEl = parent.querySelector('[data-qa*="seller"], [class*="seller-name"]');
-                  
-                  const seller = sellerEl?.textContent?.trim() || link.getAttribute('aria-label') || '';
-                  const title = titleEl?.textContent?.trim() || '';
-                  
-                  if (title && !title.includes('Fiverr') && seller && !seller.includes('Fiverr')) {
-                    results.push({
-                      title: title,
-                      seller: seller,
-                      price: priceEl?.textContent?.trim() || 'Starting at',
-                      rating: parent.querySelector('[class*="rating"], [data-qa*="rating"]')?.textContent?.trim() || '0',
-                      reviews: parent.querySelector('[class*="review"]')?.textContent?.match(/\\d+/)?.[0] || '0',
-                      url: href,
-                    });
-                    processedUrls.add(href);
-                  }
-                }
+            const results = [];
+            const cards = document.querySelectorAll('[class*="entity-result"], [class*="search-result"]');
+            
+            cards.forEach(card => {
+              const nameEl = card.querySelector('[class*="entity-result__title"] a, [class*="name"]');
+              const titleEl = card.querySelector('[class*="entity-result__primary-subtitle"], [class*="headline"]');
+              const locationEl = card.querySelector('[class*="entity-result__secondary-subtitle"], [class*="location"]');
+              const linkEl = card.querySelector('a[href*="/in/"]');
+              
+              if (nameEl) {
+                results.push({
+                  name: nameEl.textContent?.trim() || '',
+                  title: titleEl?.textContent?.trim() || '',
+                  location: locationEl?.textContent?.trim() || '',
+                  profileUrl: linkEl?.href || '',
+                });
               }
             });
             
             return results;
           }
-          
-          // Procesar tarjetas de gig encontradas
-          gigs.forEach((gig, idx) => {
-            const titleEl = gig.querySelector('[data-qa="gig-card-title"]') || gig.querySelector('h3') || gig.querySelector('[class*="title"]');
-            const priceEl = gig.querySelector('[data-qa="gig-price"]') || gig.querySelector('[class*="price"]');
-            const ratingEl = gig.querySelector('[data-qa="star-rating"]') || gig.querySelector('[class*="rating"]');
-            const reviewsEl = gig.querySelector('[class*="reviews"]');
-            const sellerEl = gig.querySelector('[data-qa="gig-creator-name"]') || gig.querySelector('[class*="seller-name"]') || gig.querySelector('[class*="by"]');
-            const linkEl = gig.querySelector('a[href*="/gigs/"]') || gig.querySelector('a');
-            
-            const title = titleEl?.textContent?.trim() || '';
-            const seller = sellerEl?.textContent?.trim()?.replace(/^by\\s+/i, '') || '';
-            const price = priceEl?.textContent?.trim() || '';
-            
-            // Validaciones: descartar si no tiene datos o si es Fiverr
-            const isValidSeller = seller && !seller.toLowerCase().includes('fiverr') && seller.length > 0;
-            const isValidTitle = title && !title.toLowerCase().includes('fiverr');
-            
-            if (isValidSeller && isValidTitle) {
-              results.push({
-                title: title,
-                seller: seller,
-                price: price || 'Starting at',
-                rating: ratingEl?.textContent?.trim() || '0',
-                reviews: reviewsEl?.textContent?.match(/\\d+/)?.[0] || '0',
-                url: linkEl?.href || '',
-              });
-            }
-          });
-          
-          console.log('Extracted ' + results.length + ' valid gigs');
-          return results;
-        }
-      `,
-    };
+        `,
+      };
+    }
 
-    const results = await this.executeActor(this.actors.fiverr, input);
+    const results = await this.executeActor(actorId, input);
 
     if (!results || results.length === 0) {
-      console.error('❌ Fiverr: No se obtuvieron resultados reales del actor de Apify');
+      console.error('❌ LinkedIn: Sin resultados del actor');
       return [];
     }
 
-    console.log(`✅ Fiverr actor devolvió ${results.length} resultados raw`);
+    console.log(`✅ LinkedIn: ${results.length} resultados raw`);
+    return this.normalizeLinkedInResults(results, filter);
+  }
 
-    // Filtrado adicional en frontend para eliminar resultados inválidos
+  private normalizeLinkedInResults(results: any[], filter: ScrapingFilter): ScrapedCandidate[] {
     return results
-      .filter((item: any) => {
-        const seller = (item.seller || '').toLowerCase();
-        const title = (item.title || '').toLowerCase();
-        
-        // Descartar si no tiene seller válido o es resultado de Fiverr
-        return item.seller && item.seller.trim().length > 2 && 
-               !seller.includes('fiverr') && 
-               !title.includes('fiverr') &&
-               item.title;
+      .map((item: any, index: number) => {
+        const name = item.name || item.fullName || item.firstName && item.lastName
+          ? `${item.firstName || ''} ${item.lastName || ''}`.trim()
+          : 'Unknown';
+        const title = item.title || item.headline || item.occupation || '';
+        const profileUrl = item.profileUrl || item.url || item.linkedInUrl || '';
+        const location = item.location || item.country || item.geo || '';
+
+        // LinkedIn profiles don't have hourly rates — estimate from title
+        const estimatedRate = this.estimateRateFromTitle(title);
+
+        // Extract skills from profile data
+        const skills = item.skills || item.topSkills || [];
+
+        const candidate: ScrapedCandidate = {
+          id: `linkedin-${item.publicIdentifier || item.id || index}-${Date.now()}`,
+          name,
+          platform: 'LinkedIn' as FreelancePlatform,
+          platformUsername: item.publicIdentifier || profileUrl.split('/in/').pop()?.replace(/\//g, '') || `li-${index}`,
+          profileUrl,
+          title,
+          country: location,
+          hourlyRate: estimatedRate,
+          jobSuccessRate: 0, // N/A for LinkedIn
+          certifications: [],
+          bio: item.summary || item.about || '',
+          scrapedAt: new Date().toISOString(),
+          talentScore: 0,
+          skills: Array.isArray(skills) ? skills.map((s: any) => typeof s === 'string' ? s : s.name || '') : [],
+          badges: [],
+          yearsExperience: this.estimateExperience(item),
+        };
+
+        candidate.talentScore = this.calculateTalentScore(candidate, filter);
+        return candidate;
       })
-      .map((item: any, index: number) => ({
-        id: `fiverr-${item.url?.split('/').pop() || index}`,
-        name: item.seller || 'Unknown Seller',
-        platform: 'Fiverr' as FreelancePlatform,
-        platformUsername: item.seller?.toLowerCase().replace(/\s+/g, '-') || 'unknown',
-        profileUrl: item.url || 'https://www.fiverr.com',
-        title: item.title || 'Gig Provider',
-        country: 'Unknown',
-        hourlyRate: this.parseRate(item.price),
-        jobSuccessRate: this.parseRating(item.rating),
-        certifications: item.reviews && parseInt(item.reviews) > 50 ? ['Top Rated'] : [],
-        bio: item.reviews ? `${item.reviews} reviews` : '',
-        scrapedAt: new Date().toISOString(),
-      }));
+      .filter(c => c.name !== 'Unknown' && c.name.trim().length > 1)
+      .filter(c => c.talentScore >= 15) // Lower threshold for LinkedIn (less data available)
+      .sort((a, b) => b.talentScore - a.talentScore);
+  }
+
+  // ─── TALENT SCORE SYSTEM ────────────────────────────────────────────────
+
+  /**
+   * Calculates a TalentScore from 0-100 based on multiple quality signals.
+   * This is the core algorithm for finding A-Players.
+   * 
+   * Components:
+   *  - Rate relevance (0-25): Is their rate in the desired range?
+   *  - Success rate (0-25): Job success / rating
+   *  - Title relevance (0-25): How well does their title match the keyword?
+   *  - Badges / certifications (0-25): Top Rated, Level 2, etc.
+   */
+  private calculateTalentScore(candidate: ScrapedCandidate, filter: ScrapingFilter): number {
+    let score = 0;
+
+    // 1. Rate Score (0-25)
+    if (candidate.hourlyRate > 0) {
+      if (candidate.hourlyRate >= filter.minHourlyRate) {
+        // In range or above — good
+        score += 20;
+        // Bonus for premium pricing (confidence signal)
+        if (candidate.hourlyRate >= filter.minHourlyRate * 1.5) score += 5;
+      } else if (candidate.hourlyRate >= filter.minHourlyRate * 0.7) {
+        // Slightly below — still acceptable
+        score += 10;
+      }
+      // Below 70% of minimum — 0 points
+    } else if (candidate.platform === 'LinkedIn') {
+      // LinkedIn doesn't have rates — give base score
+      score += 12;
+    }
+
+    // 2. Success/Rating Score (0-25)
+    if (candidate.jobSuccessRate > 0) {
+      if (candidate.jobSuccessRate >= 95) {
+        score += 25;
+      } else if (candidate.jobSuccessRate >= 90) {
+        score += 20;
+      } else if (candidate.jobSuccessRate >= 80) {
+        score += 15;
+      } else if (candidate.jobSuccessRate >= 70) {
+        score += 10;
+      } else if (candidate.jobSuccessRate >= 50) {
+        score += 5;
+      }
+    } else if (candidate.platform === 'LinkedIn') {
+      // LinkedIn — no success rate, give base
+      score += 10;
+    }
+
+    // 3. Title Relevance (0-25)
+    const titleRelevance = this.calculateTitleRelevance(candidate.title, filter.keyword);
+    score += Math.round(titleRelevance * 25);
+
+    // 4. Badges & Certifications Score (0-25)
+    const badgeTexts = [...candidate.badges, ...candidate.certifications]
+      .map(b => b.toLowerCase());
+
+    if (badgeTexts.some(b => b.includes('top rated plus'))) {
+      score += 25;
+    } else if (badgeTexts.some(b => b.includes('top rated'))) {
+      score += 20;
+    } else if (badgeTexts.some(b => b.includes('level 2'))) {
+      score += 15;
+    } else if (badgeTexts.some(b => b.includes('rising talent') || b.includes('level 1'))) {
+      score += 10;
+    } else if (badgeTexts.some(b => b.includes('highly reviewed'))) {
+      score += 10;
+    } else if (candidate.totalJobs && candidate.totalJobs > 20) {
+      score += 8; // Experience signal without badge
+    }
+
+    // Bonus: Years of experience
+    if (candidate.yearsExperience >= 8) score += 5;
+    else if (candidate.yearsExperience >= 5) score += 3;
+
+    return Math.min(100, Math.max(0, score));
   }
 
   /**
-   * Parse price strings from any platform
-   * Examples: "$25", "Starting at $100", "€50/hr", "¥5000"
+   * Calculates how relevant a candidate's title is to the search keyword.
+   * Returns 0.0 to 1.0
    */
+  private calculateTitleRelevance(title: string, keyword: string): number {
+    if (!title || !keyword) return 0;
+
+    const titleLower = title.toLowerCase();
+    const keywordLower = keyword.toLowerCase();
+
+    // Exact match or contains full keyword
+    if (titleLower.includes(keywordLower)) return 1.0;
+
+    // Check individual words
+    const keywordWords = keywordLower.split(/\s+/).filter(w => w.length > 2);
+    const titleWords = titleLower.split(/\s+/);
+
+    if (keywordWords.length === 0) return 0;
+
+    let matchCount = 0;
+    for (const kw of keywordWords) {
+      if (titleWords.some(tw => tw.includes(kw) || kw.includes(tw))) {
+        matchCount++;
+      }
+    }
+
+    return matchCount / keywordWords.length;
+  }
+
+  // ─── UTILITY METHODS ────────────────────────────────────────────────────
+
   private parseRate(price: any): number {
     if (typeof price === 'number') return price;
     if (typeof price === 'string') {
-      // Extract all numbers and take the first one
-      const match = price.match(/\d+/);
-      return match ? parseInt(match[0]) : 0;
+      const match = price.match(/\d+(?:\.\d+)?/);
+      return match ? parseFloat(match[0]) : 0;
     }
     return 0;
   }
 
-  /**
-   * Convert rating to 0-100 scale
-   * Handles both 5-star (Fiverr) and percentage (Upwork) ratings
-   */
+  private parseNumber(val: any): number {
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') {
+      const cleaned = val.replace(/[,$€£]/g, '').trim();
+      const match = cleaned.match(/[\d.]+/);
+      return match ? parseFloat(match[0]) : 0;
+    }
+    return 0;
+  }
+
+  private parseSuccessRate(rate: any): number {
+    if (typeof rate === 'number') {
+      return rate > 5 ? Math.min(rate, 100) : Math.round((rate / 5) * 100);
+    }
+    if (typeof rate === 'string') {
+      const num = parseFloat(rate.replace(/[^0-9.]/g, ''));
+      if (isNaN(num)) return 0;
+      return num > 5 ? Math.min(Math.round(num), 100) : Math.round((num / 5) * 100);
+    }
+    return 0;
+  }
+
   private parseRating(rating: any): number {
     if (typeof rating === 'string') {
       const num = parseFloat(rating.replace(/[^\d.]/g, ''));
       if (isNaN(num)) return 0;
-      
-      // If number is > 5, assume it's already a percentage
       if (num > 5) return Math.min(Math.round(num), 100);
-      // Otherwise convert 5-star to percentage
       return Math.round((num / 5) * 100);
     }
     if (typeof rating === 'number') {
@@ -396,10 +771,31 @@ export class ApifyService {
     return 0;
   }
 
-  /**
-   * Apify API uses ~ instead of / in actor IDs for URL paths
-   * e.g. powerai/upwork-talent-search-scraper => powerai~upwork-talent-search-scraper
-   */
+  private estimateExperience(item: any): number {
+    if (item.yearsExperience) return parseInt(item.yearsExperience);
+    if (item.memberSince) {
+      const year = parseInt(item.memberSince);
+      if (year > 2000) return new Date().getFullYear() - year;
+    }
+    if (item.totalHours && item.totalHours > 5000) return 5;
+    if (item.totalJobs && item.totalJobs > 50) return 3;
+    return 0;
+  }
+
+  private estimateRateFromTitle(title: string): number {
+    if (!title) return 0;
+    const t = title.toLowerCase();
+    // Senior/Lead/Principal/CTO — premium
+    if (t.match(/\b(senior|lead|principal|staff|director|cto|vp|head)\b/)) return 80;
+    // Mid-level signals
+    if (t.match(/\b(developer|engineer|architect|consultant)\b/)) return 50;
+    // Junior signals
+    if (t.match(/\b(junior|intern|trainee|student)\b/)) return 25;
+    return 40; // Default mid-range
+  }
+
+  // ─── ACTOR EXECUTION ───────────────────────────────────────────────────
+
   private encodeActorId(actorId: string): string {
     return actorId.replace(/\//g, '~');
   }
@@ -410,9 +806,8 @@ export class ApifyService {
   ): Promise<any[] | null> {
     const encodedActorId = this.encodeActorId(actorId);
     try {
-      console.log(`🚀 Ejecutando actor: ${actorId} (API path: ${encodedActorId})`);
+      console.log(`🚀 Ejecutando actor: ${actorId}`);
 
-      // Call Apify to run the actor
       const runResponse = await fetch(
         `${this.baseUrl}/acts/${encodedActorId}/runs?token=${this.apiKey}`,
         {
@@ -424,18 +819,27 @@ export class ApifyService {
 
       if (!runResponse.ok) {
         const errText = await runResponse.text();
-        throw new Error(`Actor execution failed: ${runResponse.status} - ${errText}`);
+        console.error(`❌ Actor ${actorId}: HTTP ${runResponse.status} - ${errText}`);
+
+        if (runResponse.status === 404) {
+          console.error(`💡 TIP: El actor "${actorId}" no existe. Ve a https://apify.com/store y busca uno compatible.`);
+          console.error(`💡 También puedes actualizar el Actor ID en Supabase tabla 'apify_config'.`);
+        } else if (runResponse.status === 403) {
+          console.error(`💡 TIP: Acceso denegado al actor "${actorId}". Puede requerir pago o no estar disponible en tu cuenta.`);
+        }
+
+        throw new Error(`Actor execution failed: ${runResponse.status}`);
       }
 
       const runData = await runResponse.json();
       const runId = runData.data.id;
 
-      console.log(`⏳ Actor iniciado, run ID: ${runId}. Esperando resultados...`);
+      console.log(`⏳ Actor iniciado, run ID: ${runId}`);
 
-      // Poll for completion (max 3 minutes — actors reales tardan más)
+      // Poll for completion (max 5 minutes for dedicated actors)
       let completed = false;
       let attempts = 0;
-      const maxAttempts = 180; // 180 * 1000ms = 3 minutes
+      const maxAttempts = 300; // 300 * 1000ms = 5 minutes
       const pollInterval = 1000;
 
       while (!completed && attempts < maxAttempts) {
@@ -449,24 +853,24 @@ export class ApifyService {
           const status = await statusResponse.json();
           const runStatus = status.data.status;
 
-          if (attempts % 10 === 0) {
-            console.log(`⏳ Estado del actor: ${runStatus} (${attempts}s transcurridos)`);
+          if (attempts % 15 === 0) {
+            console.log(`⏳ Actor ${actorId}: ${runStatus} (${attempts}s)`);
           }
 
           if (runStatus === 'SUCCEEDED') {
             completed = true;
-          } else if (runStatus === 'FAILED' || runStatus === 'ABORTED' || runStatus === 'TIMED-OUT') {
-            throw new Error(`Actor run failed with status: ${runStatus} - ${status.data.statusMessage || ''}`);
+          } else if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(runStatus)) {
+            throw new Error(`Actor failed: ${runStatus} - ${status.data.statusMessage || ''}`);
           }
         }
         attempts++;
       }
 
       if (!completed) {
-        throw new Error(`Actor run timeout after ${maxAttempts} seconds`);
+        throw new Error(`Actor timeout after ${maxAttempts}s`);
       }
 
-      // Get results from the default dataset
+      // Get results
       const datasetId = runData.data.defaultDatasetId;
       const resultsUrl = datasetId
         ? `${this.baseUrl}/datasets/${datasetId}/items?token=${this.apiKey}`
@@ -476,16 +880,15 @@ export class ApifyService {
 
       if (resultsResponse.ok) {
         const data = await resultsResponse.json();
-        // The dataset endpoint returns a flat array directly
         const items = Array.isArray(data) ? data : (data.items || data.data || []);
-        console.log(`📊 Dataset devolvió ${items.length} items`);
+        console.log(`📊 Dataset: ${items.length} items`);
         return items;
       }
 
-      console.error(`❌ Error obteniendo resultados del dataset: ${resultsResponse.status}`);
+      console.error(`❌ Error obteniendo dataset: ${resultsResponse.status}`);
       return null;
     } catch (error) {
-      console.error('❌ Apify actor execution error:', error);
+      console.error(`❌ Actor execution error (${actorId}):`, error);
       return null;
     }
   }

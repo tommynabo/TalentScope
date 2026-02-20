@@ -82,6 +82,10 @@ export const PipelineList: React.FC<PipelineListProps> = ({ campaign, onUpdateCa
       certifications: [],
       bio: `Pipeline: ${laneLabels[c.kanbanLane]}`,
       scrapedAt: c.addedAt,
+      talentScore: (c as any).talentScore || 0,
+      skills: [],
+      badges: [],
+      yearsExperience: 0,
       linkedInUrl: c.linkedInUrl,
       emails: c.email ? [c.email] : [],
       photoValidated: false,
@@ -218,9 +222,8 @@ export const PipelineList: React.FC<PipelineListProps> = ({ campaign, onUpdateCa
                     <select
                       value={candidate.kanbanLane}
                       onChange={(e) => onUpdateCandidate(candidate, e.target.value)}
-                      className={`px-2 py-1 rounded text-xs font-medium text-white border-0 cursor-pointer ${
-                        laneBg[candidate.kanbanLane]
-                      }`}
+                      className={`px-2 py-1 rounded text-xs font-medium text-white border-0 cursor-pointer ${laneBg[candidate.kanbanLane]
+                        }`}
                     >
                       {Object.entries(laneLabels).map(([key, label]) => (
                         <option key={key} value={key}>

@@ -5,6 +5,7 @@
 export enum FreelancePlatform {
   Upwork = 'Upwork',
   Fiverr = 'Fiverr',
+  LinkedIn = 'LinkedIn',
 }
 
 export enum CandidateStatus {
@@ -35,6 +36,14 @@ export interface ScrapedCandidate {
   certifications: string[];
   bio: string;
   scrapedAt: string;
+  // New fields for quality filtering
+  talentScore: number; // 0-100 composite score
+  skills: string[];
+  badges: string[]; // e.g. "Top Rated", "Top Rated Plus", "Rising Talent"
+  yearsExperience: number;
+  totalEarnings?: number;
+  totalJobs?: number;
+  totalHours?: number;
 }
 
 export interface EnrichedCandidate extends ScrapedCandidate {

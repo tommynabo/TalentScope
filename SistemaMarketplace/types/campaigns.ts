@@ -8,7 +8,7 @@ export interface Campaign {
   name: string;
   platform: FreelancePlatform;
   createdAt: string;
-  
+
   // Búsqueda específica por plataforma
   searchTerms: {
     keyword: string;
@@ -28,7 +28,7 @@ export interface Campaign {
 
   // Candidatos en esta campaña
   candidates: EnrichedCandidateInCampaign[];
-  
+
   // Stats
   stats: CampaignStats;
   status: 'active' | 'paused' | 'completed';
@@ -45,8 +45,9 @@ export interface EnrichedCandidateInCampaign {
   platform: FreelancePlatform;
   hourlyRate: number;
   jobSuccessRate: number;
+  talentScore: number; // 0-100 composite score
   addedAt: string;
-  
+
   // Pipeline status
   kanbanLane: 'todo' | 'contacted' | 'replied' | 'rejected' | 'hired';
   notes?: string;
