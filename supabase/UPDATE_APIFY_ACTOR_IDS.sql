@@ -12,16 +12,17 @@
 -- =============================================================================
 
 -- 🔧 ACTUALIZAR ACTOR ID DE UPWORK
--- Actor seleccionado: nwtn/upwork-profile-scraper
+-- Actor seleccionado: apify/web-scraper
 -- Razones: 
---   ✅ Gratuito y muy popular
---   ✅ Mejor mantenimiento que alternativas
---   ✅ Buena relación calidad-precio
---   ✅ Menos recursos = más rápido
+--   ✅ Oficial de Apify (máxima confianza)
+--   ✅ Completamente gratuito
+--   ✅ Funciona con cualquier sitio (flexible)
+--   ✅ Bien documentado y soportado
+--   ✅ nwtn/upwork-profile-scraper no está disponible en todas las cuentas
 UPDATE public.apify_config 
 SET 
-    actor_id = 'nwtn/upwork-profile-scraper',  -- Premium quality, free version available
-    description = 'Scraper de Upwork - Gratuito, mantenido activamente, optimizado',
+    actor_id = 'apify/web-scraper',  -- Official Apify actor, universal
+    description = 'Web Scraper Apify - Universal para Upwork, gratuito, confiable',
     updated_at = CURRENT_TIMESTAMP
 WHERE config_key = 'upwork_scraper';
 

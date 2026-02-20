@@ -8,7 +8,7 @@ export class ApifyService {
 
   // Actor IDs por defecto (fallback si no están en DB)
   private defaultActors = {
-    upwork: 'nwtn/upwork-profile-scraper',
+    upwork: 'apify/web-scraper',  // Changed from nwtn/upwork-profile-scraper - not available in all accounts
     fiverr: 'apify/web-scraper',
   };
 
@@ -143,12 +143,65 @@ export class ApifyService {
 
     console.log(`🔗 Upwork search URL: ${searchUrl}`);
 
-    // Input adaptado para nwtn/upwork-profile-scraper
+    // Usar apify/web-scraper con pageFunction optimizado para Upwork
     const input = {
       startUrls: [{ url: searchUrl }],
       maxPages: 2,
       maxResults: 50,
-      waitUntilContentLoaded: true,
+      pageFunction: `
+        async function pageFunction(context) {
+          const { page, request, log } = context;
+          const results = [];
+          
+          // Selector mejorado para tarjetas de freelancer en Upwork
+          const freelancerCards = page.querySelectorAll('[data-test="freelancer-card"]') || 
+                                 page.querySelectorAll('.freelancer-card') ||
+                                 page.querySelectorAll('[class*="freelancer"]');
+          
+          if (freelancerCards.length === 0) {
+            // Fallback: buscar por estructura HTML común
+            const searchResults = page.querySelectorAll('[data-testid="search-result"]') ||
+                                 page.querySelectorAll('[class*="search"] [class*="result"]');
+            
+            searchResults.forEach((result, idx) => {
+              const nameEl = result.querySelector('h2') || result.querySelector('[class*="name"]');
+              const titleEl = result.querySelector('[class*="title"]') || result.querySelector('p');
+              const rateEl = result.querySelector('[class*="rate"]') || result.querySelector('[class*="price"]');
+              const linkEl = result.querySelector('a[href*="/freelancers/"]') || result.querySelector('a');
+              
+              if (nameEl && linkEl) {
+                results.push({
+                  name: nameEl.textContent?.trim() || 'Unknown',
+                  title: titleEl?.textContent?.trim() || 'Freelancer',
+                  rate: rateEl?.textContent?.trim() || '0',
+                  url: linkEl.href || '',
+                  userId: linkEl.href?.split('/').pop() || idx,
+                });
+              }
+            });
+          } else {
+            // Extracción desde tarjetas de freelancer
+            freelancerCards.forEach((card, idx) => {
+              const nameEl = card.querySelector('[class*="freelancer-name"]') || card.querySelector('h2');
+              const titleEl = card.querySelector('[class*="title"]') || card.querySelector('p:first-of-type');
+              const rateEl = card.querySelector('[class*="hourly-rate"]') || card.querySelector('[class*="rate"]');
+              const ratingEl = card.querySelector('[class*="rating"]') || card.querySelector('[class*="stars"]');
+              const linkEl = card.querySelector('a[href*="/freelancers/"]') || card.querySelector('a');
+              
+              results.push({
+                name: nameEl?.textContent?.trim() || 'Unknown',
+                title: titleEl?.textContent?.trim() || 'Freelancer',
+                rate: rateEl?.textContent?.trim() || '0',
+                rating: ratingEl?.textContent?.trim() || '0',
+                url: linkEl?.href || '',
+                userId: linkEl?.href?.split('/').pop() || idx,
+              });
+            });
+          }
+          
+          return results.length > 0 ? results : [];
+        }
+      `,
     };
 
     const results = await this.executeActor(this.actors.upwork, input);
@@ -161,17 +214,17 @@ export class ApifyService {
     console.log(`✅ Upwork actor devolvió ${results.length} resultados raw`);
 
     return results.map((item: any, index: number) => ({
-      id: `upwork-${item.id || item.userId || item.ciphertext || index}`,
-      name: item.name || item.title || item.freelancerName || 'Unknown',
+      id: `upwork-${item.userId || item.id || index}`,
+      name: item.name || 'Unknown',
       platform: 'Upwork' as FreelancePlatform,
-      platformUsername: item.username || item.userId || item.ciphertext || '',
-      profileUrl: item.profileUrl || item.url || item.link || `https://upwork.com/freelancers/~${item.id || item.userId || ''}`,
-      title: item.title || item.jobTitle || item.topSkill || item.specialization || 'Freelancer',
-      country: item.country || item.location || 'Unknown',
-      hourlyRate: parseFloat(item.hourlyRate || item.rate || item.price || '0') || filter.minHourlyRate,
-      jobSuccessRate: parseFloat(item.jobSuccess || item.jobSuccessRate || item.successRate || '0') || 0,
-      certifications: item.certifications || item.badges || [],
-      bio: item.bio || item.description || item.overview || item.shortOverview || '',
+      platformUsername: item.userId || item.username || '',
+      profileUrl: item.url || `https://upwork.com/freelancers/${item.userId || ''}`,
+      title: item.title || 'Freelancer',
+      country: item.country || 'Unknown',
+      hourlyRate: this.parseRate(item.rate) || filter.minHourlyRate,
+      jobSuccessRate: this.parseRating(item.rating) || 0,
+      certifications: [],
+      bio: '',
       scrapedAt: new Date().toISOString(),
     }));
   }
@@ -183,35 +236,89 @@ export class ApifyService {
 
     console.log(`🔗 Fiverr search URL: ${searchUrl}`);
 
-    // Input adaptado para apify/web-scraper (universal)
+    // Input optimizado para apify/web-scraper con pageFunction mejorada
     const input = {
       startUrls: [{ url: searchUrl }],
       maxPages: 2,
-      maxResults: 50,
+      maxResults: 100,
       pageFunction: `
         async function pageFunction(context) {
           const { page, request, log } = context;
           const results = [];
-          const gigs = page.querySelectorAll('[data-qa="gig-card"]');
           
-          gigs.forEach((gig, idx) => {
-            const titleElement = gig.querySelector('[data-qa="gig-card-title"]') || gig.querySelector('h3');
-            const priceElement = gig.querySelector('[data-qa="gig-price"]') || gig.querySelector('.price');
-            const ratingElement = gig.querySelector('[data-qa="star-rating"]') || gig.querySelector('.star-rating');
-            const sellerElement = gig.querySelector('[data-qa="seller-name"]') || gig.querySelector('[data-qa="gig-creator-name"]');
-            const linkElement = gig.querySelector('a[href*="/"]');
+          // Estrategia 1: Buscar tarjetas de gig por data-qa
+          let gigs = page.querySelectorAll('[data-qa="gig-card"]');
+          
+          if (gigs.length === 0) {
+            // Estrategia 2: Buscar por clase común
+            gigs = page.querySelectorAll('[class*="gig-card"], [class*="gig"], .s-result-item');
+          }
+          
+          if (gigs.length === 0) {
+            // Estrategia 3: Buscar todos los enlaces que contengan /gigs/
+            const allGigLinks = page.querySelectorAll('a[href*="/gigs/"]');
+            const processedUrls = new Set();
             
-            results.push({
-              id: idx,
-              title: titleElement?.textContent?.trim() || 'Gig',
-              price: priceElement?.textContent?.trim() || '0',
-              rating: ratingElement?.textContent?.trim() || '0',
-              seller: sellerElement?.textContent?.trim() || 'Unknown',
-              url: linkElement?.href || '',
-              description: gig.textContent?.substring(0, 200) || '',
+            allGigLinks.forEach((link) => {
+              const href = link.href;
+              if (!processedUrls.has(href) && href.includes('/gigs/')) {
+                const parent = link.closest('[class*="card"]') || link.closest('div[data-qa]') || link.parentElement.parentElement;
+                if (parent) {
+                  const titleEl = link.querySelector('h3, [class*="title"]') || link;
+                  const priceEl = parent.querySelector('[class*="price"], [data-qa*="price"]');
+                  const sellerEl = parent.querySelector('[data-qa*="seller"], [class*="seller-name"]');
+                  
+                  const seller = sellerEl?.textContent?.trim() || link.getAttribute('aria-label') || '';
+                  const title = titleEl?.textContent?.trim() || '';
+                  
+                  if (title && !title.includes('Fiverr') && seller && !seller.includes('Fiverr')) {
+                    results.push({
+                      title: title,
+                      seller: seller,
+                      price: priceEl?.textContent?.trim() || 'Starting at',
+                      rating: parent.querySelector('[class*="rating"], [data-qa*="rating"]')?.textContent?.trim() || '0',
+                      reviews: parent.querySelector('[class*="review"]')?.textContent?.match(/\\d+/)?.[0] || '0',
+                      url: href,
+                    });
+                    processedUrls.add(href);
+                  }
+                }
+              }
             });
+            
+            return results;
+          }
+          
+          // Procesar tarjetas de gig encontradas
+          gigs.forEach((gig, idx) => {
+            const titleEl = gig.querySelector('[data-qa="gig-card-title"]') || gig.querySelector('h3') || gig.querySelector('[class*="title"]');
+            const priceEl = gig.querySelector('[data-qa="gig-price"]') || gig.querySelector('[class*="price"]');
+            const ratingEl = gig.querySelector('[data-qa="star-rating"]') || gig.querySelector('[class*="rating"]');
+            const reviewsEl = gig.querySelector('[class*="reviews"]');
+            const sellerEl = gig.querySelector('[data-qa="gig-creator-name"]') || gig.querySelector('[class*="seller-name"]') || gig.querySelector('[class*="by"]');
+            const linkEl = gig.querySelector('a[href*="/gigs/"]') || gig.querySelector('a');
+            
+            const title = titleEl?.textContent?.trim() || '';
+            const seller = sellerEl?.textContent?.trim()?.replace(/^by\\s+/i, '') || '';
+            const price = priceEl?.textContent?.trim() || '';
+            
+            // Validaciones: descartar si no tiene datos o si es Fiverr
+            const isValidSeller = seller && !seller.toLowerCase().includes('fiverr') && seller.length > 0;
+            const isValidTitle = title && !title.toLowerCase().includes('fiverr');
+            
+            if (isValidSeller && isValidTitle) {
+              results.push({
+                title: title,
+                seller: seller,
+                price: price || 'Starting at',
+                rating: ratingEl?.textContent?.trim() || '0',
+                reviews: reviewsEl?.textContent?.match(/\\d+/)?.[0] || '0',
+                url: linkEl?.href || '',
+              });
+            }
           });
           
+          console.log('Extracted ' + results.length + ' valid gigs');
           return results;
         }
       `,
@@ -226,28 +333,42 @@ export class ApifyService {
 
     console.log(`✅ Fiverr actor devolvió ${results.length} resultados raw`);
 
-    return results.map((item: any, index: number) => ({
-      id: `fiverr-${item.gigId || item.sellerId || item.id || index}`,
-      name: item.seller || item.sellerName || item.name || 'Unknown',
-      platform: 'Fiverr' as FreelancePlatform,
-      platformUsername: item.seller || item.username || item.sellerId || '',
-      profileUrl: item.url || item.profileUrl || `https://fiverr.com/${item.seller || ''}`,
-      title: item.title || 'Freelancer',
-      country: item.location || item.country || 'Unknown',
-      hourlyRate: this.parseFiverrPrice(item.price) || filter.minHourlyRate,
-      jobSuccessRate: this.parseFiverrRating(item.rating),
-      certifications: item.isPro ? ['Fiverr Pro'] : [],
-      bio: item.description || item.title || '',
-      scrapedAt: new Date().toISOString(),
-    }));
+    // Filtrado adicional en frontend para eliminar resultados inválidos
+    return results
+      .filter((item: any) => {
+        const seller = (item.seller || '').toLowerCase();
+        const title = (item.title || '').toLowerCase();
+        
+        // Descartar si no tiene seller válido o es resultado de Fiverr
+        return item.seller && item.seller.trim().length > 2 && 
+               !seller.includes('fiverr') && 
+               !title.includes('fiverr') &&
+               item.title;
+      })
+      .map((item: any, index: number) => ({
+        id: `fiverr-${item.url?.split('/').pop() || index}`,
+        name: item.seller || 'Unknown Seller',
+        platform: 'Fiverr' as FreelancePlatform,
+        platformUsername: item.seller?.toLowerCase().replace(/\s+/g, '-') || 'unknown',
+        profileUrl: item.url || 'https://www.fiverr.com',
+        title: item.title || 'Gig Provider',
+        country: 'Unknown',
+        hourlyRate: this.parseRate(item.price),
+        jobSuccessRate: this.parseRating(item.rating),
+        certifications: item.reviews && parseInt(item.reviews) > 50 ? ['Top Rated'] : [],
+        bio: item.reviews ? `${item.reviews} reviews` : '',
+        scrapedAt: new Date().toISOString(),
+      }));
   }
 
   /**
-   * Parses Fiverr price strings like "Starting at$200" => 200
+   * Parse price strings from any platform
+   * Examples: "$25", "Starting at $100", "€50/hr", "¥5000"
    */
-  private parseFiverrPrice(price: any): number {
+  private parseRate(price: any): number {
     if (typeof price === 'number') return price;
     if (typeof price === 'string') {
+      // Extract all numbers and take the first one
       const match = price.match(/\d+/);
       return match ? parseInt(match[0]) : 0;
     }
@@ -255,13 +376,24 @@ export class ApifyService {
   }
 
   /**
-   * Converts Fiverr rating (0-5 scale) to job success percentage (0-100)
+   * Convert rating to 0-100 scale
+   * Handles both 5-star (Fiverr) and percentage (Upwork) ratings
    */
-  private parseFiverrRating(rating: any): number {
-    const num = parseFloat(rating);
-    if (isNaN(num)) return 0;
-    // Fiverr uses 0-5 scale, convert to percentage
-    return Math.round((num / 5) * 100);
+  private parseRating(rating: any): number {
+    if (typeof rating === 'string') {
+      const num = parseFloat(rating.replace(/[^\d.]/g, ''));
+      if (isNaN(num)) return 0;
+      
+      // If number is > 5, assume it's already a percentage
+      if (num > 5) return Math.min(Math.round(num), 100);
+      // Otherwise convert 5-star to percentage
+      return Math.round((num / 5) * 100);
+    }
+    if (typeof rating === 'number') {
+      if (rating > 5) return Math.min(Math.round(rating), 100);
+      return Math.round((rating / 5) * 100);
+    }
+    return 0;
   }
 
   /**

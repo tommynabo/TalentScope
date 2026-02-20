@@ -53,7 +53,7 @@ EXECUTE FUNCTION update_apify_config_timestamp();
 -- 3️⃣ Insertar Actor IDs por defecto (Seleccionados por calidad-precio-optimización)
 INSERT INTO public.apify_config (config_key, platform, actor_id, description, status, metadata) 
 VALUES 
-    ('upwork_scraper', 'Upwork', 'nwtn/upwork-profile-scraper', 'Scraper Upwork - Gratuito, optimizado, mantenido', 'active', '{"version": "1.0", "min_credits": 1, "free": true}'::jsonb),
+    ('upwork_scraper', 'Upwork', 'apify/web-scraper', 'Web Scraper Apify - Universal para Upwork, gratuito, confiable', 'active', '{"version": "1.0", "free": true, "universal": true}'::jsonb),
     ('fiverr_scraper', 'Fiverr', 'apify/web-scraper', 'Web Scraper Apify - Universal, gratuito, confiable', 'active', '{"version": "1.0", "free": true, "universal": true}'::jsonb),
     ('linkedin_search', 'LinkedIn', 'nwtn/linkedin-profile-scraper', 'LinkedIn Profile Scraper - De calidad', 'active', '{"version": "1.0"}'::jsonb)
 ON CONFLICT (config_key) DO UPDATE 
