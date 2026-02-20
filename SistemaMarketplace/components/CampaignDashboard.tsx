@@ -183,17 +183,18 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       setLogs(prev => [...prev, `✅ Job Success Rate mínimo: ${campaign.searchTerms.minJobSuccessRate}%`]);
       setLogs(prev => [...prev, `⏳ Conectando con APIs de scraping...`]);
 
-      // Get API keys from environment - REAL KEYS, NOT MOCK
-      const apifyKey = import.meta.env.VITE_APIFY_API_KEY;
+      // Get API keys from environment
+      // Usa VITE_APIFY_MARKETPLACE_API_KEY si existe, si no usa VITE_APIFY_API_KEY
+      const apifyMarketplaceKey = import.meta.env.VITE_APIFY_MARKETPLACE_API_KEY || import.meta.env.VITE_APIFY_API_KEY;
       const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
       // Log which mode we're in
-      if (!apifyKey || apifyKey === 'mock') {
+      if (!apifyMarketplaceKey || apifyMarketplaceKey === 'mock') {
         setLogs(prev => [...prev, `⚠️ MODO SIMULACIÓN: No hay API key de Apify configurada`]);
-      } else if (apifyKey) {
-        setLogs(prev => [...prev, `✅ SCRAPING REAL: Apify API configurada (${apifyKey.substring(0, 15)}...)`]);
+      } else if (apifyMarketplaceKey) {
+        setLogs(prev => [...prev, `✅ SCRAPING REAL: Apify API Marketplace configurada (${apifyMarketplaceKey.substring(0, 15)}...)`]);
       }
 
       if (!openaiKey || openaiKey === 'mock') {
@@ -202,8 +203,8 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         setLogs(prev => [...prev, `✅ ENRIQUECIMIENTO REAL: OpenAI API configurada (sk-proj-...)`]);
       }
 
-      // Initialize service with real keys AND Supabase
-      const raidService = MarketplaceRaidService.getInstance(apifyKey, openaiKey, supabaseUrl, supabaseKey);
+      // Initialize service with MARKETPLACE API KEY
+      const raidService = MarketplaceRaidService.getInstance(apifyMarketplaceKey, openaiKey, supabaseUrl, supabaseKey);
 
       setLogs(prev => [...prev, `✅ Servicio marketplace inicializado`]);
 

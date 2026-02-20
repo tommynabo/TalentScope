@@ -8,8 +8,8 @@ export class ApifyService {
 
   // Actor IDs por defecto (fallback si no están en DB)
   private defaultActors = {
-    upwork: 'powerai/upwork-talent-search-scraper',
-    fiverr: 'newpo/fiverr-scraper',
+    upwork: 'nwtn/upwork-profile-scraper',
+    fiverr: 'apify/web-scraper',
   };
 
   // Actor IDs cargados desde la base de datos
@@ -18,6 +18,12 @@ export class ApifyService {
     fiverr: '',
   };
 
+  /**
+   * Constructor
+   * @param apiKey - API key de Apify (puede ser específica para marketplace)
+   * @param supabaseUrl - URL de Supabase
+   * @param supabaseKey - Clave anon de Supabase
+   */
   constructor(apiKey: string, supabaseUrl?: string, supabaseKey?: string) {
     if (!apiKey) {
       console.error('❌ ApifyService: No se proporcionó API key');
