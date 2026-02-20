@@ -179,6 +179,8 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       // Get API keys from environment - REAL KEYS, NOT MOCK
       const apifyKey = import.meta.env.VITE_APIFY_API_KEY;
       const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
       // Log which mode we're in
       if (!apifyKey || apifyKey === 'mock') {
@@ -193,8 +195,8 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         setLogs(prev => [...prev, `✅ ENRIQUECIMIENTO REAL: OpenAI API configurada (sk-proj-...)`]);
       }
 
-      // Initialize service with real keys
-      const raidService = MarketplaceRaidService.getInstance(apifyKey, openaiKey);
+      // Initialize service with real keys AND Supabase
+      const raidService = MarketplaceRaidService.getInstance(apifyKey, openaiKey, supabaseUrl, supabaseKey);
 
       setLogs(prev => [...prev, `✅ Servicio marketplace inicializado`]);
 
@@ -205,8 +207,9 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       if (connections.apify) {
         setLogs(prev => [...prev, `✅✅✅ APIFY CONECTADO - SCRAPING EN VIVO`]);
       } else {
-        setLogs(prev => [...prev, `❌ Apify no responde - verifica tu API key y los Actor IDs configurados en apifyService.ts`]);
-        setLogs(prev => [...prev, `📋 SOLUCIÓN: Ve a https://apify.com/store, busca scrapers de "Upwork" o "Fiverr", y configura los Actor IDs reales`]);
+        setLogs(prev => [...prev, `❌ Apify no responde - verifica tu API key y los Actor IDs configurados en BD`]);
+        setLogs(prev => [...prev, `📋 SOLUCIÓN: Ve a Supabase y actualiza los Actor IDs en la tabla 'apify_config'`]);
+        setLogs(prev => [...prev, `📖 Lee: SistemaMarketplace/APIFY_ACTOR_ID_SETUP.md para instrucciones completas`]);
         setLogs(prev => [...prev, `⛔ Búsqueda cancelada: no se pueden obtener candidatos sin conexión a Apify`]);
         setSearching(false);
         return;
@@ -248,10 +251,11 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       if (scrapedCount === 0) {
         setLogs(prev => [...prev, `❌ No se encontraron candidatos`]);
         setLogs(prev => [...prev, `⚠️ MOTIVOS POSIBLES:`]);
-        setLogs(prev => [...prev, `   1. Los Actor IDs de Apify no están configurados correctamente`]);
-        setLogs(prev => [...prev, `   2. La API key de Apify no tiene permisos o créditos`]);
-        setLogs(prev => [...prev, `   3. El actor especificado no existe en tu cuenta de Apify`]);
-        setLogs(prev => [...prev, `📋 SOLUCIÓN: Ve a https://apify.com/store, busca "Fiverr" o "Upwork", y actualiza los Actor IDs en apifyService.ts`]);
+        setLogs(prev => [...prev, `   1. Los Actor IDs en la BD de Supabase no son correctos`]);
+        setLogs(prev => [...prev, `   2. La API key de Apify no tiene permisos o créditos suficientes`]);
+        setLogs(prev => [...prev, `   3. El actor especificado no existe o está inactivo en tu cuenta de Apify`]);
+        setLogs(prev => [...prev, `📋 SOLUCIÓN: Actualiza los Actor IDs en Supabase tabla 'apify_config'`]);
+        setLogs(prev => [...prev, `📖 Guía completa: SistemaMarketplace/APIFY_ACTOR_ID_SETUP.md`]);
         setSearching(false);
         return;
       }

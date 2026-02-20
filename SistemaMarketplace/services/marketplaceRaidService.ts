@@ -10,23 +10,36 @@ export class MarketplaceRaidService {
 
   private constructor(
     apifyKey: string,
-    openaiKey: string
+    openaiKey: string,
+    supabaseUrl?: string,
+    supabaseKey?: string
   ) {
-    this.apifyService = new ApifyService(apifyKey);
+    this.apifyService = new ApifyService(apifyKey, supabaseUrl, supabaseKey);
     this.aiEnrichmentService = new AIEnrichmentService(openaiKey);
   }
 
   static getInstance(
     apifyKey: string = '',
-    openaiKey: string = ''
+    openaiKey: string = '',
+    supabaseUrl?: string,
+    supabaseKey?: string
   ): MarketplaceRaidService {
     if (!MarketplaceRaidService.instance) {
       MarketplaceRaidService.instance = new MarketplaceRaidService(
         apifyKey,
-        openaiKey
+        openaiKey,
+        supabaseUrl,
+        supabaseKey
       );
     }
     return MarketplaceRaidService.instance;
+  }
+
+  /**
+   * Obtener la instancia del servicio Apify para actualizar Actor IDs
+   */
+  getApifyService(): ApifyService {
+    return this.apifyService;
   }
 
   async validateAllConnections(): Promise<{

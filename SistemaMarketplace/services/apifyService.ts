@@ -1,20 +1,93 @@
 import { ScrapingFilter, ScrapedCandidate, FreelancePlatform } from '../types/marketplace';
+import { ApifyConfigService } from './apifyConfigService';
 
 export class ApifyService {
   private apiKey: string;
   private baseUrl = 'https://api.apify.com/v2';
+  private configService: ApifyConfigService | null = null;
 
-  // Actor IDs reales de Apify Store — configurables via ENV o hardcoded
-  private actors = {
-    upwork: import.meta.env.VITE_APIFY_UPWORK_ACTOR_ID || 'powerai/upwork-talent-search-scraper',
-    fiverr: import.meta.env.VITE_APIFY_FIVERR_ACTOR_ID || 'newpo/fiverr-scraper',
+  // Actor IDs por defecto (fallback si no están en DB)
+  private defaultActors = {
+    upwork: 'powerai/upwork-talent-search-scraper',
+    fiverr: 'newpo/fiverr-scraper',
   };
 
-  constructor(apiKey: string) {
+  // Actor IDs cargados desde la base de datos
+  private actors = {
+    upwork: '',
+    fiverr: '',
+  };
+
+  constructor(apiKey: string, supabaseUrl?: string, supabaseKey?: string) {
     if (!apiKey) {
       console.error('❌ ApifyService: No se proporcionó API key');
     }
     this.apiKey = apiKey;
+
+    // Inicializar servicio de configuración si se proporciona
+    if (supabaseUrl && supabaseKey) {
+      this.configService = new ApifyConfigService(supabaseUrl, supabaseKey);
+      this.initializeActorIds();
+    } else {
+      // Usar valores por defecto si no hay Supabase
+      this.actors = { ...this.defaultActors };
+      console.warn('⚠️ ApifyService: Usando Actor IDs por defecto. Para usar configuración de BD, proporciona supabaseUrl y supabaseKey');
+    }
+  }
+
+  /**
+   * Inicializar los Actor IDs desde la base de datos
+   */
+  private async initializeActorIds(): Promise<void> {
+    if (!this.configService) {
+      this.actors = { ...this.defaultActors };
+      return;
+    }
+
+    try {
+      // Obtener Actor IDs desde la base de datos
+      const upworkId = await this.configService.getActorId('upwork_scraper');
+      const fiverrId = await this.configService.getActorId('fiverr_scraper');
+
+      // Usar valores de BD si existen, si no usar defaults
+      this.actors.upwork = upworkId || this.defaultActors.upwork;
+      this.actors.fiverr = fiverrId || this.defaultActors.fiverr;
+
+      console.log('✅ Actor IDs cargados desde base de datos');
+      console.log(`   - Upwork: ${this.actors.upwork}`);
+      console.log(`   - Fiverr: ${this.actors.fiverr}`);
+    } catch (error) {
+      console.error('❌ Error inicializando Actor IDs desde BD:', error);
+      // Fallback a valores por defecto
+      this.actors = { ...this.defaultActors };
+    }
+  }
+
+  /**
+   * Actualizar un Actor ID en la base de datos
+   */
+  async updateActorId(platform: 'upwork' | 'fiverr', newActorId: string): Promise<boolean> {
+    if (!this.configService) {
+      console.error('❌ No hay servicio de configuración - no se puede actualizar Actor ID');
+      return false;
+    }
+
+    const configKey = platform === 'upwork' ? 'upwork_scraper' : 'fiverr_scraper';
+    const platformName = platform === 'upwork' ? 'Upwork' : 'Fiverr';
+
+    const success = await this.configService.setActorId(
+      configKey,
+      newActorId,
+      platformName as any,
+      `Scraper de ${platformName} actualizado ${new Date().toISOString()}`
+    );
+
+    if (success) {
+      this.actors[platform] = newActorId;
+      console.log(`✅ Actor ID de ${platformName} actualizado: ${newActorId}`);
+    }
+
+    return success;
   }
 
   async validateConnection(): Promise<boolean> {
