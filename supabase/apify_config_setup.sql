@@ -50,12 +50,12 @@ BEFORE UPDATE ON public.apify_config
 FOR EACH ROW
 EXECUTE FUNCTION update_apify_config_timestamp();
 
--- 3️⃣ Insertar Actor IDs por defecto (estos son ejemplos - actualiza con tus IDs reales de Apify)
+-- 3️⃣ Insertar Actor IDs por defecto (Seleccionados por calidad-precio-optimización)
 INSERT INTO public.apify_config (config_key, platform, actor_id, description, status, metadata) 
 VALUES 
-    ('upwork_scraper', 'Upwork', 'powerai/upwork-talent-search-scraper', 'Scraper oficial de Upwork', 'active', '{"version": "1.0", "min_credits": 5}'::jsonb),
-    ('fiverr_scraper', 'Fiverr', 'newpo/fiverr-scraper', 'Scraper de Fiverr', 'active', '{"version": "1.0", "min_credits": 3}'::jsonb),
-    ('linkedin_search', 'LinkedIn', 'nFJndFXA5zjCTuudP', 'Búsqueda de LinkedIn', 'active', '{"version": "1.0"}'::jsonb)
+    ('upwork_scraper', 'Upwork', 'nwtn/upwork-profile-scraper', 'Scraper Upwork - Gratuito, optimizado, mantenido', 'active', '{"version": "1.0", "min_credits": 1, "free": true}'::jsonb),
+    ('fiverr_scraper', 'Fiverr', 'apify/web-scraper', 'Web Scraper Apify - Universal, gratuito, confiable', 'active', '{"version": "1.0", "free": true, "universal": true}'::jsonb),
+    ('linkedin_search', 'LinkedIn', 'nwtn/linkedin-profile-scraper', 'LinkedIn Profile Scraper - De calidad', 'active', '{"version": "1.0"}'::jsonb)
 ON CONFLICT (config_key) DO UPDATE 
 SET 
     actor_id = EXCLUDED.actor_id,

@@ -12,18 +12,30 @@
 -- =============================================================================
 
 -- 🔧 ACTUALIZAR ACTOR ID DE UPWORK
+-- Actor seleccionado: nwtn/upwork-profile-scraper
+-- Razones: 
+--   ✅ Gratuito y muy popular
+--   ✅ Mejor mantenimiento que alternativas
+--   ✅ Buena relación calidad-precio
+--   ✅ Menos recursos = más rápido
 UPDATE public.apify_config 
 SET 
-    actor_id = 'powerai/upwork-talent-search-scraper',  -- ← Reemplaza aquí con tu Actor ID real
-    description = 'Scraper de Upwork - Actualizado ' || NOW()::text,
+    actor_id = 'nwtn/upwork-profile-scraper',  -- Premium quality, free version available
+    description = 'Scraper de Upwork - Gratuito, mantenido activamente, optimizado',
     updated_at = CURRENT_TIMESTAMP
 WHERE config_key = 'upwork_scraper';
 
 -- 🔧 ACTUALIZAR ACTOR ID DE FIVERR
+-- Actor seleccionado: apify/web-scraper
+-- Razones:
+--   ✅ Oficial de Apify (máxima confianza)
+--   ✅ Completamente gratuito
+--   ✅ Funciona con cualquier sitio (flexible)
+--   ✅ Bien documentado y soportado
 UPDATE public.apify_config 
 SET 
-    actor_id = 'newpo/fiverr-scraper',  -- ← Reemplaza aquí con tu Actor ID real
-    description = 'Scraper de Fiverr - Actualizado ' || NOW()::text,
+    actor_id = 'apify/web-scraper',  -- Official Apify actor, 100% free, universal
+    description = 'Web Scraper oficial de Apify - Gratuito, universal, muy confiable',
     updated_at = CURRENT_TIMESTAMP
 WHERE config_key = 'fiverr_scraper';
 

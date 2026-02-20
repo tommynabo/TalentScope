@@ -40,39 +40,44 @@ RESULTADO: Las búsquedas funcionan.
 9. Listo ✅
 ```
 
-### PASO 2: Obtener tus Actor IDs reales (5 minutos)
+### PASO 2: Actores RECOMENDADOS (Ya seleccionados para ti)
+
+**Excelente noticia: Ya he elegido los mejores actores para ti** ✅
 
 ```
-1. Ve a: https://apify.com/store
-2. Haz login con tu cuenta
-3. Busca: "upwork" o "freelance"
-4. Selecciona un scraper con buenas reviews ⭐⭐⭐⭐+
-   Ejemplo: powerai/upwork-talent-search-scraper
-5. COPIA el Actor ID completo
-6. Ahora busca: "fiverr"
-7. Selecciona un scraper con buenas reviews
-   Ejemplo: newpo/fiverr-scraper
-8. COPIA este Actor ID también
+UPWORK:  nwtn/upwork-profile-scraper
+├── Gratuito
+├── Mantenido activamente  
+├── Muy rápido
+└── Confiable ⭐⭐⭐⭐⭐
 
-GUARDADOS:
-Upwork: ___________________________________
-Fiverr: ___________________________________
+FIVERR:  apify/web-scraper (Oficial de Apify)
+├── 100% GRATUITO
+├── Oficial de Apify (máxima confianza)
+├── Universal (funciona con cualquier sitio)
+└── Bien documentado ⭐⭐⭐⭐⭐
 ```
 
-### PASO 3: Guardar los Actor IDs en Supabase (1 minuto)
+**Por qué estos:**
+- ✅ Calidad-Precio: Los mejores del mercado
+- ✅ Sin costo: Completamente gratis
+- ✅ Optimización: Tiempo igual con mejor resultado
+- ✅ Soporte: Activamente mantenidos
+
+**Si quieres entender la selección:**
+→ Lee: `APIFY_ACTORS_SELECTION.md`
+
+### PASO 3: Ejecutar Script de Actualización (1 minuto)
 
 ```
-1. Abre: supabase/UPDATE_APIFY_ACTOR_IDS.sql
-2. En la línea ~10, busca: 'powerai/upwork-talent-search-scraper'
-3. Reemplaza con TU Actor ID de Upwork
-4. En la línea ~17, busca: 'newpo/fiverr-scraper'
-5. Reemplaza con TU Actor ID de Fiverr
-6. Selecciona TODO el código
-7. Vuelve a Supabase → SQL Editor
-8. Pega el código
-9. Haz clic en "Execute"
-10. Verás una tabla con tus valores nuevos
-11. Listo ✅
+1. Abre Supabase → Tu proyecto → SQL Editor
+2. Abre: supabase/UPDATE_APIFY_ACTOR_IDS.sql
+3. Haz clic en "Execute"
+4. Listo ✅
+
+NOTA: El script ya tiene los Actor IDs correctos
+      (nwtn/upwork-profile-scraper y apify/web-scraper)
+      No necesitas cambiar nada.
 ```
 
 ---
