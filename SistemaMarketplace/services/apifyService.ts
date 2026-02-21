@@ -132,12 +132,86 @@ export class ApifyService {
     await this.initializeActorIds();
 
     try {
-      console.log(`🔍 Upwork: Buscando "${filter.keyword}" con actor ${this.actors.upwork}`);
-      return await this.runUpworkDedicated(filter);
+      console.log(`🔍 Upwork: Iniciando búsqueda con buffer de intentos múltiples...`);
+      // NUEVO: Usar búsqueda con buffer + loop de reintentos (como LinkedIn/GitHub)
+      return await this.scrapeUpworkWithBuffer(filter);
     } catch (error) {
       console.error('❌ Upwork scraping error:', error);
       return [];
     }
+  }
+
+  // ─── BÚSQUEDA CON BUFFER (Patrón LinkedIn/GitHub) ──────────────────────────
+
+  private async scrapeUpworkWithBuffer(filter: ScrapingFilter, maxRetries: number = 5): Promise<ScrapedCandidate[]> {
+    const buffer: ScrapedCandidate[] = [];
+    const targetCount = 50; // Objetivo de candidatos
+    const seenProfiles = new Set<string>(); // Dedup por profileUrl
+    let attempt = 0;
+
+    console.log(`📊 Upwork: Búsqueda con buffer - Target: ${targetCount} candidatos en ${maxRetries} intentos`);
+
+    while (buffer.length < targetCount && attempt < maxRetries) {
+      attempt++;
+      
+      // Crear variación de query
+      const queryKeyword = this.getUpworkQueryVariation(filter.keyword, attempt);
+      console.log(`\n[Intento ${attempt}/${maxRetries}] 🔍 Buscando "${queryKeyword}"...`);
+
+      // Crear filtro modificado con la nueva keyword
+      const modifiedFilter = {
+        ...filter,
+        keyword: queryKeyword
+      };
+
+      try {
+        // Buscar con maxResults * 4 (como LinkedIn)
+        const tempResults = await this.runUpworkDedicated(modifiedFilter);
+        console.log(`   ✅ ${tempResults.length} resultados raw obtenidos`);
+
+        if (tempResults.length === 0) {
+          console.log(`   ⚠️ Sin resultados en este intento`);
+          continue;
+        }
+
+        // Filtrar duplicados (por profileUrl/platformUsername) y agregar al buffer
+        const newCandidates = tempResults.filter(c => {
+          const key = c.profileUrl || c.platformUsername;
+          if (seenProfiles.has(key)) {
+            return false;
+          }
+          seenProfiles.add(key);
+          return true;
+        });
+
+        buffer.push(...newCandidates);
+        console.log(`   📦 Buffer: ${buffer.length}/${targetCount} candidatos acumulados`);
+
+        if (buffer.length >= targetCount) {
+          console.log(`   ✅ Meta alcanzada en intento ${attempt}`);
+          break;
+        }
+      } catch (err: any) {
+        console.error(`   ❌ Error en intento ${attempt}: ${err.message}`);
+      }
+    }
+
+    console.log(`\n✅ Búsqueda completada: ${buffer.length} candidatos únicos encontrados`);
+    return buffer.slice(0, 50); // Retorna máximo 50
+  }
+
+  private getUpworkQueryVariation(baseKeyword: string, attempt: number): string {
+    const variations = [
+      baseKeyword, // Intento 1: Keyword base
+      `"${baseKeyword}" Top Rated`, // Intento 2: Con badge
+      `${baseKeyword} "rising talent" OR "level 1"`, // Intento 3: Nivel bajo
+      `${baseKeyword} freelance remote`, // Intento 4: Con atributos
+      `${baseKeyword} experienced OR expert OR senior`, // Intento 5: Experiencia
+    ];
+
+    const selected = variations[Math.min(attempt - 1, variations.length - 1)];
+    console.log(`   📝 Variación: ${selected}`);
+    return selected;
   }
 
   private async runUpworkDedicated(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
@@ -361,12 +435,82 @@ export class ApifyService {
     await this.initializeActorIds();
 
     try {
-      console.log(`🔍 Fiverr: Buscando "${filter.keyword}" con actor ${this.actors.fiverr}`);
-      return await this.runFiverrScraper(filter);
+      console.log(`🔍 Fiverr: Iniciando búsqueda con buffer de intentos múltiples...`);
+      return await this.scrapeFiverrWithBuffer(filter);
     } catch (error) {
       console.error('❌ Fiverr scraping error:', error);
       return [];
     }
+  }
+
+  private async scrapeFiverrWithBuffer(filter: ScrapingFilter, maxRetries: number = 5): Promise<ScrapedCandidate[]> {
+    const buffer: ScrapedCandidate[] = [];
+    const targetCount = 40; // Objetivo para Fiverr (menos que Upwork)
+    const seenProfiles = new Set<string>(); // Dedup por profileUrl
+    let attempt = 0;
+
+    console.log(`📊 Fiverr: Búsqueda con buffer - Target: ${targetCount} candidatos en ${maxRetries} intentos`);
+
+    while (buffer.length < targetCount && attempt < maxRetries) {
+      attempt++;
+      
+      // Crear variación de query
+      const queryKeyword = this.getFiverrQueryVariation(filter.keyword, attempt);
+      console.log(`\n[Intento ${attempt}/${maxRetries}] 🔍 Buscando "${queryKeyword}"...`);
+
+      // Crear filtro modificado
+      const modifiedFilter = {
+        ...filter,
+        keyword: queryKeyword
+      };
+
+      try {
+        const tempResults = await this.runFiverrScraper(modifiedFilter);
+        console.log(`   ✅ ${tempResults.length} resultados raw obtenidos`);
+
+        if (tempResults.length === 0) {
+          console.log(`   ⚠️ Sin resultados en este intento`);
+          continue;
+        }
+
+        // Filtrar duplicados
+        const newCandidates = tempResults.filter(c => {
+          const key = c.platformUsername || c.profileUrl;
+          if (seenProfiles.has(key)) {
+            return false;
+          }
+          seenProfiles.add(key);
+          return true;
+        });
+
+        buffer.push(...newCandidates);
+        console.log(`   📦 Buffer: ${buffer.length}/${targetCount} candidatos acumulados`);
+
+        if (buffer.length >= targetCount) {
+          console.log(`   ✅ Meta alcanzada en intento ${attempt}`);
+          break;
+        }
+      } catch (err: any) {
+        console.error(`   ❌ Error en intento ${attempt}: ${err.message}`);
+      }
+    }
+
+    console.log(`\n✅ Búsqueda completada: ${buffer.length} candidatos únicos encontrados`);
+    return buffer.slice(0, 40);
+  }
+
+  private getFiverrQueryVariation(baseKeyword: string, attempt: number): string {
+    const variations = [
+      baseKeyword,
+      `"${baseKeyword}" rating high`,
+      `${baseKeyword} "top rated" OR "pro"`,
+      `${baseKeyword} seller "english" OR "spanish"`,
+      `${baseKeyword} portfolio reviews`,
+    ];
+
+    const selected = variations[Math.min(attempt - 1, variations.length - 1)];
+    console.log(`   📝 Variación: ${selected}`);
+    return selected;
   }
 
   private async runFiverrScraper(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
@@ -567,12 +711,82 @@ export class ApifyService {
     await this.initializeActorIds();
 
     try {
-      console.log(`🔍 LinkedIn: Buscando "${filter.keyword}" con actor ${this.actors.linkedin}`);
-      return await this.runLinkedInSearch(filter);
+      console.log(`🔍 LinkedIn: Iniciando búsqueda con buffer de intentos múltiples...`);
+      return await this.scrapeLinkedInWithBuffer(filter);
     } catch (error) {
       console.error('❌ LinkedIn scraping error:', error);
       return [];
     }
+  }
+
+  private async scrapeLinkedInWithBuffer(filter: ScrapingFilter, maxRetries: number = 5): Promise<ScrapedCandidate[]> {
+    const buffer: ScrapedCandidate[] = [];
+    const targetCount = 30; // Objetivo para LinkedIn (menos dados disponibles)
+    const seenLinkedInProfiles = new Set<string>(); // Dedup por profileUrl
+    let attempt = 0;
+
+    console.log(`📊 LinkedIn: Búsqueda con buffer - Target: ${targetCount} candidatos en ${maxRetries} intentos`);
+
+    while (buffer.length < targetCount && attempt < maxRetries) {
+      attempt++;
+      
+      // Crear variación de query
+      const queryKeyword = this.getLinkedInQueryVariation(filter.keyword, attempt);
+      console.log(`\n[Intento ${attempt}/${maxRetries}] 🔍 Buscando "${queryKeyword}"...`);
+
+      // Crear filtro modificado
+      const modifiedFilter = {
+        ...filter,
+        keyword: queryKeyword
+      };
+
+      try {
+        const tempResults = await this.runLinkedInSearch(modifiedFilter);
+        console.log(`   ✅ ${tempResults.length} resultados raw obtenidos`);
+
+        if (tempResults.length === 0) {
+          console.log(`   ⚠️ Sin resultados en este intento`);
+          continue;
+        }
+
+        // Filtrar duplicados
+        const newCandidates = tempResults.filter(c => {
+          const key = c.profileUrl || c.platformUsername;
+          if (seenLinkedInProfiles.has(key)) {
+            return false;
+          }
+          seenLinkedInProfiles.add(key);
+          return true;
+        });
+
+        buffer.push(...newCandidates);
+        console.log(`   📦 Buffer: ${buffer.length}/${targetCount} candidatos acumulados`);
+
+        if (buffer.length >= targetCount) {
+          console.log(`   ✅ Meta alcanzada en intento ${attempt}`);
+          break;
+        }
+      } catch (err: any) {
+        console.error(`   ❌ Error en intento ${attempt}: ${err.message}`);
+      }
+    }
+
+    console.log(`\n✅ Búsqueda completada: ${buffer.length} candidatos únicos encontrados`);
+    return buffer.slice(0, 30);
+  }
+
+  private getLinkedInQueryVariation(baseKeyword: string, attempt: number): string {
+    const variations = [
+      baseKeyword,
+      `"${baseKeyword}" current company tech`,
+      `${baseKeyword} "Senior" OR "Lead" OR "Principal"`,
+      `${baseKeyword} location "España" OR "Spain" OR "remote"`,
+      `${baseKeyword} experience "5 years" OR "10 years" OR "15 years"`,
+    ];
+
+    const selected = variations[Math.min(attempt - 1, variations.length - 1)];
+    console.log(`   📝 Variación: ${selected}`);
+    return selected;
   }
 
   private async runLinkedInSearch(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
