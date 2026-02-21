@@ -50,28 +50,36 @@ export class ApifyConfigService {
         return this.cache.get(configKey) || null;
       }
 
-      const { data, error } = await this.supabase
-        .from('apify_config')
-        .select('*')
-        .eq('config_key', configKey)
-        .eq('status', 'active')
-        .single();
+      try {
+        const { data, error } = await this.supabase
+          .from('apify_config')
+          .select('*')
+          .eq('config_key', configKey)
+          .eq('status', 'active')
+          .single();
 
-      if (error) {
-        console.error(`❌ Error en getConfig(${configKey}):`, error);
+        if (error) {
+          // Log specific error details
+          const errorMsg = error?.message || JSON.stringify(error);
+          console.warn(`⚠️ getConfig(${configKey}) - Tabla no existe o sin resultados. Usando Actor IDs por defecto. Error: ${errorMsg}`);
+          return null;
+        }
+
+        if (data) {
+          // Guardar en cache
+          this.cache.set(configKey, data);
+          // Limpiar cache después de expirar
+          setTimeout(() => this.cache.delete(configKey), this.cacheExpiry);
+        }
+
+        return data || null;
+      } catch (supabaseError) {
+        // If Supabase errors (table doesn't exist, no connection, etc), just use defaults
+        console.warn(`⚠️ Supabase no disponible para ${configKey}. Usando Actor IDs por defecto.`, supabaseError);
         return null;
       }
-
-      if (data) {
-        // Guardar en cache
-        this.cache.set(configKey, data);
-        // Limpiar cache después de expirar
-        setTimeout(() => this.cache.delete(configKey), this.cacheExpiry);
-      }
-
-      return data || null;
     } catch (error) {
-      console.error(`❌ Error inesperado en getConfig(${configKey}):`, error);
+      console.warn(`⚠️ Error en getConfig(${configKey}). Usando defaults.`, error);
       return null;
     }
   }

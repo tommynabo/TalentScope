@@ -160,13 +160,111 @@ export class ApifyService {
       maxItems: 50
     };
 
-    // Prevent HTTP 400 if user still hasn't updated Actor ID in Supabase
+    // Real pageFunction for apify/web-scraper - extracts actual Upwork data
     if (actorId === 'apify/web-scraper') {
       input.pageFunction = `
         async function pageFunction(context) {
-          // Fallback dummy function to prevent API crash. 
-          // Real scraping requires renting a dedicated actor.
-          return [];
+          const { page, request } = context;
+          
+          // Wait for content to load
+          try {
+            await page.waitForSelector('[class*="talent"], [class*="freelancer"], li[class*="result"]', { timeout: 5000 }).catch(() => {});
+          } catch (e) {/* ignore */}
+          
+          const results = [];
+          const delay = (ms) => new Promise(r => setTimeout(r, ms));
+          await delay(2000);
+          
+          // Strategy 1: Extract from main result cards
+          const talentCards = await page.$$('[data-test="client-contract-card"], li[class*="result"], [class*="freelancer-card"], [class*="talent-card"]');
+          
+          for (const card of talentCards.slice(0, 50)) {
+            try {
+              const result = {};
+              
+              // Extract name - try multiple selectors
+              result.name = await card.$eval('h2, [class*="freelancer-name"], [class*="name"] a, strong', el => el.textContent?.trim() || '').catch(() => '');
+              if (!result.name) {
+                const nameLink = await card.$('a[href*="/o/"]');
+                if (nameLink) {
+                  result.name = await nameLink.evaluate(el => el.textContent?.trim() || '');
+                }
+              }
+              
+              // Extract title/headline  
+              result.title = await card.$eval('[class*="headline"], [class*="description"], p', el => el.textContent?.trim() || '').catch(() => '');
+              
+              // Extract hourly rate
+              const rateEl = await card.$('[class*="rate"], strong');
+              if (rateEl) {
+                const rateText = await rateEl.evaluate(el => el.textContent?.trim() || '');
+                if (rateText) {
+                  const rateMatch = rateText.match(/\\d+/);
+                  if (rateMatch) result.hourlyRate = rateMatch[0];
+                }
+              }
+              
+              // Extract job success rate - look for percentages
+              const allText = await card.evaluate(el => el.textContent || '');
+              const successMatch = allText.match(/(\\d{1,3})%/);
+              if (successMatch) {
+                result.jobSuccessRate = successMatch[1];
+              }
+              
+              // Extract location
+              result.country = await card.$eval('[class*="location"], [class*="country"], span', el => el.textContent?.trim() || '').catch(() => 'Unknown');
+              
+              // Extract profile URL
+              const profileLink = await card.$('a[href*="/o/"], a[href*="/freelancers/"]');
+              if (profileLink) {
+                result.profileUrl = await profileLink.evaluate(el => el.href || '');
+              }
+              
+              // Extract badges
+              const badgeEls = await card.$$('[class*="badge"], [class*="tag"], [class*="label"]');
+              result.badges = [];
+              for (const badge of badgeEls) {
+                const text = await badge.evaluate(el => el.textContent?.trim()).catch(() => '');
+                if (text && text.length > 0) result.badges.push(text);
+              }
+              
+              // Extract skills if available
+              const skillsText = await card.$eval('[class*="skills"], [class*="expertise"]', el => el.textContent?.trim() || '').catch(() => '');
+              result.skills = skillsText ? skillsText.split(',').map(s => s.trim()).filter(s => s && s.length > 0) : [];
+              
+              // Extract job/hour counts
+              const countsText = allText.match(/(\\d+)\\s*(jobs?|hours?)/gi) || [];
+              result.totalJobs = countsText.find(c => c.includes('job')) ? countsText.find(c => c.includes('job')).match(/\\d+/)?.[0] : '';
+              result.totalHours = countsText.find(c => c.includes('hour')) ? countsText.find(c => c.includes('hour')).match(/\\d+/)?.[0] : '';
+              
+              // Only add if has minimum required fields
+              if (result.name && result.name.length > 2) {
+                results.push(result);
+              }
+            } catch (cardError) {
+              // Continue processing other cards
+            }
+          }
+          
+          // Strategy 2: Fallback - find all profile links
+          if (results.length === 0) {
+            const links = await page.$$('a[href*="/o/"]');
+            for (const link of links.slice(0, 50)) {
+              try {
+                const href = await link.evaluate(el => el.href || '');
+                const text = await link.evaluate(el => el.textContent?.trim() || '');
+                if (text && href && href.includes('/o/')) {
+                  results.push({
+                    name: text,
+                    profileUrl: href,
+                    title: 'Freelancer'
+                  });
+                }
+              } catch (e) {/* skip */}
+            }
+          }
+          
+          return results;
         }
       `;
       input.proxyConfiguration = { useApifyProxy: true };
@@ -179,11 +277,27 @@ export class ApifyService {
       return [];
     }
 
-    // Filter out error results from generic scrapers if accidentally used
-    const validResults = results.filter((r: any) => !r['#error']);
+    // Filter out actual error items (not all items - be lenient)
+    // Only filter if item is explicitly marked as error
+    let validResults = results.filter((r: any) => {
+      if (typeof r === 'object' && r !== null) {
+        // Skip only if explicitly marked as error and has nothing else
+        if (r['#error'] && !r.name && !r.profileUrl) {
+          return false;
+        }
+        // Keep anything with basic info
+        return r.name || r.profileUrl || r.title;
+      }
+      return false;
+    });
+
+    // If we got nothing after filtering, return original results
     if (validResults.length === 0) {
-      console.warn('⚠️ Upwork: Los resultados devueltos contienen errores.');
-      return [];
+      validResults = results.filter((r: any) => typeof r === 'object' && r !== null);
+      if (validResults.length === 0) {
+        console.warn('⚠️ Upwork: Los resultados no tienen formato válido.');
+        return [];
+      }
     }
 
     console.log(`✅ Upwork: ${validResults.length} resultados raw del actor`);
@@ -232,7 +346,7 @@ export class ApifyService {
         return candidate;
       })
       .filter(c => c.name !== 'Unknown' && c.name.trim().length > 0)
-      .filter(c => c.talentScore >= 20) // Minimum quality threshold
+      .filter(c => c.talentScore >= 1) // Very lenient threshold - can be filtered by user
       .sort((a, b) => b.talentScore - a.talentScore); // Best first
   }
 
@@ -274,13 +388,99 @@ export class ApifyService {
       maxResults: 50
     };
 
-    // Prevent HTTP 400 if user still hasn't updated Actor ID in Supabase
+    // Real pageFunction for apify/web-scraper - extracts Fiverr seller data
     if (actorId === 'apify/web-scraper') {
       input.pageFunction = `
         async function pageFunction(context) {
-          // Fallback dummy function to prevent API crash. 
-          // Real scraping requires renting a dedicated actor.
-          return [];
+          const { page, request } = context;
+          
+          const delay = (ms) => new Promise(r => setTimeout(r, ms));
+          await delay(2000);
+          
+          const results = [];
+          
+          // Strategy 1: Extract from gig cards
+          const gigCards = await page.$$('[data-component-search-gig-card], [class*="gig-card"], [class*="gig"], div[role="listitem"]');
+          
+          for (const card of gigCards.slice(0, 50)) {
+            try {
+              const result = {};
+              
+              // Extract seller name
+              result.seller = await card.$eval('[class*="seller"], [class*="user"], p, span', el => el.textContent?.trim() || '').catch(() => '');
+              if (!result.seller) {
+                const sellerLink = await card.$('a');
+                if (sellerLink) {
+                  result.seller = await sellerLink.evaluate(el => el.textContent?.trim() || '');
+                }
+              }
+              
+              // Extract gig title
+              result.title = await card.$eval('[class*="gig-title"], h3, a', el => el.textContent?.trim() || '').catch(() => '');
+              
+              // Extract price
+              const priceEl = await card.$('[class*="price"], [class*="cost"]');
+              if (priceEl) {
+                const priceText = await priceEl.evaluate(el => el.textContent?.trim() || '');
+                const priceMatch = priceText.match(/\\d+/);
+                if (priceMatch) result.price = priceMatch[0];
+              }
+              
+              // Extract rating/reviews
+              const ratingText = await card.$eval('[class*="rating"], [class*="review"], span', el => el.textContent?.trim() || '').catch(() => '');
+              if (ratingText) {
+                const ratingMatch = ratingText.match(/\\d+\\.?\\d*/);
+                if (ratingMatch) result.rating = ratingMatch[0];
+              }
+              
+              // Extract seller URL
+              const sellerLink = await card.$('a[href*="/user/"], a[href*="?ref=seller"]');
+              if (sellerLink) {
+                result.sellerUrl = await sellerLink.evaluate(el => el.href || '');
+              }
+              
+              // Extract review count
+              const reviewCountText = await card.$eval('[class*="review"], [class*="count"]', el => el.textContent?.trim() || '').catch(() => '');
+              if (reviewCountText) {
+                const reviewMatch = reviewCountText.match(/\\d+/);
+                if (reviewMatch) result.reviews = reviewMatch[0];
+              }
+              
+              // Get all text for additional parsing
+              const allText = await card.evaluate(el => el.textContent || '');
+              
+              // Extract level if present
+              if (allText.includes('Top Rated')) result.level = 'Top Rated';
+              else if (allText.includes('Pro')) result.level = 'Pro';
+              else if (allText.includes('Seller')) result.level = 'Seller';
+              
+              // Only add if has minimum required fields
+              if (result.seller && result.title) {
+                results.push(result);
+              }
+            } catch (cardError) {
+              // Continue to next card
+            }
+          }
+          
+          // Strategy 2: Fallback - extract from links
+          if (results.length === 0) {
+            const links = await page.$$('a[href*="/user/"], a[href*="?ref=seller"]');
+            for (const link of links.slice(0, 50)) {
+              try {
+                const href = await link.evaluate(el => el.href || '');
+                const text = await link.evaluate(el => el.textContent?.trim() || '');
+                if (text && href) {
+                  results.push({
+                    seller: text,
+                    sellerUrl: href
+                  });
+                }
+              } catch (e) {/* skip */}
+            }
+          }
+          
+          return results;
         }
       `;
       input.proxyConfiguration = { useApifyProxy: true };
@@ -293,10 +493,25 @@ export class ApifyService {
       return [];
     }
 
-    const validResults = results.filter((r: any) => !r['#error']);
+    // Better error filtering - be lenient
+    let validResults = results.filter((r: any) => {
+      if (typeof r === 'object' && r !== null) {
+        // Skip only if explicitly error and empty
+        if (r['#error'] && !r.seller && !r.sellerUrl && !r.title) {
+          return false;
+        }
+        return r.seller || r.sellerUrl || r.title;
+      }
+      return false;
+    });
+
+    // If nothing valid, return all objects
     if (validResults.length === 0) {
-      console.warn('⚠️ Fiverr: Los resultados devueltos contienen errores.');
-      return [];
+      validResults = results.filter((r: any) => typeof r === 'object' && r !== null);
+      if (validResults.length === 0) {
+        console.warn('⚠️ Fiverr: Los resultados no tienen formato válido.');
+        return [];
+      }
     }
 
     console.log(`✅ Fiverr: ${validResults.length} resultados raw`);
@@ -337,7 +552,7 @@ export class ApifyService {
         candidate.talentScore = this.calculateTalentScore(candidate, filter);
         return candidate;
       })
-      .filter(c => c.talentScore >= 20)
+      .filter(c => c.talentScore >= 1) // Very lenient - filter in UI
       .sort((a, b) => b.talentScore - a.talentScore);
   }
 
@@ -384,35 +599,82 @@ export class ApifyService {
         proxy: { useApifyProxy: true },
       };
     } else {
-      // Fallback: web-scraper
+      // Fallback: web-scraper with improved LinkedIn pageFunction
       input = {
         startUrls: [{ url: searchUrl }],
         maxPagesPerCrawl: 2,
         proxyConfiguration: { useApifyProxy: true },
-        waitUntilNetworkIdle: true,
+        waitUntilNetworkIdle: false,
+        navigationTimeoutSecs: 30,
         pageFunction: `
           async function pageFunction(context) {
             const { page } = context;
-            await new Promise(r => setTimeout(r, 5000));
+            const delay = (ms) => new Promise(r => setTimeout(r, ms));
+            
+            // Extra wait for LinkedIn to load
+            await delay(3000);
             
             const results = [];
-            const cards = document.querySelectorAll('[class*="entity-result"], [class*="search-result"]');
             
-            cards.forEach(card => {
-              const nameEl = card.querySelector('[class*="entity-result__title"] a, [class*="name"]');
-              const titleEl = card.querySelector('[class*="entity-result__primary-subtitle"], [class*="headline"]');
-              const locationEl = card.querySelector('[class*="entity-result__secondary-subtitle"], [class*="location"]');
-              const linkEl = card.querySelector('a[href*="/in/"]');
+            try {
+              // Strategy 1: Try modern LinkedIn selectors
+              const cards = await page.$$('[data-test-result-index], [class*="entity-result"], li[class*="search-result"]');
               
-              if (nameEl) {
-                results.push({
-                  name: nameEl.textContent?.trim() || '',
-                  title: titleEl?.textContent?.trim() || '',
-                  location: locationEl?.textContent?.trim() || '',
-                  profileUrl: linkEl?.href || '',
-                });
+              for (const card of cards.slice(0, 50)) {
+                try {
+                  const result = {};
+                  
+                  // Extract name
+                  const nameEl = await card.$('span[aria-hidden="true"], [class*="name"], a[href*="/in/"]');
+                  if (nameEl) {
+                    result.name = await nameEl.evaluate(el => el.textContent?.trim() || '');
+                  }
+                  
+                  // Extract title
+                  result.title = await card.$eval('[class*="headline"], [class*="subtitle"], p', el => el.textContent?.trim() || '').catch(() => '');
+                  
+                  // Extract location
+                  result.location = await card.$eval('[class*="location"], [class*="geo"]', el => el.textContent?.trim() || '').catch(() => '');
+                  
+                  // Extract profile URL
+                  const profileLink = await card.$('a[href*="/in/"]');
+                  if (profileLink) {
+                    result.profileUrl = await profileLink.evaluate(el => el.href || '');
+                  }
+                  
+                  // Get text to find skills
+                  const allText = await card.evaluate(el => el.textContent || '');
+                  
+                  // Extract skills mentioned in text
+                  result.skills = allText.match(/(?:skilled in|expertise in|experience with)\\s+([^,\\.]+)/gi) || [];
+                  
+                  if (result.name) {
+                    results.push(result);
+                  }
+                } catch (e) {
+                  // Skip this card and continue
+                }
               }
-            });
+              
+              // Strategy 2: If nothing found, try alternate selectors
+              if (results.length === 0) {
+                const links = await page.$$('a[href*="/in/"]');
+                for (const link of links.slice(0, 50)) {
+                  try {
+                    const href = await link.evaluate(el => el.href || '');
+                    const text = await link.evaluate(el => el.textContent?.trim() || '');
+                    if (text && href && href.includes('/in/')) {
+                      results.push({
+                        name: text,
+                        profileUrl: href
+                      });
+                    }
+                  } catch (e) {/* skip */}
+                }
+              }
+            } catch (error) {
+              console.error('LinkedIn extraction error:', error);
+            }
             
             return results;
           }
@@ -427,8 +689,29 @@ export class ApifyService {
       return [];
     }
 
-    console.log(`✅ LinkedIn: ${results.length} resultados raw`);
-    return this.normalizeLinkedInResults(results, filter);
+    // Better filtering for LinkedIn
+    let validResults = results.filter((r: any) => {
+      if (typeof r === 'object' && r !== null) {
+        // Skip only real errors
+        if (r['#error'] && !r.name && !r.profileUrl) {
+          return false;
+        }
+        return r.name || r.profileUrl;
+      }
+      return false;
+    });
+
+    // If nothing valid, return all objects
+    if (validResults.length === 0) {
+      validResults = results.filter((r: any) => typeof r === 'object' && r !== null);
+      if (validResults.length === 0) {
+        console.warn('⚠️ LinkedIn: Los resultados no tienen formato válido.');
+        return [];
+      }
+    }
+
+    console.log(`✅ LinkedIn: ${validResults.length} resultados raw`);
+    return this.normalizeLinkedInResults(validResults, filter);
   }
 
   private normalizeLinkedInResults(results: any[], filter: ScrapingFilter): ScrapedCandidate[] {
@@ -470,7 +753,7 @@ export class ApifyService {
         return candidate;
       })
       .filter(c => c.name !== 'Unknown' && c.name.trim().length > 1)
-      .filter(c => c.talentScore >= 15) // Lower threshold for LinkedIn (less data available)
+      .filter(c => c.talentScore >= 1) // Very low threshold for LinkedIn (minimal data available)
       .sort((a, b) => b.talentScore - a.talentScore);
   }
 
