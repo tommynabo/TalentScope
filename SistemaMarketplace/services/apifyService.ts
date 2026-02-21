@@ -150,7 +150,7 @@ export class ApifyService {
     const actorId = this.actors.upwork;
 
     // For dedicated actors like powerai/upwork-talent-search-scraper or trudax/upwork-freelancers-scraper
-    const input = {
+    const input: Record<string, any> = {
       searchQuery: filter.keyword,
       search: filter.keyword,
       query: filter.keyword,
@@ -159,6 +159,18 @@ export class ApifyService {
       maxResults: 50,
       maxItems: 50
     };
+
+    // Prevent HTTP 400 if user still hasn't updated Actor ID in Supabase
+    if (actorId === 'apify/web-scraper') {
+      input.pageFunction = `
+        async function pageFunction(context) {
+          // Fallback dummy function to prevent API crash. 
+          // Real scraping requires renting a dedicated actor.
+          return [];
+        }
+      `;
+      input.proxyConfiguration = { useApifyProxy: true };
+    }
 
     const results = await this.executeActor(actorId, input);
 
@@ -252,7 +264,7 @@ export class ApifyService {
     const actorId = this.actors.fiverr;
 
     // Dedicated Fiverr actors like newpo/fiverr-scraper usually accept search queries
-    const input = {
+    const input: Record<string, any> = {
       searchQuery: filter.keyword,
       search: filter.keyword,
       query: filter.keyword,
@@ -261,6 +273,18 @@ export class ApifyService {
       maxItems: 50,
       maxResults: 50
     };
+
+    // Prevent HTTP 400 if user still hasn't updated Actor ID in Supabase
+    if (actorId === 'apify/web-scraper') {
+      input.pageFunction = `
+        async function pageFunction(context) {
+          // Fallback dummy function to prevent API crash. 
+          // Real scraping requires renting a dedicated actor.
+          return [];
+        }
+      `;
+      input.proxyConfiguration = { useApifyProxy: true };
+    }
 
     const results = await this.executeActor(actorId, input);
 
