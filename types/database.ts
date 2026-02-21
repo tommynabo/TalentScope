@@ -163,6 +163,10 @@ export interface GitHubFilterCriteria {
     locations: string[];
     available_for_hire: boolean;
 
+    // Language Requirements - Spanish filter
+    require_spanish_speaker?: boolean; // Require Spanish language proficiency
+    min_spanish_language_confidence?: number; // 0-100 confidence threshold
+    
     score_threshold?: number; // 0-100
 }
 

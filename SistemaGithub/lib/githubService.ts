@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { githubContactService } from '../../SistemaGithub/lib/githubContactService';
 import { githubDeduplicationService } from '../../SistemaGithub/lib/githubDeduplication';
 import { GitHubCandidatePersistence } from '../../SistemaGithub/lib/githubCandidatePersistence';
+import { analyzeSpanishLanguageProficiency } from '../../SistemaGithub/lib/githubSpanishLanguageFilter';
 
 export type GitHubLogCallback = (message: string) => void;
 
@@ -283,6 +284,27 @@ export class GitHubService {
                 if (!hasMatchingLanguage) {
                     onLog(`  ⏭️ No matching languages. Found: ${languages.join(', ')}`);
                     return null;
+                }
+            }
+
+            // 5.2 🗣️ FAST: Check Spanish language requirement (if criteria requires it)
+            if (criteria.require_spanish_speaker) {
+                const spanishAnalysis = analyzeSpanishLanguageProficiency(
+                    user.bio,
+                    user.location,
+                    user.name,
+                    user.company
+                );
+
+                if (spanishAnalysis.confidence < (criteria.min_spanish_language_confidence || 30)) {
+                    onLog(`  ⏭️ Spanish language confidence ${spanishAnalysis.confidence}% below minimum ${criteria.min_spanish_language_confidence || 30}%`);
+                    return null;
+                }
+
+                if (spanishAnalysis.confidence >= 50) {
+                    onLog(`  🗣️ Spanish speaker confirmed (confidence: ${spanishAnalysis.confidence}%) - ${spanishAnalysis.location || 'Location detected'}`);
+                } else if (spanishAnalysis.confidence >= 30) {
+                    onLog(`  🗣️ Likely Spanish speaker (confidence: ${spanishAnalysis.confidence}%)`);
                 }
             }
 

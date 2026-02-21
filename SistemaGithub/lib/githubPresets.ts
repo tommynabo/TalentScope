@@ -5,6 +5,9 @@ import { GitHubFilterCriteria } from '../../types/database';
  * 
  * Utiliza estos templates como punto de partida para búsquedas comunes.
  * Todos están calibrados basados en el algoritmo de scoring.
+ * 
+ * 🗣️ ALL PRESETS NOW INCLUDE SPANISH LANGUAGE FILTER
+ * Todos los presets filtran automáticamente por hispanohablantes de España y Latinoamérica
  */
 
 // ===========================
@@ -34,6 +37,10 @@ export const PRESET_PROVEN_SHIPPERS: GitHubFilterCriteria = {
     // Location & Demographics
     locations: ['Spain', 'Barcelona'],
     available_for_hire: false,
+    
+    // Language Requirements - Spanish speakers
+    require_spanish_speaker: true,
+    min_spanish_language_confidence: 60,
     
     score_threshold: 75  // Top tier only
 };
@@ -66,6 +73,10 @@ export const PRESET_EMERGING_BUILDERS: GitHubFilterCriteria = {
     locations: ['Spain'],
     available_for_hire: true, // "Open to work"
     
+    // Language Requirements - Spanish speakers
+    require_spanish_speaker: true,
+    min_spanish_language_confidence: 30,
+    
     score_threshold: 50  // Más amplio
 };
 
@@ -96,6 +107,10 @@ export const PRESET_FULLSTACK_SPECIALISTS: GitHubFilterCriteria = {
     // Location & Demographics
     locations: ['Spain', 'Barcelona', 'Madrid'],
     available_for_hire: false,
+    
+    // Language Requirements - Spanish speakers
+    require_spanish_speaker: true,
+    min_spanish_language_confidence: 50,
     
     score_threshold: 70
 };
@@ -128,6 +143,10 @@ export const PRESET_OPEN_SOURCE_CONTRIBUTORS: GitHubFilterCriteria = {
     locations: ['Spain'],
     available_for_hire: false,
     
+    // Language Requirements - Spanish speakers
+    require_spanish_speaker: true,
+    min_spanish_language_confidence: 60,
+    
     score_threshold: 75
 };
 
@@ -158,6 +177,10 @@ export const PRESET_UNIVERSITY_TALENT: GitHubFilterCriteria = {
     // Location & Demographics
     locations: ['Spain'],
     available_for_hire: true, // Buscan prácticas
+    
+    // Language Requirements - Spanish speakers
+    require_spanish_speaker: true,
+    min_spanish_language_confidence: 30,
     
     score_threshold: 30  // Bajo threshold
 };
@@ -190,6 +213,10 @@ export const PRESET_PRODUCT_ENGINEERS: GitHubFilterCriteria = {
     locations: [], // GitHub API does NOT support location: filter in search. Use post-processing if needed.
     available_for_hire: false,
     
+    // Language Requirements - Spanish speakers
+    require_spanish_speaker: true,
+    min_spanish_language_confidence: 30,
+    
     score_threshold: 0  // Accept ALL scores (no minimum)
 };
 
@@ -220,6 +247,10 @@ export const PRESET_SOLO_DEVELOPERS: GitHubFilterCriteria = {
     // Location & Demographics
     locations: ['Spain'],
     available_for_hire: false,
+    
+    // Language Requirements - Spanish speakers
+    require_spanish_speaker: true,
+    min_spanish_language_confidence: 50,
     
     score_threshold: 70
 };
@@ -252,6 +283,10 @@ export const PRESET_ML_DEVELOPERS: GitHubFilterCriteria = {
     locations: ['Spain'],
     available_for_hire: false,
     
+    // Language Requirements - Spanish speakers
+    require_spanish_speaker: true,
+    min_spanish_language_confidence: 60,
+    
     score_threshold: 75
 };
 
@@ -283,6 +318,10 @@ export const PRESET_QUALITY_OBSESSED: GitHubFilterCriteria = {
     locations: ['Spain'],
     available_for_hire: false,
     
+    // Language Requirements - Spanish speakers
+    require_spanish_speaker: true,
+    min_spanish_language_confidence: 70,
+    
     score_threshold: 85  // Only A-players
 };
 
@@ -313,6 +352,10 @@ export const PRESET_VOLUME_SEARCH: GitHubFilterCriteria = {
     // Location & Demographics
     locations: ['Spain'],
     available_for_hire: false,
+    
+    // Language Requirements - Spanish speakers
+    require_spanish_speaker: true,
+    min_spanish_language_confidence: 30,
     
     score_threshold: 40  // Very permissive
 };
