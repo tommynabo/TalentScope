@@ -499,160 +499,103 @@ export class ApifyService {
   }
 
   private async runFiverrScraper(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
-    const keyword = encodeURIComponent(filter.keyword);
-    // Search for sellers (people), not gigs, by default if possible
-    const searchUrl = `https://www.fiverr.com/search/gigs?query=${keyword}&source=top-bar&ref_ctx_id=2&search_in=everywhere`;
+    const dorkQuery = filter.keyword; // From getFiverrQueryVariation
 
-    console.log(`🔗 Fiverr URL: ${searchUrl}`);
-    const actorId = this.actors.fiverr;
+    console.log(`🔗 Fiverr Dork: ${dorkQuery}`);
 
-    // Dedicated Fiverr actors like newpo/fiverr-scraper usually accept search queries
+    // We force Google Search Scraper because Fiverr Cloudflare blocks direct scrape too
+    const actorId = 'apify/google-search-scraper';
+
     const input: Record<string, any> = {
-      searchQuery: filter.keyword,
-      search: filter.keyword,
-      query: filter.keyword,
-      searchUrl: searchUrl,
-      startUrls: [{ url: searchUrl }],
-      maxItems: 50,
-      maxResults: 50
+      queries: dorkQuery,
+      resultsPerPage: 100,
+      maxPagesPerQuery: 1,
+      languageCode: "",
+      mobileResults: false,
+      includeUnfilteredResults: false,
+      saveHtml: false,
+      saveHtmlToKeyValueStore: false
     };
-
-    // Real pageFunction for apify/web-scraper - SIMPLIFIED, working extraction
-    if (actorId === 'apify/web-scraper') {
-      input.pageFunction = `
-        async function pageFunction(context) {
-          const { page } = context;
-          
-          const results = [];
-          
-          try {
-            // Get all links
-            const links = await page.$$('a');
-            
-            for (const link of links.slice(0, 100)) {
-              try {
-                const href = await link.evaluate(el => el.href || '');
-                const text = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
-                
-                // Fiverr seller links typically have pattern /[username] or contain /user/
-                // OR are seller profile links
-                if (text && text.length > 1 && href && href.includes('fiverr.com')) {
-                  // Check if it looks like a seller profile URL
-                  if (href.match(/fiverr\\.com\\/[a-z0-9_-]+\\/?$/i) || 
-                      href.includes('/user/') ||
-                      href.includes('seller')) {
-                    results.push({
-                      seller: text,
-                      sellerUrl: href,
-                      title: 'Seller'
-                    });
-                  }
-                }
-                
-                if (results.length >= 50) break;
-              } catch (e) {
-                // Continue
-              }
-            }
-          } catch (e) {
-            // Fallback
-          }
-          
-          // If nothing found, try to extract from any Fiverr links
-          if (results.length === 0) {
-            try {
-              const links = await page.$$('a[href*="fiverr"]');
-              for (const link of links.slice(0, 50)) {
-                try {
-                  const href = await link.evaluate(el => el.href || '');
-                  const text = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
-                  
-                  if (text && href) {
-                    results.push({
-                      seller: text,
-                      sellerUrl: href,
-                      title: 'Seller'
-                    });
-                  }
-                } catch (e) {
-                  // Skip
-                }
-              }
-            } catch (e) {
-              // Fallback failed
-            }
-          }
-          
-          return results.slice(0, 50);
-        }
-      `;
-      input.proxyConfiguration = { useApifyProxy: true };
-    }
 
     const rawResults = await this.executeActor(actorId, input);
 
     if (!rawResults || rawResults.length === 0) {
-      console.error('❌ Fiverr: El actor no devolvió resultados.');
+      console.error('❌ Fiverr (Google): El actor no devolvió resultados.');
       return [];
     }
 
-    // Extract pageFunctionResult if it exists (apify/web-scraper wraps results)
-    const results = this.extractPageFunctionResults(rawResults);
+    // Google Search Scraper returns results inside organicResults array
+    let organicResults: any[] = [];
 
-    // Better error filtering - be lenient
-    let validResults = results.filter((r: any) => {
-      if (typeof r === 'object' && r !== null) {
-        // Skip only if explicitly error and empty
-        if (r['#error'] && !r.seller && !r.sellerUrl && !r.title) {
-          return false;
-        }
-        return r.seller || r.sellerUrl || r.title;
-      }
-      return false;
-    });
-
-    // If nothing valid, return all objects
-    if (validResults.length === 0) {
-      validResults = results.filter((r: any) => typeof r === 'object' && r !== null);
-      if (validResults.length === 0) {
-        console.warn('⚠️ Fiverr: Los resultados no tienen formato válido.');
-        return [];
+    for (const item of rawResults) {
+      if (item.organicResults && Array.isArray(item.organicResults)) {
+        organicResults = organicResults.concat(item.organicResults);
       }
     }
 
-    console.log(`✅ Fiverr: ${validResults.length} resultados raw`);
+    if (organicResults.length === 0) {
+      console.warn('⚠️ Fiverr (Google): No se encontraron organicResults.');
+      return [];
+    }
+
+    // Filter valid Fiverr profiles or gigs
+    const validResults = organicResults.filter((r: any) => {
+      if (!r.url) return false;
+      return r.url.includes('fiverr.com/');
+    });
+
+    console.log(`✅ Fiverr: ${validResults.length} resultados raw de Google`);
     return this.normalizeFiverrResults(validResults, filter);
   }
 
   private normalizeFiverrResults(results: any[], filter: ScrapingFilter): ScrapedCandidate[] {
     return results
-      .filter((item: any) => {
-        const seller = (item.seller || '').toLowerCase();
-        return seller && seller.length > 2 && !seller.includes('fiverr') && item.title;
-      })
       .map((item: any, index: number) => {
-        const badges: string[] = [];
-        if (item.level) badges.push(item.level);
-        const reviewCount = parseInt(String(item.reviews || '0').replace(/[kK]/g, '000').replace(/\+/g, ''));
-        if (reviewCount > 100) badges.push('Highly Reviewed');
+        // Parse Google snippet data
+        const profileUrl = item.url || '';
+        let title = item.title || 'Fiverr Freelancer';
+
+        let name = 'Fiverr Seller';
+        // Extract real name or username from URL or title
+        if (title.includes('|') || title.includes('-')) {
+          name = title.split(/[|-]/)[0].replace(/Fiverr/gi, '').trim();
+        } else if (profileUrl.includes('fiverr.com/')) {
+          const parts = profileUrl.split('fiverr.com/');
+          if (parts.length > 1) {
+            const username = parts[1].split('/')[0].split('?')[0];
+            if (username && !['categories', 'search', 'gigs'].includes(username)) {
+              name = username;
+            }
+          }
+        }
+
+        const bio = item.description || '';
+
+        // Simple regex attempts for rating
+        let ratingMatch = bio.match(/([0-9.]+)\s*\(\s*([0-9,]+)\s*\)/);
+        let rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
+        let successRate = rating > 0 ? (rating / 5) * 100 : 0; // Convert 5 star to 100%
 
         const candidate: ScrapedCandidate = {
-          id: `fiverr-${item.sellerUrl?.split('/').pop() || index}-${Date.now()}`,
-          name: item.seller || 'Unknown Seller',
+          id: `fiverr-google-${index}-${Date.now()}`,
+          name,
           platform: 'Fiverr' as FreelancePlatform,
-          platformUsername: item.seller?.toLowerCase().replace(/\s+/g, '') || 'unknown',
-          profileUrl: item.sellerUrl || 'https://www.fiverr.com',
-          title: item.title || 'Gig Provider',
+          platformUsername: name.replace(/\s+/g, '').toLowerCase() || `seller-${index}`,
+          profileUrl,
+          title,
           country: 'Unknown',
-          hourlyRate: this.parseRate(item.price),
-          jobSuccessRate: this.parseRating(item.rating),
-          certifications: badges,
-          bio: item.reviews ? `${item.reviews} reviews` : '',
+          hourlyRate: 0, // Fiverr tends to be project-based
+          jobSuccessRate: successRate,
+          certifications: [],
+          bio: bio,
           scrapedAt: new Date().toISOString(),
           talentScore: 0,
-          skills: [],
-          badges,
+          skills: [filter.keyword],
+          badges: [],
           yearsExperience: 0,
+          totalEarnings: 0,
+          totalJobs: 0,
+          totalHours: 0,
         };
 
         candidate.talentScore = this.calculateTalentScore(candidate, filter);

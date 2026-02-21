@@ -12,31 +12,28 @@
 -- =============================================================================
 
 -- 🔧 ACTUALIZAR ACTOR ID DE UPWORK
--- Actor seleccionado: apify/web-scraper
+-- Actor seleccionado: apify/google-search-scraper
 -- Razones: 
+--   ✅ Bypass de Cloudflare usando Google Dorks
 --   ✅ Oficial de Apify (máxima confianza)
---   ✅ Completamente gratuito
---   ✅ Funciona con cualquier sitio (flexible)
---   ✅ Bien documentado y soportado
---   ✅ nwtn/upwork-profile-scraper no está disponible en todas las cuentas
+--   ✅ Extremadamente rápido y gratis
 UPDATE public.apify_config 
 SET 
-    actor_id = 'apify/web-scraper',  -- Official Apify actor, universal
-    description = 'Web Scraper Apify - Universal para Upwork, gratuito, confiable',
+    actor_id = 'apify/google-search-scraper',
+    description = 'Google Search Scraper - Bypass Cloudflare vía Dorks para Upwork',
     updated_at = CURRENT_TIMESTAMP
 WHERE config_key = 'upwork_scraper';
 
 -- 🔧 ACTUALIZAR ACTOR ID DE FIVERR
--- Actor seleccionado: apify/web-scraper
+-- Actor seleccionado: apify/google-search-scraper
 -- Razones:
+--   ✅ Bypass de Cloudflare usando Google Dorks
 --   ✅ Oficial de Apify (máxima confianza)
---   ✅ Completamente gratuito
---   ✅ Funciona con cualquier sitio (flexible)
---   ✅ Bien documentado y soportado
+--   ✅ Extremadamente rápido y gratis
 UPDATE public.apify_config 
 SET 
-    actor_id = 'apify/web-scraper',  -- Official Apify actor, 100% free, universal
-    description = 'Web Scraper oficial de Apify - Gratuito, universal, muy confiable',
+    actor_id = 'apify/google-search-scraper',
+    description = 'Google Search Scraper - Bypass Cloudflare vía Dorks para Fiverr',
     updated_at = CURRENT_TIMESTAMP
 WHERE config_key = 'fiverr_scraper';
 

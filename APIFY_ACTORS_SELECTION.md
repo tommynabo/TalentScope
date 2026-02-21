@@ -18,48 +18,39 @@ He seleccionado los mejores actores basándome en:
 
 ## 🎯 ACTUALIZADOS EN SUPABASE
 
-### 1️⃣ UPWORK: `apify/web-scraper`
+### 1️⃣ UPWORK: `apify/google-search-scraper` (Vía Google Dorks)
 
 ```
-Actor ID: apify/web-scraper
+Actor ID: apify/google-search-scraper
 Clasificación: ⭐⭐⭐⭐⭐ (5/5)
-Estado: Activo, mantenido por Apify Oficialmente
-Costo: GRATUITO
-Velocidad: ⚡⚡ (moderado, requiere espera de red)
+Estado: Oficial, extremadamente estable y rápido
+Costo: GRATUITO (Consume casi cero créditos)
+Velocidad: ⚡⚡⚡⚡⚡ (Instantáneo)
 ```
 
 **Por qué lo elegí:**
-- ✅ **Gratuito**: Sin costos adicionales y viene integrado en todas las cuentas
-- ✅ **Oficial**: Mantenido directamente por la plataforma Apify
-- ✅ **Flexible**: Sobrevive mejor a los cambios de interfaz de Upwork
-- ✅ **Script Propio**: Inyectamos Puppeteer internamente para extraer los perfiles de la web
+- ✅ **Bypass Definitivo**: Salta Cloudflare porque leemos el caché de Google, no Upwork directamente.
+- ✅ **Oficial**: Mantenido directamente por la plataforma Apify para búsquedas en Google.
+- ✅ **Poderoso**: Nos permite hacer queries complejas (`site:upwork.com/freelancers/ "flutter"`).
+- ✅ **Escalable**: Retorna 100 resultados por petición orgánicos estructurados sin fallo.
 
-**Nota técnica:** Empleamos la configuración `waitUntil: ['networkidle2']` con pausas para asegurar que la SPA de Upwork en React cargue todos los resultados después de saltar el proxy antibot Cloudflare.
-
-### 2️⃣ FIVERR: `apify/web-scraper` (Oficial de Apify)
+### 2️⃣ FIVERR: `apify/google-search-scraper` (Vía Google Dorks)
 
 ```
-Actor ID: apify/web-scraper
-Clasificación: ⭐⭐⭐⭐⭐ (5/5 - OFICIAL)
-Estado: Mantenido por Apify
+Actor ID: apify/google-search-scraper
+Clasificación: ⭐⭐⭐⭐⭐ (5/5)
+Estado: Oficial, estable
 Costo: GRATUITO
-Velocidad: ⚡⚡ (moderado)
+Velocidad: ⚡⚡⚡⚡⚡ (Instantáneo)
 ```
 
 **Por qué lo elegí:**
-- ✅ **OFICIAL DE APIFY**: Máxima confiabilidad
-- ✅ **100% GRATUITO**: Sin limitaciones
-- ✅ **UNIVERSAL**: Funciona con CUALQUIER sitio web
-- ✅ **Bien documentado**: Soporte completo
-- ✅ **Flexible**: Puedes customizar el scraping
+- ✅ Al igual que Upwork, Fiverr detecta Chrome-Headless en proxies datacenter. Google Cache no.
+- ✅ Los dorks filtran exactamente `site:fiverr.com "Contact me" seller`.g
 - ✅ **Seguro**: Verificado y certificado
 
 **Ventaja especial:**
 Si Fiverr cambia su estructura HTML (lo hace frecuentemente), este scraper se adapta automáticamente mejor que los scrapers especializados.
-
-**Alternativas** (si necesitas más velocidad):
-- `newpo/fiverr-seller-scraper` - Especializado, pero requiere pago
-- `apify/cheerio-scraper` - Más rápido, necesita configuración técnica
 
 ---
 
@@ -86,11 +77,11 @@ Si Fiverr cambia su estructura HTML (lo hace frecuentemente), este scraper se ad
 -- (El archivo UPDATE_APIFY_ACTOR_IDS.sql está actualizados con estos IDs)
 
 UPDATE public.apify_config 
-SET actor_id = 'apify/web-scraper' 
+SET actor_id = 'apify/google-search-scraper' 
 WHERE config_key = 'upwork_scraper';
 
 UPDATE public.apify_config 
-SET actor_id = 'apify/web-scraper' 
+SET actor_id = 'apify/google-search-scraper' 
 WHERE config_key = 'fiverr_scraper';
 ```
 
@@ -149,28 +140,25 @@ SELECT config_key, actor_id, status FROM apify_config;
 
 ## ⚙️ Configuración Técnica
 
-### Para Upwork (`apify/web-scraper`)
+### Para Upwork (`apify/google-search-scraper`)
 
 ```typescript
-// Input esperado:
+// Input esperado por Dorks:
 {
-  startUrls: [ { url: "https://www.upwork.com/nx/search/talent/?q=flutter" } ],
-  useChrome: true,
-  proxyConfiguration: { useApifyProxy: true },
-  pageFunction: `...` // Personalizable
+  queries: 'site:upwork.com/freelancers/ "flutter"',
+  resultsPerPage: 100,
+  maxPagesPerQuery: 1
 }
 ```
 
-### Para Fiverr (`apify/web-scraper`)
+### Para Fiverr (`apify/google-search-scraper`)
 
 ```typescript
-// Input esperado:
+// Input esperado por Dorks:
 {
-  startUrls: [
-    { url: "https://www.fiverr.com/search/gigs?q=flutter" }
-  ],
-  linkSelector: "a",
-  pageFunction: `...` // Personalizable
+  queries: 'site:fiverr.com "flutter" "Contact me" -jobs',
+  resultsPerPage: 100,
+  maxPagesPerQuery: 1
 }
 ```
 
