@@ -214,6 +214,24 @@ export class ApifyService {
     return selected;
   }
 
+  private extractPageFunctionResults(results: any[]): any[] {
+    if (!results || !Array.isArray(results)) return [];
+    
+    const extracted: any[] = [];
+    for (const r of results) {
+      if (r && r.pageFunctionResult) {
+        if (Array.isArray(r.pageFunctionResult)) {
+          extracted.push(...r.pageFunctionResult);
+        } else {
+          extracted.push(r.pageFunctionResult);
+        }
+      } else {
+        extracted.push(r);
+      }
+    }
+    return extracted;
+  }
+
   private async runUpworkDedicated(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
     const keyword = encodeURIComponent(filter.keyword);
     // Many dedicated actors prefer direct query, others prefer searchUrl
@@ -304,12 +322,15 @@ export class ApifyService {
       input.proxyConfiguration = { useApifyProxy: true };
     }
 
-    const results = await this.executeActor(actorId, input);
+    const rawResults = await this.executeActor(actorId, input);
 
-    if (!results || results.length === 0) {
+    if (!rawResults || rawResults.length === 0) {
       console.warn('⚠️ Upwork: El actor no devolvió resultados.');
       return [];
     }
+
+    // Extract pageFunctionResult if it exists (apify/web-scraper wraps results)
+    const results = this.extractPageFunctionResults(rawResults);
 
     // Filter out actual error items (not all items - be lenient)
     // Only filter if item is explicitly marked as error
@@ -564,12 +585,15 @@ export class ApifyService {
       input.proxyConfiguration = { useApifyProxy: true };
     }
 
-    const results = await this.executeActor(actorId, input);
+    const rawResults = await this.executeActor(actorId, input);
 
-    if (!results || results.length === 0) {
+    if (!rawResults || rawResults.length === 0) {
       console.error('❌ Fiverr: El actor no devolvió resultados.');
       return [];
     }
+
+    // Extract pageFunctionResult if it exists (apify/web-scraper wraps results)
+    const results = this.extractPageFunctionResults(rawResults);
 
     // Better error filtering - be lenient
     let validResults = results.filter((r: any) => {
@@ -818,12 +842,15 @@ export class ApifyService {
       };
     }
 
-    const results = await this.executeActor(actorId, input);
+    const rawResults = await this.executeActor(actorId, input);
 
-    if (!results || results.length === 0) {
+    if (!rawResults || rawResults.length === 0) {
       console.error('❌ LinkedIn: Sin resultados del actor');
       return [];
     }
+
+    // Extract pageFunctionResult if it exists (apify/web-scraper wraps results)
+    const results = this.extractPageFunctionResults(rawResults);
 
     // Better filtering for LinkedIn
     let validResults = results.filter((r: any) => {
