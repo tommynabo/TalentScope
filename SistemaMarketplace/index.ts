@@ -16,6 +16,9 @@ export { ManualEnrichmentModal } from './components/ManualEnrichmentModal';
 export { SearchGenerator } from './components/SearchGenerator';
 
 export { MarketplaceRaidService } from './services/marketplaceRaidService';
+export { MarketplaceSearchService } from './services/marketplaceSearchService';
+export { MarketplaceScoringService } from './services/marketplaceScoringService';
+export { MarketplaceDeduplicationService, dedupService } from './services/marketplaceDeduplicationService';
 export { ApifyService } from './services/apifyService';
 export { AIEnrichmentService } from './services/aiEnrichmentService';
 export { FreeEnrichmentService } from './services/freeEnrichmentService';
