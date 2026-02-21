@@ -20,7 +20,7 @@ export class ApifyService {
   // Actor IDs — apify/web-scraper is FREE and included in every Apify account
   // Dedicated actors (upwork-vibe, newpo, etc.) require PAID rental
   private defaultActors = {
-    upwork: 'apify/web-scraper',
+    upwork: 'nwtn/upwork-profile-scraper',
     fiverr: 'apify/web-scraper',
     linkedin: 'curious_coder/linkedin-search-api',
   };
@@ -153,7 +153,7 @@ export class ApifyService {
 
     while (buffer.length < targetCount && attempt < maxRetries) {
       attempt++;
-      
+
       // Crear variación de query
       const queryKeyword = this.getUpworkQueryVariation(filter.keyword, attempt);
       console.log(`\n[Intento ${attempt}/${maxRetries}] 🔍 Buscando "${queryKeyword}"...`);
@@ -216,7 +216,7 @@ export class ApifyService {
 
   private extractPageFunctionResults(results: any[]): any[] {
     if (!results || !Array.isArray(results)) return [];
-    
+
     const extracted: any[] = [];
     for (const r of results) {
       if (r && r.pageFunctionResult) {
@@ -241,15 +241,17 @@ export class ApifyService {
     console.log(`🔗 Upwork URL: ${searchUrl}`);
     const actorId = this.actors.upwork;
 
-    // For dedicated actors like powerai/upwork-talent-search-scraper or trudax/upwork-freelancers-scraper
+    // For dedicated actors like nwtn/upwork-profile-scraper
     const input: Record<string, any> = {
       searchQuery: filter.keyword,
       search: filter.keyword,
       query: filter.keyword,
       searchUrl: searchUrl,
       startUrls: [{ url: searchUrl }],
+      urls: [searchUrl], // specific to nwtn
       maxResults: 50,
-      maxItems: 50
+      maxItems: 50,
+      maxPages: 3 // specific to nwtn
     };
 
     // Real pageFunction for apify/web-scraper - SIMPLIFIED, working extraction
@@ -434,7 +436,7 @@ export class ApifyService {
 
     while (buffer.length < targetCount && attempt < maxRetries) {
       attempt++;
-      
+
       // Crear variación de query
       const queryKeyword = this.getFiverrQueryVariation(filter.keyword, attempt);
       console.log(`\n[Intento ${attempt}/${maxRetries}] 🔍 Buscando "${queryKeyword}"...`);
@@ -687,7 +689,7 @@ export class ApifyService {
 
     while (buffer.length < targetCount && attempt < maxRetries) {
       attempt++;
-      
+
       // Crear variación de query
       const queryKeyword = this.getLinkedInQueryVariation(filter.keyword, attempt);
       console.log(`\n[Intento ${attempt}/${maxRetries}] 🔍 Buscando "${queryKeyword}"...`);
