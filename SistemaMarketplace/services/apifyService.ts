@@ -239,106 +239,129 @@ export class ApifyService {
       input.pageFunction = `
         async function pageFunction(context) {
           const { page, request } = context;
+          const delay = (ms) => new Promise(r => setTimeout(r, ms));
           
-          // Wait for content to load
-          try {
-            await page.waitForSelector('[class*="talent"], [class*="freelancer"], li[class*="result"]', { timeout: 5000 }).catch(() => {});
-          } catch (e) {/* ignore */}
+          // Give page time to load after initial navigation
+          await delay(3000);
           
           const results = [];
-          const delay = (ms) => new Promise(r => setTimeout(r, ms));
-          await delay(2000);
           
-          // Strategy 1: Extract from main result cards
-          const talentCards = await page.$$('[data-test="client-contract-card"], li[class*="result"], [class*="freelancer-card"], [class*="talent-card"]');
-          
-          for (const card of talentCards.slice(0, 50)) {
-            try {
-              const result = {};
+          // Strategy 1: Extract profile links using page.evaluate (most reliable)
+          try {
+            const links = await page.evaluate(() => {
+              const items = [];
+              const anchors = document.querySelectorAll('a');
+              const seen = new Set();
               
-              // Extract name - try multiple selectors
-              result.name = await card.$eval('h2, [class*="freelancer-name"], [class*="name"] a, strong', el => el.textContent?.trim() || '').catch(() => '');
-              if (!result.name) {
-                const nameLink = await card.$('a[href*="/o/"]');
-                if (nameLink) {
-                  result.name = await nameLink.evaluate(el => el.textContent?.trim() || '');
-                }
-              }
-              
-              // Extract title/headline  
-              result.title = await card.$eval('[class*="headline"], [class*="description"], p', el => el.textContent?.trim() || '').catch(() => '');
-              
-              // Extract hourly rate
-              const rateEl = await card.$('[class*="rate"], strong');
-              if (rateEl) {
-                const rateText = await rateEl.evaluate(el => el.textContent?.trim() || '');
-                if (rateText) {
-                  const rateMatch = rateText.match(/\\d+/);
-                  if (rateMatch) result.hourlyRate = rateMatch[0];
-                }
-              }
-              
-              // Extract job success rate - look for percentages
-              const allText = await card.evaluate(el => el.textContent || '');
-              const successMatch = allText.match(/(\\d{1,3})%/);
-              if (successMatch) {
-                result.jobSuccessRate = successMatch[1];
-              }
-              
-              // Extract location
-              result.country = await card.$eval('[class*="location"], [class*="country"], span', el => el.textContent?.trim() || '').catch(() => 'Unknown');
-              
-              // Extract profile URL
-              const profileLink = await card.$('a[href*="/o/"], a[href*="/freelancers/"]');
-              if (profileLink) {
-                result.profileUrl = await profileLink.evaluate(el => el.href || '');
-              }
-              
-              // Extract badges
-              const badgeEls = await card.$$('[class*="badge"], [class*="tag"], [class*="label"]');
-              result.badges = [];
-              for (const badge of badgeEls) {
-                const text = await badge.evaluate(el => el.textContent?.trim()).catch(() => '');
-                if (text && text.length > 0) result.badges.push(text);
-              }
-              
-              // Extract skills if available
-              const skillsText = await card.$eval('[class*="skills"], [class*="expertise"]', el => el.textContent?.trim() || '').catch(() => '');
-              result.skills = skillsText ? skillsText.split(',').map(s => s.trim()).filter(s => s && s.length > 0) : [];
-              
-              // Extract job/hour counts
-              const countsText = allText.match(/(\\d+)\\s*(jobs?|hours?)/gi) || [];
-              result.totalJobs = countsText.find(c => c.includes('job')) ? countsText.find(c => c.includes('job')).match(/\\d+/)?.[0] : '';
-              result.totalHours = countsText.find(c => c.includes('hour')) ? countsText.find(c => c.includes('hour')).match(/\\d+/)?.[0] : '';
-              
-              // Only add if has minimum required fields
-              if (result.name && result.name.length > 2) {
-                results.push(result);
-              }
-            } catch (cardError) {
-              // Continue processing other cards
-            }
-          }
-          
-          // Strategy 2: Fallback - find all profile links
-          if (results.length === 0) {
-            const links = await page.$$('a[href*="/o/"]');
-            for (const link of links.slice(0, 50)) {
-              try {
-                const href = await link.evaluate(el => el.href || '');
-                const text = await link.evaluate(el => el.textContent?.trim() || '');
-                if (text && href && href.includes('/o/')) {
-                  results.push({
+              for (const a of anchors) {
+                const href = a.href || '';
+                const text = (a.textContent || a.innerText || '').trim();
+                
+                // Look for Upwork profile URLs
+                if ((href.includes('/o/') || href.includes('/freelancers/')) && 
+                    text.length > 2 && 
+                    text.length < 100 &&
+                    !seen.has(href)) {
+                  
+                  seen.add(href);
+                  items.push({
                     name: text,
                     profileUrl: href,
                     title: 'Freelancer'
                   });
                 }
-              } catch (e) {/* skip */}
+              }
+              
+              return items;
+            });
+            
+            if (links && links.length > 0) {
+              results.push(...links.slice(0, 50));
+            }
+          } catch (e) {
+            console.log('Strategy 1 failed:', e.message);
+          }
+          
+          // Strategy 2: If we got some results, try to extract more details
+          if (results.length > 0) {
+            // Try to find ratings and rates from page text
+            try {
+              const details = await page.evaluate(() => {
+                const data = {};
+                const bodyText = document.body.innerText || '';
+                
+                // Look for job success patterns like "98%" or "100%"
+                const ratingMatches = bodyText.match(/(\\d{1,3})%/g);
+                if (ratingMatches) {
+                  data.ratings = ratingMatches.slice(0, 5);
+                }
+                
+                // Look for hourly rates like "$85/hr"
+                const rateMatches = bodyText.match(/\\$(\\d+)\\/(?:hr|hour)/gi);
+                if (rateMatches) {
+                  data.rates = rateMatches.slice(0, 5);
+                }
+                
+                return data;
+              });
+              
+              // Assign details to results
+              if (details.ratings) {
+                for (let i = 0; i < results.length && i < details.ratings.length; i++) {
+                  results[i].jobSuccessRate = parseInt(details.ratings[i]);
+                }
+              }
+              if (details.rates) {
+                for (let i = 0; i < results.length && i < details.rates.length; i++) {
+                  const rateMatch = details.rates[i].match(/(\\d+)/);
+                  if (rateMatch) results[i].hourlyRate = rateMatch[1];
+                }
+              }
+            } catch (e) {
+              console.log('Details extraction failed:', e.message);
             }
           }
           
-          return results;
+          // Strategy 3: Fallback - parse page as text and extract candidate names
+          if (results.length === 0) {
+            try {
+              const textResults = await page.evaluate(() => {
+                const names = [];
+                const bodyText = document.body.innerText || '';
+                
+                // Split into lines and get non-empty ones that look like names
+                const lines = bodyText
+                  .split('\\n')
+                  .map(l => l.trim())
+                  .filter(l => l.length > 2 && l.length < 80 && !l.includes('http') && !l.includes('/'));
+                
+                // Deduplicate and limit
+                const seen = new Set();
+                for (const line of lines) {
+                  // Skip common UI elements
+                  if (line.match(/^(Submit|Cancel|Search|Filter|Sort|Skills|Location|Rate)/i)) continue;
+                  
+                  if (!seen.has(line) && line.split(' ').length <= 5) {
+                    seen.add(line);
+                    names.push({
+                      name: line,
+                      title: 'Freelancer'
+                    });
+                  }
+                  
+                  if (names.length >= 25) break;
+                }
+                
+                return names;
+              });
+              
+              results.push(...textResults);
+            } catch (e) {
+              console.log('Text parsing strategy failed:', e.message);
+            }
+          }
+          
+          return results.slice(0, 50);
         }
       `;
       input.proxyConfiguration = { useApifyProxy: true };
@@ -536,95 +559,109 @@ export class ApifyService {
     if (actorId === 'apify/web-scraper') {
       input.pageFunction = `
         async function pageFunction(context) {
-          const { page, request } = context;
-          
+          const { page } = context;
           const delay = (ms) => new Promise(r => setTimeout(r, ms));
-          await delay(2000);
+          
+          // Give page time to load JavaScript
+          await delay(3000);
           
           const results = [];
           
-          // Strategy 1: Extract from gig cards
-          const gigCards = await page.$$('[data-component-search-gig-card], [class*="gig-card"], [class*="gig"], div[role="listitem"]');
-          
-          for (const card of gigCards.slice(0, 50)) {
-            try {
-              const result = {};
+          // Strategy 1: Extract seller/profile links
+          try {
+            const sellers = await page.evaluate(() => {
+              const items = [];
+              // En Fiverr, los vendedores tienen URLs como /[username]
+              const anchors = document.querySelectorAll('a');
+              const seen = new Set();
               
-              // Extract seller name
-              result.seller = await card.$eval('[class*="seller"], [class*="user"], p, span', el => el.textContent?.trim() || '').catch(() => '');
-              if (!result.seller) {
-                const sellerLink = await card.$('a');
-                if (sellerLink) {
-                  result.seller = await sellerLink.evaluate(el => el.textContent?.trim() || '');
-                }
-              }
-              
-              // Extract gig title
-              result.title = await card.$eval('[class*="gig-title"], h3, a', el => el.textContent?.trim() || '').catch(() => '');
-              
-              // Extract price
-              const priceEl = await card.$('[class*="price"], [class*="cost"]');
-              if (priceEl) {
-                const priceText = await priceEl.evaluate(el => el.textContent?.trim() || '');
-                const priceMatch = priceText.match(/\\d+/);
-                if (priceMatch) result.price = priceMatch[0];
-              }
-              
-              // Extract rating/reviews
-              const ratingText = await card.$eval('[class*="rating"], [class*="review"], span', el => el.textContent?.trim() || '').catch(() => '');
-              if (ratingText) {
-                const ratingMatch = ratingText.match(/\\d+\\.?\\d*/);
-                if (ratingMatch) result.rating = ratingMatch[0];
-              }
-              
-              // Extract seller URL
-              const sellerLink = await card.$('a[href*="/user/"], a[href*="?ref=seller"]');
-              if (sellerLink) {
-                result.sellerUrl = await sellerLink.evaluate(el => el.href || '');
-              }
-              
-              // Extract review count
-              const reviewCountText = await card.$eval('[class*="review"], [class*="count"]', el => el.textContent?.trim() || '').catch(() => '');
-              if (reviewCountText) {
-                const reviewMatch = reviewCountText.match(/\\d+/);
-                if (reviewMatch) result.reviews = reviewMatch[0];
-              }
-              
-              // Get all text for additional parsing
-              const allText = await card.evaluate(el => el.textContent || '');
-              
-              // Extract level if present
-              if (allText.includes('Top Rated')) result.level = 'Top Rated';
-              else if (allText.includes('Pro')) result.level = 'Pro';
-              else if (allText.includes('Seller')) result.level = 'Seller';
-              
-              // Only add if has minimum required fields
-              if (result.seller && result.title) {
-                results.push(result);
-              }
-            } catch (cardError) {
-              // Continue to next card
-            }
-          }
-          
-          // Strategy 2: Fallback - extract from links
-          if (results.length === 0) {
-            const links = await page.$$('a[href*="/user/"], a[href*="?ref=seller"]');
-            for (const link of links.slice(0, 50)) {
-              try {
-                const href = await link.evaluate(el => el.href || '');
-                const text = await link.evaluate(el => el.textContent?.trim() || '');
-                if (text && href) {
-                  results.push({
-                    seller: text,
-                    sellerUrl: href
+              for (const a of anchors) {
+                const href = a.href || '';
+                const text = (a.textContent || a.innerText || '').trim();
+                
+                // Look for Fiverr seller URLs - typically /[username] format
+                const isSellerUrl = /fiverr\\.com\\/[a-z0-9_-]+\\/?$/.test(href.toLowerCase());
+                
+                if (isSellerUrl && text.length > 1 && !seen.has(href)) {
+                  seen.add(href);
+                  items.push({
+                    seller: text || href.split('/').pop(),
+                    sellerUrl: href,
+                    title: 'Gig Provider'
                   });
                 }
-              } catch (e) {/* skip */}
+              }
+              
+              return items;
+            });
+            
+            if (sellers && sellers.length > 0) {
+              results.push(...sellers.slice(0, 50));
+            }
+          } catch (e) {
+            console.log('Seller extraction failed:', e.message);
+          }
+          
+          // Strategy 2: Extract ratings and pricing from page
+          if (results.length > 0) {
+            try {
+              const details = await page.evaluate(() => {
+                const bodyText = document.body.innerText || '';
+                
+                // Extract star ratings (look for "4.8" or similar)
+                const ratingMatches = bodyText.match(/(\\d+\\.?\\d*)\\s*(?:★|★★|rating|out of|\\()/);
+                if (ratingMatches) return { rating: ratingMatches[1] };
+                
+                return {};
+              });
+              
+              if (details.rating && results[0]) {
+                results[0].rating = details.rating;
+              }
+            } catch (e) {
+              console.log('Details extraction failed:', e.message);
             }
           }
           
-          return results;
+          // Strategy 3: Fallback - extract from page text
+          if (results.length === 0) {
+            try {
+              const textResults = await page.evaluate(() => {
+                const items = [];
+                const bodyText = document.body.innerText || '';
+                
+                // Split into lines and extract potential seller names
+                const lines = bodyText
+                  .split('\\n')
+                  .map(l => l.trim())
+                  .filter(l => l.length > 2 && l.length < 80 && !l.includes('http'));
+                
+                const seen = new Set();
+                for (const line of lines) {
+                  // Skip common UI elements  
+                  if (line.match(/^(Search|Filter|Business|Logo|Save|Contact|Budget|Delivery)/i)) continue;
+                  
+                  if (!seen.has(line) && line.split(' ').length <= 4) {
+                    seen.add(line);
+                    items.push({
+                      seller: line,
+                      title: 'Gig Provider'
+                    });
+                  }
+                  
+                  if (items.length >= 25) break;
+                }
+                
+                return items;
+              });
+              
+              results.push(...textResults);
+            } catch (e) {
+              console.log('Text parsing failed:', e.message);
+            }
+          }
+          
+          return results.slice(0, 50);
         }
       `;
       input.proxyConfiguration = { useApifyProxy: true };
@@ -830,67 +867,111 @@ export class ApifyService {
             
             const results = [];
             
+            // Strategy 1: Extract LinkedIn profile links
             try {
-              // Strategy 1: Try modern LinkedIn selectors
-              const cards = await page.$$('[data-test-result-index], [class*="entity-result"], li[class*="search-result"]');
-              
-              for (const card of cards.slice(0, 50)) {
-                try {
-                  const result = {};
+              const profiles = await page.evaluate(() => {
+                const items = [];
+                const anchors = document.querySelectorAll('a');
+                const seen = new Set();
+                
+                for (const a of anchors) {
+                  const href = a.href || '';
+                  const text = (a.textContent || a.innerText || '').trim();
                   
-                  // Extract name
-                  const nameEl = await card.$('span[aria-hidden="true"], [class*="name"], a[href*="/in/"]');
-                  if (nameEl) {
-                    result.name = await nameEl.evaluate(el => el.textContent?.trim() || '');
+                  // LinkedIn profile URLs contain /in/ or /company/
+                  if (href.includes('/in/') && text.length > 2 && !seen.has(href)) {
+                    seen.add(href);
+                    items.push({
+                      name: text,
+                      profileUrl: href,
+                      title: 'Professional'
+                    });
                   }
-                  
-                  // Extract title
-                  result.title = await card.$eval('[class*="headline"], [class*="subtitle"], p', el => el.textContent?.trim() || '').catch(() => '');
-                  
-                  // Extract location
-                  result.location = await card.$eval('[class*="location"], [class*="geo"]', el => el.textContent?.trim() || '').catch(() => '');
-                  
-                  // Extract profile URL
-                  const profileLink = await card.$('a[href*="/in/"]');
-                  if (profileLink) {
-                    result.profileUrl = await profileLink.evaluate(el => el.href || '');
-                  }
-                  
-                  // Get text to find skills
-                  const allText = await card.evaluate(el => el.textContent || '');
-                  
-                  // Extract skills mentioned in text
-                  result.skills = allText.match(/(?:skilled in|expertise in|experience with)\\s+([^,\\.]+)/gi) || [];
-                  
-                  if (result.name) {
-                    results.push(result);
-                  }
-                } catch (e) {
-                  // Skip this card and continue
                 }
-              }
+                
+                return items;
+              });
               
-              // Strategy 2: If nothing found, try alternate selectors
-              if (results.length === 0) {
-                const links = await page.$$('a[href*="/in/"]');
-                for (const link of links.slice(0, 50)) {
-                  try {
-                    const href = await link.evaluate(el => el.href || '');
-                    const text = await link.evaluate(el => el.textContent?.trim() || '');
-                    if (text && href && href.includes('/in/')) {
-                      results.push({
-                        name: text,
-                        profileUrl: href
-                      });
-                    }
-                  } catch (e) {/* skip */}
-                }
+              if (profiles && profiles.length > 0) {
+                results.push(...profiles.slice(0, 50));
               }
-            } catch (error) {
-              console.error('LinkedIn extraction error:', error);
+            } catch (e) {
+              console.log('Profile extraction failed:', e.message);
             }
             
-            return results;
+            // Strategy 2: Extract title and location from page content
+            if (results.length > 0) {
+              try {
+                const details = await page.evaluate(() => {
+                  const bodyText = document.body.innerText || '';
+                  const data = {};
+                  
+                  // Look for common LinkedIn titles/locations patterns
+                  const lines = bodyText.split('\\n').slice(0, 100);
+                  const titles = [];
+                  
+                  for (const line of lines) {
+                    const trimmed = line.trim();
+                    // Common professional titles
+                    if (trimmed.match(/^(Senior|Junior|Lead|Principal|Staff|Manager|Director|Architect|Engineer|Developer|Designer|Product|Data|Solutions)\\s+/i)) {
+                      titles.push(trimmed);
+                    }
+                  }
+                  
+                  return { titles };
+                });
+                
+                // Assign titles to results
+                if (details.titles && details.titles.length > 0) {
+                  for (let i = 0; i < results.length && i < details.titles.length; i++) {
+                    results[i].title = details.titles[i];
+                  }
+                }
+              } catch (e) {
+                console.log('Details extraction failed:', e.message);
+              }
+            }
+            
+            // Strategy 3: Fallback - parse page as simple text
+            if (results.length === 0) {
+              try {
+                const textResults = await page.evaluate(() => {
+                  const names = [];
+                  const bodyText = document.body.innerText || '';
+                  
+                  // Extract lines that look like names (2-4 words, proper case)
+                  const lines = bodyText
+                    .split('\\n')
+                    .map(l => l.trim())
+                    .filter(l => l.length > 3 && l.length < 60);
+                  
+                  const seen = new Set();
+                  for (const line of lines) {
+                    // Skip common UI elements and links
+                    if (line.match(/^(Search|Skills|Filter|Export|Message|Connect|More|Follow|Premium|Sort|Location|Experience)/i)) continue;
+                    if (line.includes('http') || line.includes('/')) continue;
+                    
+                    if (!seen.has(line)) {
+                      seen.add(line);
+                      names.push({
+                        name: line,
+                        title: 'Professional'
+                      });
+                    }
+                    
+                    if (names.length >= 25) break;
+                  }
+                  
+                  return names;
+                });
+                
+                results.push(...textResults);
+              } catch (e) {
+                console.log('Text parsing failed:', e.message);
+              }
+            }
+            
+            return results.slice(0, 50);
           }
         `,
       };
