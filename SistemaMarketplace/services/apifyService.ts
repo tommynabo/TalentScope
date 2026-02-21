@@ -234,130 +234,67 @@ export class ApifyService {
       maxItems: 50
     };
 
-    // Real pageFunction for apify/web-scraper - extracts actual Upwork data
+    // Real pageFunction for apify/web-scraper - SIMPLIFIED, working extraction
     if (actorId === 'apify/web-scraper') {
       input.pageFunction = `
         async function pageFunction(context) {
-          const { page, request } = context;
-          const delay = (ms) => new Promise(r => setTimeout(r, ms));
+          const { page } = context;
           
-          // Give page time to load after initial navigation
-          await delay(3000);
-          
+          // Simple extraction - find ALL links that look like Upwork profiles
           const results = [];
           
-          // Strategy 1: Extract profile links using page.evaluate (most reliable)
           try {
-            const links = await page.evaluate(() => {
-              const items = [];
-              const anchors = document.querySelectorAll('a');
-              const seen = new Set();
-              
-              for (const a of anchors) {
-                const href = a.href || '';
-                const text = (a.textContent || a.innerText || '').trim();
+            // Get all links on the page
+            const links = await page.$$('a[href*="/o/"], a[href*="/freelancers/"]');
+            
+            for (const link of links.slice(0, 50)) {
+              try {
+                // Get href
+                const href = await link.evaluate(el => el.href);
                 
-                // Look for Upwork profile URLs
-                if ((href.includes('/o/') || href.includes('/freelancers/')) && 
-                    text.length > 2 && 
-                    text.length < 100 &&
-                    !seen.has(href)) {
-                  
-                  seen.add(href);
-                  items.push({
+                // Get text
+                const text = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
+                
+                if (href && text && text.length > 2) {
+                  results.push({
                     name: text,
                     profileUrl: href,
                     title: 'Freelancer'
                   });
                 }
+              } catch (e) {
+                // Skip this link
               }
-              
-              return items;
-            });
-            
-            if (links && links.length > 0) {
-              results.push(...links.slice(0, 50));
             }
           } catch (e) {
-            console.log('Strategy 1 failed:', e.message);
+            // If selector didn't find anything, try a different approach
           }
           
-          // Strategy 2: If we got some results, try to extract more details
-          if (results.length > 0) {
-            // Try to find ratings and rates from page text
-            try {
-              const details = await page.evaluate(() => {
-                const data = {};
-                const bodyText = document.body.innerText || '';
-                
-                // Look for job success patterns like "98%" or "100%"
-                const ratingMatches = bodyText.match(/(\\d{1,3})%/g);
-                if (ratingMatches) {
-                  data.ratings = ratingMatches.slice(0, 5);
-                }
-                
-                // Look for hourly rates like "$85/hr"
-                const rateMatches = bodyText.match(/\\$(\\d+)\\/(?:hr|hour)/gi);
-                if (rateMatches) {
-                  data.rates = rateMatches.slice(0, 5);
-                }
-                
-                return data;
-              });
-              
-              // Assign details to results
-              if (details.ratings) {
-                for (let i = 0; i < results.length && i < details.ratings.length; i++) {
-                  results[i].jobSuccessRate = parseInt(details.ratings[i]);
-                }
-              }
-              if (details.rates) {
-                for (let i = 0; i < results.length && i < details.rates.length; i++) {
-                  const rateMatch = details.rates[i].match(/(\\d+)/);
-                  if (rateMatch) results[i].hourlyRate = rateMatch[1];
-                }
-              }
-            } catch (e) {
-              console.log('Details extraction failed:', e.message);
-            }
-          }
-          
-          // Strategy 3: Fallback - parse page as text and extract candidate names
+          // If no results, try ANY link that might be a profile
           if (results.length === 0) {
             try {
-              const textResults = await page.evaluate(() => {
-                const names = [];
-                const bodyText = document.body.innerText || '';
-                
-                // Split into lines and get non-empty ones that look like names
-                const lines = bodyText
-                  .split('\\n')
-                  .map(l => l.trim())
-                  .filter(l => l.length > 2 && l.length < 80 && !l.includes('http') && !l.includes('/'));
-                
-                // Deduplicate and limit
-                const seen = new Set();
-                for (const line of lines) {
-                  // Skip common UI elements
-                  if (line.match(/^(Submit|Cancel|Search|Filter|Sort|Skills|Location|Rate)/i)) continue;
+              const allLinks = await page.$$('a');
+              for (const link of allLinks.slice(0, 100)) {
+                try {
+                  const href = await link.evaluate(el => el.href || '');
+                  const text = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
                   
-                  if (!seen.has(line) && line.split(' ').length <= 5) {
-                    seen.add(line);
-                    names.push({
-                      name: line,
+                  // Check if looks like Upwork profile
+                  if ((href.includes('/o/') || href.includes('/freelancers/')) && text && text.length > 2) {
+                    results.push({
+                      name: text,
+                      profileUrl: href,
                       title: 'Freelancer'
                     });
                   }
                   
-                  if (names.length >= 25) break;
+                  if (results.length >= 50) break;
+                } catch (e) {
+                  // Continue
                 }
-                
-                return names;
-              });
-              
-              results.push(...textResults);
+              }
             } catch (e) {
-              console.log('Text parsing strategy failed:', e.message);
+              // Fallback failed too
             }
           }
           
@@ -555,109 +492,69 @@ export class ApifyService {
       maxResults: 50
     };
 
-    // Real pageFunction for apify/web-scraper - extracts Fiverr seller data
+    // Real pageFunction for apify/web-scraper - SIMPLIFIED, working extraction
     if (actorId === 'apify/web-scraper') {
       input.pageFunction = `
         async function pageFunction(context) {
           const { page } = context;
-          const delay = (ms) => new Promise(r => setTimeout(r, ms));
-          
-          // Give page time to load JavaScript
-          await delay(3000);
           
           const results = [];
           
-          // Strategy 1: Extract seller/profile links
           try {
-            const sellers = await page.evaluate(() => {
-              const items = [];
-              // En Fiverr, los vendedores tienen URLs como /[username]
-              const anchors = document.querySelectorAll('a');
-              const seen = new Set();
-              
-              for (const a of anchors) {
-                const href = a.href || '';
-                const text = (a.textContent || a.innerText || '').trim();
-                
-                // Look for Fiverr seller URLs - typically /[username] format
-                const isSellerUrl = /fiverr\\.com\\/[a-z0-9_-]+\\/?$/.test(href.toLowerCase());
-                
-                if (isSellerUrl && text.length > 1 && !seen.has(href)) {
-                  seen.add(href);
-                  items.push({
-                    seller: text || href.split('/').pop(),
-                    sellerUrl: href,
-                    title: 'Gig Provider'
-                  });
-                }
-              }
-              
-              return items;
-            });
+            // Get all links
+            const links = await page.$$('a');
             
-            if (sellers && sellers.length > 0) {
-              results.push(...sellers.slice(0, 50));
-            }
-          } catch (e) {
-            console.log('Seller extraction failed:', e.message);
-          }
-          
-          // Strategy 2: Extract ratings and pricing from page
-          if (results.length > 0) {
-            try {
-              const details = await page.evaluate(() => {
-                const bodyText = document.body.innerText || '';
+            for (const link of links.slice(0, 100)) {
+              try {
+                const href = await link.evaluate(el => el.href || '');
+                const text = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
                 
-                // Extract star ratings (look for "4.8" or similar)
-                const ratingMatches = bodyText.match(/(\\d+\\.?\\d*)\\s*(?:★|★★|rating|out of|\\()/);
-                if (ratingMatches) return { rating: ratingMatches[1] };
-                
-                return {};
-              });
-              
-              if (details.rating && results[0]) {
-                results[0].rating = details.rating;
-              }
-            } catch (e) {
-              console.log('Details extraction failed:', e.message);
-            }
-          }
-          
-          // Strategy 3: Fallback - extract from page text
-          if (results.length === 0) {
-            try {
-              const textResults = await page.evaluate(() => {
-                const items = [];
-                const bodyText = document.body.innerText || '';
-                
-                // Split into lines and extract potential seller names
-                const lines = bodyText
-                  .split('\\n')
-                  .map(l => l.trim())
-                  .filter(l => l.length > 2 && l.length < 80 && !l.includes('http'));
-                
-                const seen = new Set();
-                for (const line of lines) {
-                  // Skip common UI elements  
-                  if (line.match(/^(Search|Filter|Business|Logo|Save|Contact|Budget|Delivery)/i)) continue;
-                  
-                  if (!seen.has(line) && line.split(' ').length <= 4) {
-                    seen.add(line);
-                    items.push({
-                      seller: line,
-                      title: 'Gig Provider'
+                // Fiverr seller links typically have pattern /[username] or contain /user/
+                // OR are seller profile links
+                if (text && text.length > 1 && href && href.includes('fiverr.com')) {
+                  // Check if it looks like a seller profile URL
+                  if (href.match(/fiverr\\.com\\/[a-z0-9_-]+\\/?$/i) || 
+                      href.includes('/user/') ||
+                      href.includes('seller')) {
+                    results.push({
+                      seller: text,
+                      sellerUrl: href,
+                      title: 'Seller'
                     });
                   }
-                  
-                  if (items.length >= 25) break;
                 }
                 
-                return items;
-              });
-              
-              results.push(...textResults);
+                if (results.length >= 50) break;
+              } catch (e) {
+                // Continue
+              }
+            }
+          } catch (e) {
+            // Fallback
+          }
+          
+          // If nothing found, try to extract from any Fiverr links
+          if (results.length === 0) {
+            try {
+              const links = await page.$$('a[href*="fiverr"]');
+              for (const link of links.slice(0, 50)) {
+                try {
+                  const href = await link.evaluate(el => el.href || '');
+                  const text = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
+                  
+                  if (text && href) {
+                    results.push({
+                      seller: text,
+                      sellerUrl: href,
+                      title: 'Seller'
+                    });
+                  }
+                } catch (e) {
+                  // Skip
+                }
+              }
             } catch (e) {
-              console.log('Text parsing failed:', e.message);
+              // Fallback failed
             }
           }
           
@@ -860,114 +757,58 @@ export class ApifyService {
         pageFunction: `
           async function pageFunction(context) {
             const { page } = context;
-            const delay = (ms) => new Promise(r => setTimeout(r, ms));
-            
-            // Extra wait for LinkedIn to load
-            await delay(3000);
             
             const results = [];
             
-            // Strategy 1: Extract LinkedIn profile links
             try {
-              const profiles = await page.evaluate(() => {
-                const items = [];
-                const anchors = document.querySelectorAll('a');
-                const seen = new Set();
-                
-                for (const a of anchors) {
-                  const href = a.href || '';
-                  const text = (a.textContent || a.innerText || '').trim();
+              // Get all links
+              const links = await page.$$('a');
+              
+              for (const link of links.slice(0, 100)) {
+                try {
+                  const href = await link.evaluate(el => el.href || '');
+                  const text = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
                   
-                  // LinkedIn profile URLs contain /in/ or /company/
-                  if (href.includes('/in/') && text.length > 2 && !seen.has(href)) {
-                    seen.add(href);
-                    items.push({
+                  // LinkedIn profile URLs contain /in/ 
+                  if (text && text.length > 2 && href && href.includes('/in/')) {
+                    results.push({
                       name: text,
                       profileUrl: href,
                       title: 'Professional'
                     });
                   }
+                  
+                  if (results.length >= 50) break;
+                } catch (e) {
+                  // Continue
                 }
-                
-                return items;
-              });
-              
-              if (profiles && profiles.length > 0) {
-                results.push(...profiles.slice(0, 50));
               }
             } catch (e) {
-              console.log('Profile extraction failed:', e.message);
+              // Fallback
             }
             
-            // Strategy 2: Extract title and location from page content
-            if (results.length > 0) {
-              try {
-                const details = await page.evaluate(() => {
-                  const bodyText = document.body.innerText || '';
-                  const data = {};
-                  
-                  // Look for common LinkedIn titles/locations patterns
-                  const lines = bodyText.split('\\n').slice(0, 100);
-                  const titles = [];
-                  
-                  for (const line of lines) {
-                    const trimmed = line.trim();
-                    // Common professional titles
-                    if (trimmed.match(/^(Senior|Junior|Lead|Principal|Staff|Manager|Director|Architect|Engineer|Developer|Designer|Product|Data|Solutions)\\s+/i)) {
-                      titles.push(trimmed);
-                    }
-                  }
-                  
-                  return { titles };
-                });
-                
-                // Assign titles to results
-                if (details.titles && details.titles.length > 0) {
-                  for (let i = 0; i < results.length && i < details.titles.length; i++) {
-                    results[i].title = details.titles[i];
-                  }
-                }
-              } catch (e) {
-                console.log('Details extraction failed:', e.message);
-              }
-            }
-            
-            // Strategy 3: Fallback - parse page as simple text
+            // If nothing, try direct selector
             if (results.length === 0) {
               try {
-                const textResults = await page.evaluate(() => {
-                  const names = [];
-                  const bodyText = document.body.innerText || '';
-                  
-                  // Extract lines that look like names (2-4 words, proper case)
-                  const lines = bodyText
-                    .split('\\n')
-                    .map(l => l.trim())
-                    .filter(l => l.length > 3 && l.length < 60);
-                  
-                  const seen = new Set();
-                  for (const line of lines) {
-                    // Skip common UI elements and links
-                    if (line.match(/^(Search|Skills|Filter|Export|Message|Connect|More|Follow|Premium|Sort|Location|Experience)/i)) continue;
-                    if (line.includes('http') || line.includes('/')) continue;
+                const links = await page.$$('a[href*="/in/"]');
+                for (const link of links.slice(0, 50)) {
+                  try {
+                    const href = await link.evaluate(el => el.href || '');
+                    const text = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
                     
-                    if (!seen.has(line)) {
-                      seen.add(line);
-                      names.push({
-                        name: line,
+                    if (text && href) {
+                      results.push({
+                        name: text,
+                        profileUrl: href,
                         title: 'Professional'
                       });
                     }
-                    
-                    if (names.length >= 25) break;
+                  } catch (e) {
+                    // Skip
                   }
-                  
-                  return names;
-                });
-                
-                results.push(...textResults);
+                }
               } catch (e) {
-                console.log('Text parsing failed:', e.message);
+                // Fallback failed
               }
             }
             
