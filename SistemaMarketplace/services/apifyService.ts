@@ -20,7 +20,7 @@ export class ApifyService {
   // Actor IDs — apify/web-scraper is FREE and included in every Apify account
   // Dedicated actors (upwork-vibe, newpo, etc.) require PAID rental
   private defaultActors = {
-    upwork: 'nwtn/upwork-profile-scraper',
+    upwork: 'apify/web-scraper',
     fiverr: 'apify/web-scraper',
     linkedin: 'curious_coder/linkedin-search-api',
   };
@@ -241,37 +241,32 @@ export class ApifyService {
     console.log(`🔗 Upwork URL: ${searchUrl}`);
     const actorId = this.actors.upwork;
 
-    // For dedicated actors like nwtn/upwork-profile-scraper
     const input: Record<string, any> = {
-      searchQuery: filter.keyword,
-      search: filter.keyword,
-      query: filter.keyword,
-      searchUrl: searchUrl,
       startUrls: [{ url: searchUrl }],
-      urls: [searchUrl], // specific to nwtn
-      maxResults: 50,
-      maxItems: 50,
-      maxPages: 3 // specific to nwtn
+      useChrome: true,
+      proxyConfiguration: { useApifyProxy: true },
+      maxPagesPerCrawl: 3,
+      maxResults: 50
     };
 
     // Real pageFunction for apify/web-scraper - SIMPLIFIED, working extraction
-    if (actorId === 'apify/web-scraper') {
+    if (actorId === 'apify/web-scraper' || actorId === 'nwtn/upwork-profile-scraper') {
       input.pageFunction = `
         async function pageFunction(context) {
           const { page } = context;
-          
-          // Simple extraction - find ALL links that look like Upwork profiles
           const results = [];
           
           try {
-            // Get all links on the page
-            const links = await page.$$('a[href*="/o/"], a[href*="/freelancers/"]');
+            // Upwork can take several seconds to load the React SPA list over Cloudflare
+            await page.waitForTimeout(5000); // Give it a generous 5s buffer 
             
-            for (const link of links.slice(0, 50)) {
+            // Get all links on the page
+            const links = await page.$$('a[href*="/freelancers/"], a[href*="/o/"]');
+            
+            for (const link of links) {
               try {
                 // Get href
                 const href = await link.evaluate(el => el.href);
-                
                 // Get text
                 const text = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
                 
@@ -279,7 +274,8 @@ export class ApifyService {
                   results.push({
                     name: text,
                     profileUrl: href,
-                    title: 'Freelancer'
+                    title: 'Freelancer',
+                    platformUsername: href.split('/').filter(Boolean).pop()
                   });
                 }
               } catch (e) {
@@ -287,10 +283,10 @@ export class ApifyService {
               }
             }
           } catch (e) {
-            // If selector didn't find anything, try a different approach
+             console.log("Error finding specific selectors: " + e.message);
           }
           
-          // If no results, try ANY link that might be a profile
+          // Fallback: If no results, try ANY link that might be a profile
           if (results.length === 0) {
             try {
               const allLinks = await page.$$('a');
@@ -300,28 +296,34 @@ export class ApifyService {
                   const text = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
                   
                   // Check if looks like Upwork profile
-                  if ((href.includes('/o/') || href.includes('/freelancers/')) && text && text.length > 2) {
+                  if ((href.includes('/freelancers/') || href.includes('/o/')) && text && text.length > 2) {
                     results.push({
                       name: text,
                       profileUrl: href,
-                      title: 'Freelancer'
+                      title: 'Freelancer',
+                      platformUsername: href.split('/').filter(Boolean).pop()
                     });
                   }
-                  
-                  if (results.length >= 50) break;
-                } catch (e) {
-                  // Continue
-                }
+                } catch (e) {}
               }
-            } catch (e) {
-              // Fallback failed too
-            }
+            } catch (e) {}
           }
           
-          return results.slice(0, 50);
+          // Deduplicate based on profile URL
+          const uniqueResults = [];
+          const seenUrls = new Set();
+          
+          for (const res of results) {
+             const cleanUrl = res.profileUrl.split('?')[0];
+             if (!seenUrls.has(cleanUrl)) {
+                 seenUrls.add(cleanUrl);
+                 uniqueResults.push({ ...res, profileUrl: cleanUrl });
+             }
+          }
+          
+          return uniqueResults.slice(0, 50);
         }
       `;
-      input.proxyConfiguration = { useApifyProxy: true };
     }
 
     const rawResults = await this.executeActor(actorId, input);

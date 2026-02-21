@@ -18,29 +18,23 @@ He seleccionado los mejores actores basándome en:
 
 ## 🎯 ACTUALIZADOS EN SUPABASE
 
-### 1️⃣ UPWORK: `nwtn/upwork-profile-scraper`
+### 1️⃣ UPWORK: `apify/web-scraper`
 
 ```
-Actor ID: nwtn/upwork-profile-scraper
+Actor ID: apify/web-scraper
 Clasificación: ⭐⭐⭐⭐⭐ (5/5)
-Estado: Activo, mantenido regularmente
+Estado: Activo, mantenido por Apify Oficialmente
 Costo: GRATUITO
-Velocidad: ⚡⚡⚡ (muy rápido)
+Velocidad: ⚡⚡ (moderado, requiere espera de red)
 ```
 
 **Por qué lo elegí:**
-- ✅ **Gratuito**: Sin costos adicionales
-- ✅ **Popular**: Miles de usuarios confían en él
-- ✅ **Mantenido**: Actualizaciones regulares
-- ✅ **Optimizado**: Consume pocos créditos de Apify
-- ✅ **Rápido**: Resultados en segundos
-- ✅ **Confiable**: Casi nunca falla
+- ✅ **Gratuito**: Sin costos adicionales y viene integrado en todas las cuentas
+- ✅ **Oficial**: Mantenido directamente por la plataforma Apify
+- ✅ **Flexible**: Sobrevive mejor a los cambios de interfaz de Upwork
+- ✅ **Script Propio**: Inyectamos Puppeteer internamente para extraer los perfiles de la web
 
-**Alternativas** (si éste no funciona):
-- `theTaxGuy/upwork-jobs-scraper` - Otra buena opción
-- `apify/web-scraper` - Universal, pero más lento
-
----
+**Nota técnica:** Empleamos la configuración `waitUntil: ['networkidle2']` con pausas para asegurar que la SPA de Upwork en React cargue todos los resultados después de saltar el proxy antibot Cloudflare.
 
 ### 2️⃣ FIVERR: `apify/web-scraper` (Oficial de Apify)
 
@@ -71,14 +65,14 @@ Si Fiverr cambia su estructura HTML (lo hace frecuentemente), este scraper se ad
 
 ## 📊 Comparativa de los Actores
 
-| Criterio | Upwork (nwtn) | Fiverr (apify/web) | Alternativas |
+| Criterio | Upwork (apify/web) | Fiverr (apify/web) | Alternativas |
 |----------|---|---|---|
 | **Precio** | 🟢 Gratis | 🟢 Gratis | 🔴 Mayoría pago |
-| **Velocidad** | ⚡⚡⚡ Muy rápido | ⚡⚡ Moderado | Varía |
+| **Velocidad** | ⚡⚡ Moderado | ⚡⚡ Moderado | Varía |
 | **Confiabilidad** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
-| **Mantenimiento** | 🟢 Regular | 🟢 Constante | 🟡 Variable |
-| **Soporte** | 🟢 Bueno | 🟢 Excelente | 🟡 Limitado |
-| **Especialización** | Upwork | Universal | Mixto |
+| **Mantenimiento** | 🟢 Constante | 🟢 Constante | 🟡 Variable |
+| **Soporte** | 🟢 Excelente | 🟢 Excelente | 🟡 Limitado |
+| **Especialización** | Universal | Universal | Mixto |
 | **Recomendado** | ✅ SÍ | ✅ SÍ | ⚠️ Caso a caso |
 
 ---
@@ -92,7 +86,7 @@ Si Fiverr cambia su estructura HTML (lo hace frecuentemente), este scraper se ad
 -- (El archivo UPDATE_APIFY_ACTOR_IDS.sql está actualizados con estos IDs)
 
 UPDATE public.apify_config 
-SET actor_id = 'nwtn/upwork-profile-scraper' 
+SET actor_id = 'apify/web-scraper' 
 WHERE config_key = 'upwork_scraper';
 
 UPDATE public.apify_config 
@@ -114,11 +108,11 @@ WHERE config_key = 'fiverr_scraper';
 
 ```
 ANTES:
-├── Upwork: powerai/upwork-talent-search-scraper (❌ No existe)
+├── Upwork: nwtn/upwork-profile-scraper (❌ Error 404 - Eliminado de Apify Store)
 └── Fiverr: newpo/fiverr-scraper (❌ Requiere pago)
 
 AHORA:
-├── Upwork: nwtn/upwork-profile-scraper (✅ Gratis, mantenido)
+├── Upwork: apify/web-scraper (✅ Universal, 100% gratis, fallback dinámico con esperas SPA)
 └── Fiverr: apify/web-scraper (✅ Oficial, 100% gratis)
 ```
 
@@ -144,25 +138,26 @@ Después de actualizar en Supabase:
 
 ```sql
 -- Verifica en Supabase
-SELECT config_key, actor_id, status FROM apify_config_active;
+SELECT config_key, actor_id, status FROM apify_config;
 
 -- Deberías ver:
--- upwork_scraper    | nwtn/upwork-profile-scraper | active
--- fiverr_scraper    | apify/web-scraper           | active
+-- upwork_scraper    | apify/web-scraper | active
+-- fiverr_scraper    | apify/web-scraper | active
 ```
 
 ---
 
 ## ⚙️ Configuración Técnica
 
-### Para Upwork (`nwtn/upwork-profile-scraper`)
+### Para Upwork (`apify/web-scraper`)
 
 ```typescript
 // Input esperado:
 {
-  urls: ["https://www.upwork.com/nx/search/talent/?q=flutter"],
-  maxPages: 3,
-  waitUntilContentLoaded: true
+  startUrls: [ { url: "https://www.upwork.com/nx/search/talent/?q=flutter" } ],
+  useChrome: true,
+  proxyConfiguration: { useApifyProxy: true },
+  pageFunction: `...` // Personalizable
 }
 ```
 
