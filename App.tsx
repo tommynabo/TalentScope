@@ -24,6 +24,13 @@ import { CampaignService } from './lib/services';
 import { TabGuard } from './lib/TabGuard';
 import { initializeUnbreakableMarker } from './lib/UnbreakableExecution';
 
+// Protected Route Wrapper
+const ProtectedRoute = ({ children, user, loading }: { children: React.ReactElement, user: User | null, loading: boolean }) => {
+  if (loading) return <div className="flex items-center justify-center h-screen bg-slate-950 text-slate-500">Loading...</div>;
+  if (!user) return <Navigate to="/" replace />;
+  return children;
+};
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -121,12 +128,7 @@ const App: React.FC = () => {
     setShowToast(true);
   };
 
-  // Protected Route Wrapper
-  const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
-    if (loading) return <div className="flex items-center justify-center h-screen bg-slate-950 text-slate-500">Loading...</div>;
-    if (!user) return <Navigate to="/" replace />;
-    return children;
-  };
+  // Protected Route Wrapper is now defined outside to prevent continuous remounting
 
   if (loading) {
     return (
@@ -164,7 +166,7 @@ const App: React.FC = () => {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
               <Route path="/dashboard" element={
-                <ProtectedRoute>
+                <ProtectedRoute user={user} loading={loading}>
                   <DashboardView
                     userName={user.name.split(' ')[0] || 'User'}
                     onOpenLinkedin={() => navigate('/tablero/linkedin')}
@@ -174,19 +176,19 @@ const App: React.FC = () => {
               } />
 
               <Route path="/tablero/:platform" element={
-                <ProtectedRoute>
+                <ProtectedRoute user={user} loading={loading}>
                   <CampaignListWrapper navigate={navigate} />
                 </ProtectedRoute>
               } />
 
               <Route path="/tablero/:platform/:campaignId" element={
-                <ProtectedRoute>
+                <ProtectedRoute user={user} loading={loading}>
                   <CampaignDetailWrapper onBack={() => navigate(-1)} />
                 </ProtectedRoute>
               } />
 
               <Route path="/new-campaign" element={
-                <ProtectedRoute>
+                <ProtectedRoute user={user} loading={loading}>
                   <CampaignCreationView
                     onBack={() => navigate(-1)}
                     onCampaignCreated={() => navigate('/tablero/linkedin')}
@@ -195,19 +197,19 @@ const App: React.FC = () => {
               } />
 
               <Route path="/talento" element={
-                <ProtectedRoute>
+                <ProtectedRoute user={user} loading={loading}>
                   <TalentPoolView />
                 </ProtectedRoute>
               } />
 
               <Route path="/analytics" element={
-                <ProtectedRoute>
+                <ProtectedRoute user={user} loading={loading}>
                   <AnalyticsView />
                 </ProtectedRoute>
               } />
 
               <Route path="/settings" element={
-                <ProtectedRoute>
+                <ProtectedRoute user={user} loading={loading}>
                   <SettingsView
                     currentName={user.name || ''}
                     onNameChange={(newName) => {
@@ -221,13 +223,13 @@ const App: React.FC = () => {
               } />
 
               <Route path="/marketplace-raid" element={
-                <ProtectedRoute>
+                <ProtectedRoute user={user} loading={loading}>
                   <MarketplaceRaidDashboard onBack={() => navigate('/dashboard')} />
                 </ProtectedRoute>
               } />
 
               <Route path="/marketplace-raid/:campaignId" element={
-                <ProtectedRoute>
+                <ProtectedRoute user={user} loading={loading}>
                   <MarketplaceCampaignWrapper />
                 </ProtectedRoute>
               } />

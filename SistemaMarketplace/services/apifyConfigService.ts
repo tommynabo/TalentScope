@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../../lib/supabase';
 
 export interface ApifyActorConfig {
   id: string;
@@ -21,8 +21,8 @@ export class ApifyConfigService {
   private cache: Map<string, ApifyActorConfig> = new Map();
   private cacheExpiry: number = 5 * 60 * 1000; // 5 minutos
 
-  constructor(supabaseUrl: string, supabaseKey: string) {
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+  constructor(supabaseUrl?: string, supabaseKey?: string) {
+    this.supabase = supabase;
   }
 
   /**
@@ -56,7 +56,8 @@ export class ApifyConfigService {
           .select('*')
           .eq('config_key', configKey)
           .eq('status', 'active')
-          .single();
+          .limit(1)
+          .maybeSingle();
 
         if (error) {
           // Log specific error details
