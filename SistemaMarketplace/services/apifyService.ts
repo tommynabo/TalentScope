@@ -17,9 +17,10 @@ export class ApifyService {
   private baseUrl = 'https://api.apify.com/v2';
   private configService: ApifyConfigService | null = null;
 
-  // Actor IDs — these are known-working actors from Apify Store
+  // Actor IDs — apify/web-scraper is FREE and included in every Apify account
+  // Dedicated actors (upwork-vibe, newpo, etc.) require PAID rental
   private defaultActors = {
-    upwork: 'upwork-vibe/upwork-scraper',
+    upwork: 'apify/web-scraper',
     fiverr: 'apify/web-scraper',
     linkedin: 'curious_coder/linkedin-search-api',
   };
@@ -146,30 +147,22 @@ export class ApifyService {
 
     console.log(`🔗 Upwork URL: ${searchUrl}`);
 
-    // Input for upwork-vibe/upwork-scraper or compatible
     const actorId = this.actors.upwork;
     let input: Record<string, any>;
 
-    if (actorId.includes('upwork-vibe')) {
-      // Dedicated upwork-vibe actor — expects these fields
+    if (actorId.includes('upwork-vibe') || actorId.includes('trudax') || actorId.includes('powerai')) {
+      // Dedicated paid actors — each has its own input format
       input = {
         searchUrl: searchUrl,
         maxResults: 50,
       };
-    } else if (actorId.includes('nwtn')) {
-      // nwtn actor — different input format
-      input = {
-        urls: [searchUrl],
-        maxPages: 3,
-        waitUntilContentLoaded: true,
-      };
     } else {
-      // Generic web-scraper fallback with Puppeteer
+      // apify/web-scraper (FREE) with Puppeteer pageFunction
       input = {
         startUrls: [{ url: searchUrl }],
         maxPagesPerCrawl: 3,
         pageFunction: this.getUpworkPageFunction(),
-        proxyConfiguration: { useApifyProxy: true },
+        proxyConfiguration: { useApifyProxy: true, apifyProxyGroups: ['RESIDENTIAL'] },
         waitUntilNetworkIdle: true,
       };
     }
@@ -177,12 +170,20 @@ export class ApifyService {
     const results = await this.executeActor(actorId, input);
 
     if (!results || results.length === 0) {
-      console.warn('⚠️ Upwork: Actor dedicado devolvió 0 resultados, intentando fallback...');
+      // If the primary actor failed, try fallback with different proxy config
+      console.warn('⚠️ Upwork: Primer intento devolvió 0 resultados, intentando con proxy residencial...');
       return await this.runUpworkFallback(filter);
     }
 
-    console.log(`✅ Upwork: ${results.length} resultados raw del actor`);
-    return this.normalizeUpworkResults(results, filter);
+    // Filter out error results from web-scraper
+    const validResults = results.filter((r: any) => !r['#error']);
+    if (validResults.length === 0) {
+      console.warn('⚠️ Upwork: Resultados son solo errores, intentando fallback...');
+      return await this.runUpworkFallback(filter);
+    }
+
+    console.log(`✅ Upwork: ${validResults.length} resultados raw del actor`);
+    return this.normalizeUpworkResults(validResults, filter);
   }
 
   /**
@@ -821,14 +822,23 @@ export class ApifyService {
         const errText = await runResponse.text();
         console.error(`❌ Actor ${actorId}: HTTP ${runResponse.status} - ${errText}`);
 
-        if (runResponse.status === 404) {
-          console.error(`💡 TIP: El actor "${actorId}" no existe. Ve a https://apify.com/store y busca uno compatible.`);
-          console.error(`💡 También puedes actualizar el Actor ID en Supabase tabla 'apify_config'.`);
+        // Parse error response for specific error types
+        let errorType = '';
+        try {
+          const errJson = JSON.parse(errText);
+          errorType = errJson?.error?.type || '';
+        } catch { /* not JSON */ }
+
+        if (errorType === 'actor-is-not-rented' || errText.includes('actor-is-not-rented')) {
+          console.error(`� El actor "${actorId}" requiere SUSCRIPCIÓN DE PAGO en Apify.`);
+          console.error(`💡 Opciones: 1) Alquila el actor en https://apify.com/store  2) Usa 'apify/web-scraper' (gratuito)`);
+        } else if (runResponse.status === 404) {
+          console.error(`💡 El actor "${actorId}" no existe. Ve a https://apify.com/store y busca uno compatible.`);
         } else if (runResponse.status === 403) {
-          console.error(`💡 TIP: Acceso denegado al actor "${actorId}". Puede requerir pago o no estar disponible en tu cuenta.`);
+          console.error(`💡 Acceso denegado al actor "${actorId}".`);
         }
 
-        throw new Error(`Actor execution failed: ${runResponse.status}`);
+        throw new Error(`Actor execution failed: ${runResponse.status} (${errorType || 'unknown'})`);
       }
 
       const runData = await runResponse.json();
