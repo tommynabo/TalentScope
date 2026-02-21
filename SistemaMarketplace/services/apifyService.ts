@@ -142,140 +142,40 @@ export class ApifyService {
 
   private async runUpworkDedicated(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
     const keyword = encodeURIComponent(filter.keyword);
-    const rate = filter.minHourlyRate ? `&rate=${filter.minHourlyRate}-` : '';
-    const searchUrl = `https://www.upwork.com/nx/search/talent/?q=${keyword}${rate}&sort=relevance`;
+    // Many dedicated actors prefer direct query, others prefer searchUrl
+    // Provide both to be safe
+    const searchUrl = `https://www.upwork.com/nx/search/talent/?q=${keyword}&sort=relevance`;
 
     console.log(`🔗 Upwork URL: ${searchUrl}`);
-
     const actorId = this.actors.upwork;
-    let input: Record<string, any>;
 
-    if (actorId.includes('upwork-vibe') || actorId.includes('trudax') || actorId.includes('powerai')) {
-      // Dedicated paid actors — each has its own input format
-      input = {
-        searchUrl: searchUrl,
-        maxResults: 50,
-      };
-    } else {
-      // apify/web-scraper (FREE) with Puppeteer pageFunction
-      input = {
-        startUrls: [{ url: searchUrl }],
-        maxPagesPerCrawl: 3,
-        pageFunction: this.getUpworkPageFunction(),
-        proxyConfiguration: { useApifyProxy: true, apifyProxyGroups: ['RESIDENTIAL'] },
-        waitUntilNetworkIdle: true,
-      };
-    }
+    // For dedicated actors like powerai/upwork-talent-search-scraper or trudax/upwork-freelancers-scraper
+    const input = {
+      searchQuery: filter.keyword,
+      search: filter.keyword,
+      query: filter.keyword,
+      searchUrl: searchUrl,
+      startUrls: [{ url: searchUrl }],
+      maxResults: 50,
+      maxItems: 50
+    };
 
     const results = await this.executeActor(actorId, input);
 
     if (!results || results.length === 0) {
-      // If the primary actor failed, try fallback with different proxy config
-      console.warn('⚠️ Upwork: Primer intento devolvió 0 resultados, intentando con proxy residencial...');
-      return await this.runUpworkFallback(filter);
+      console.warn('⚠️ Upwork: El actor no devolvió resultados.');
+      return [];
     }
 
-    // Filter out error results from web-scraper
+    // Filter out error results from generic scrapers if accidentally used
     const validResults = results.filter((r: any) => !r['#error']);
     if (validResults.length === 0) {
-      console.warn('⚠️ Upwork: Resultados son solo errores, intentando fallback...');
-      return await this.runUpworkFallback(filter);
+      console.warn('⚠️ Upwork: Los resultados devueltos contienen errores.');
+      return [];
     }
 
     console.log(`✅ Upwork: ${validResults.length} resultados raw del actor`);
     return this.normalizeUpworkResults(validResults, filter);
-  }
-
-  /**
-   * Fallback: Use apify/web-scraper with Puppeteer if dedicated actor fails
-   */
-  private async runUpworkFallback(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
-    const keyword = encodeURIComponent(filter.keyword);
-    const rate = filter.minHourlyRate ? `&rate=${filter.minHourlyRate}-` : '';
-    const searchUrl = `https://www.upwork.com/nx/search/talent/?q=${keyword}${rate}&sort=relevance`;
-
-    console.log('🔄 Upwork fallback: Usando apify/web-scraper con Puppeteer...');
-
-    const input = {
-      startUrls: [{ url: searchUrl }],
-      maxPagesPerCrawl: 2,
-      pageFunction: this.getUpworkPageFunction(),
-      proxyConfiguration: { useApifyProxy: true },
-      waitUntilNetworkIdle: true,
-    };
-
-    const results = await this.executeActor('apify/web-scraper', input);
-    if (!results || results.length === 0) {
-      console.error('❌ Upwork fallback: Sin resultados');
-      return [];
-    }
-
-    console.log(`✅ Upwork fallback: ${results.length} resultados`);
-    return this.normalizeUpworkResults(results, filter);
-  }
-
-  private getUpworkPageFunction(): string {
-    return `
-      async function pageFunction(context) {
-        const { page, request, log } = context;
-        const results = [];
-        
-        // Wait for content to load
-        await new Promise(r => setTimeout(r, 5000));
-        
-        // Try to extract from any JSON data embedded in the page
-        const pageContent = document.body.innerText || '';
-        
-        // Strategy 1: Look for profile links and extract data around them
-        const profileLinks = document.querySelectorAll('a[href*="/freelancers/"], a[href*="/fl/"]');
-        const seen = new Set();
-        
-        profileLinks.forEach(link => {
-          const href = link.href || link.getAttribute('href') || '';
-          if (seen.has(href) || !href) return;
-          seen.add(href);
-          
-          // Walk up to find the container card
-          let container = link.closest('[data-test], [class*="card"], [class*="tile"], [class*="result"]')
-                       || link.parentElement?.parentElement?.parentElement;
-          
-          if (!container) return;
-          
-          const text = container.innerText || '';
-          const name = container.querySelector('h2, h3, [class*="name"]')?.textContent?.trim() || '';
-          const title = container.querySelector('[class*="title"], [class*="headline"]')?.textContent?.trim() || '';
-          
-          // Extract rate from text (pattern: $XX.XX/hr or $XX/hr)
-          const rateMatch = text.match(/\\$(\\d+(?:\\.\\d+)?)\\/hr/);
-          const rate = rateMatch ? parseFloat(rateMatch[1]) : 0;
-          
-          // Extract success rate (pattern: XX% Job Success)
-          const successMatch = text.match(/(\\d+)%\\s*(?:Job\\s*)?Success/i);
-          const success = successMatch ? parseInt(successMatch[1]) : 0;
-          
-          // Extract country
-          const countryEl = container.querySelector('[class*="country"], [class*="location"]');
-          const country = countryEl?.textContent?.trim() || '';
-          
-          if (name || title) {
-            results.push({
-              name,
-              title,
-              rate,
-              success,
-              country,
-              url: href.startsWith('http') ? href : 'https://www.upwork.com' + href,
-              badges: text.includes('Top Rated Plus') ? ['Top Rated Plus'] 
-                    : text.includes('Top Rated') ? ['Top Rated']
-                    : text.includes('Rising Talent') ? ['Rising Talent'] 
-                    : [],
-            });
-          }
-        });
-        
-        return results;
-      }
-    `;
   }
 
   private normalizeUpworkResults(results: any[], filter: ScrapingFilter): ScrapedCandidate[] {
@@ -345,105 +245,38 @@ export class ApifyService {
 
   private async runFiverrScraper(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
     const keyword = encodeURIComponent(filter.keyword);
-    // Search for sellers (people), not gigs
+    // Search for sellers (people), not gigs, by default if possible
     const searchUrl = `https://www.fiverr.com/search/gigs?query=${keyword}&source=top-bar&ref_ctx_id=2&search_in=everywhere`;
 
     console.log(`🔗 Fiverr URL: ${searchUrl}`);
+    const actorId = this.actors.fiverr;
 
+    // Dedicated Fiverr actors like newpo/fiverr-scraper usually accept search queries
     const input = {
+      searchQuery: filter.keyword,
+      search: filter.keyword,
+      query: filter.keyword,
+      searchUrl: searchUrl,
       startUrls: [{ url: searchUrl }],
-      maxPagesPerCrawl: 3,
-      pageFunction: this.getFiverrPageFunction(),
-      proxyConfiguration: { useApifyProxy: true },
-      waitUntilNetworkIdle: true,
+      maxItems: 50,
+      maxResults: 50
     };
 
-    const actorId = this.actors.fiverr;
     const results = await this.executeActor(actorId, input);
 
     if (!results || results.length === 0) {
-      console.error('❌ Fiverr: Sin resultados del actor');
+      console.error('❌ Fiverr: El actor no devolvió resultados.');
       return [];
     }
 
-    console.log(`✅ Fiverr: ${results.length} resultados raw`);
-    return this.normalizeFiverrResults(results, filter);
-  }
+    const validResults = results.filter((r: any) => !r['#error']);
+    if (validResults.length === 0) {
+      console.warn('⚠️ Fiverr: Los resultados devueltos contienen errores.');
+      return [];
+    }
 
-  private getFiverrPageFunction(): string {
-    return `
-      async function pageFunction(context) {
-        const { page, request, log } = context;
-        const results = [];
-        
-        await new Promise(r => setTimeout(r, 4000));
-        
-        // Strategy: Extract all gig cards and seller info
-        const allLinks = document.querySelectorAll('a[href*="/"]');
-        const processedSellers = new Set();
-        
-        allLinks.forEach(link => {
-          const href = link.href || '';
-          if (!href.includes('fiverr.com') || href.includes('/categories/')) return;
-          
-          const container = link.closest('[class*="gig"], [class*="card"], [class*="listing"]')
-                         || link.parentElement?.parentElement;
-          if (!container) return;
-          
-          const text = container.innerText || '';
-          
-          // Look for seller username patterns
-          const sellerLinks = container.querySelectorAll('a[href*="/"]');
-          let sellerName = '';
-          let sellerUrl = '';
-          
-          sellerLinks.forEach(sl => {
-            const slHref = sl.href || '';
-            // Fiverr seller profile URLs are like /username
-            if (slHref.match(/fiverr\\.com\\/[a-z0-9_]+$/i) && !slHref.includes('/search/') && !slHref.includes('/categories/')) {
-              sellerName = sl.textContent?.trim() || '';
-              sellerUrl = slHref;
-            }
-          });
-          
-          if (!sellerName || processedSellers.has(sellerName)) return;
-          processedSellers.add(sellerName);
-          
-          // Extract gig title
-          const titleEl = container.querySelector('h3, [class*="title"]');
-          const title = titleEl?.textContent?.trim() || '';
-          
-          // Extract price
-          const priceMatch = text.match(/(?:From|Starting at)?\\s*\\$(\\d+)/);
-          const price = priceMatch ? parseInt(priceMatch[1]) : 0;
-          
-          // Extract rating
-          const ratingMatch = text.match(/(\\d+\\.\\d+)\\s*\\(/);
-          const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
-          
-          // Extract review count
-          const reviewMatch = text.match(/\\((\\d+[kK]?\\+?)\\)/);
-          const reviews = reviewMatch ? reviewMatch[1] : '0';
-          
-          // Detect level
-          const isTRS = text.toLowerCase().includes('top rated');
-          const isLvl2 = text.toLowerCase().includes('level 2');
-          const isLvl1 = text.toLowerCase().includes('level 1');
-          
-          results.push({
-            seller: sellerName,
-            sellerUrl: sellerUrl,
-            title: title,
-            price: price,
-            rating: rating,
-            reviews: reviews,
-            level: isTRS ? 'Top Rated Seller' : isLvl2 ? 'Level 2' : isLvl1 ? 'Level 1' : '',
-          });
-        });
-        
-        return results;
-      }
-    `;
+    console.log(`✅ Fiverr: ${validResults.length} resultados raw`);
+    return this.normalizeFiverrResults(validResults, filter);
   }
 
   private normalizeFiverrResults(results: any[], filter: ScrapingFilter): ScrapedCandidate[] {
