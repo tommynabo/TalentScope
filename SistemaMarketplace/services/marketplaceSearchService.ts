@@ -207,36 +207,58 @@ export class MarketplaceSearchService {
   }
 
   private async scrapeUpworkOnce(query: string): Promise<ScrapedCandidate[]> {
-    const searchUrl = new URL('https://www.upwork.com/nx/search/talent/');
-    searchUrl.searchParams.set('q', query);
-    searchUrl.searchParams.set('sort', 'relevance');
+    const dorkQuery = query;
+
+    console.log(`🔗 Upwork Dork: ${dorkQuery}`);
+
+    const actorId = 'apify/google-search-scraper';
 
     const actorInput = {
-      startUrls: [{ url: searchUrl.toString() }],
-      maxResultsPerStartUrl: 50,
-      maxResults: 50,
-      pageFunction: this.getUpworkPageFunction(),
-      proxyConfiguration: {
-        useApifyProxy: true,
-      },
+      queries: dorkQuery,
+      resultsPerPage: 100,
+      maxPagesPerQuery: 1,
+      languageCode: "",
+      mobileResults: false,
+      includeUnfilteredResults: false,
+      saveHtml: false,
+      saveHtmlToKeyValueStore: false
     };
 
     // Execute and get raw items from dataset
     const rawItems = await this.getActorDataset(
-      'apify/web-scraper', // Free actor
+      actorId,
       actorInput,
       300
     );
 
     if (!rawItems.length) {
+      console.warn('⚠️ Upwork (Google): No results returned from actor');
       return [];
     }
 
-    // Flatten pageFunction results
-    const items = this.flattenPageFunctionResults(rawItems);
+    // Google Search Scraper returns results inside organicResults array
+    let organicResults: any[] = [];
+    for (const item of rawItems) {
+      if (item.organicResults && Array.isArray(item.organicResults)) {
+        organicResults = organicResults.concat(item.organicResults);
+      }
+    }
+
+    if (organicResults.length === 0) {
+      console.warn('⚠️ Upwork (Google): No organicResults found.');
+      return [];
+    }
+
+    // Filter valid Upwork profiles
+    const validResults = organicResults.filter((r: any) => {
+      if (!r.url) return false;
+      return r.url.includes('upwork.com/freelancers') || r.url.includes('upwork.com/o/profiles');
+    });
+
+    console.log(`✅ Upwork (Google): ${validResults.length} raw valid results`);
 
     // Convert to ScrapedCandidate format
-    const candidates = items
+    const candidates = validResults
       .map((item, idx) => this.parseUpworkItem(item, idx))
       .filter((c): c is ScrapedCandidate => c !== null)
       .filter(c => c.name.trim().length > 0);
@@ -253,75 +275,67 @@ export class MarketplaceSearchService {
   }
 
   private getUpworkPageFunction(): string {
-    return `
-    async function pageFunction(context) {
-      const { page } = context;
-      const results = [];
-      
-      try {
-        // Find profile cards/links on page
-        const profileLinks = await page.$$('a[href*="/o/"], a[href*="/freelancers/"]');
-        
-        for (const link of profileLinks.slice(0, 100)) {
-          try {
-            const href = await link.evaluate(el => el.getAttribute('href') || '');
-            const name = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
-            
-            // Get title/role from nearby elements
-            const parent = await link.evaluate(el => el.closest('[data-qa], [class*=card], [class*=profile]'));
-            const title = parent ? await link.evaluate(el => el.closest('[data-qa], [class*=card]')?.textContent || '') : '';
-            
-            if (href && name && name.length > 2) {
-              results.push({
-                name: name.substring(0, 100),
-                profileUrl: href,
-                title: title.substring(0, 200),
-              });
-            }
-          } catch (e) {
-            // Skip this link
-          }
-        }
-      } catch (e) {
-        // Page parsing failed, return partial results
-      }
-      
-      return results.slice(0, 50);
-    }
-    `;
+    return ``;
   }
 
   private parseUpworkItem(item: RawActorResult, index: number): ScrapedCandidate | null {
     if (!item || typeof item !== 'object') return null;
 
-    const name = (item.name || item.freelancerName || item.title_name || '').trim();
-    if (!name || name.length < 2) return null;
-
-    const profileUrl = item.profileUrl || item.url || item.link || '';
+    const profileUrl = item.url || '';
     if (!profileUrl || !profileUrl.includes('upwork')) return null;
 
-    const title = item.title || item.headline || item.occupation || 'Freelancer';
+    let title = item.title || 'Upwork Freelancer';
+    let name = 'Upwork Freelancer';
+
+    // Attempt to extract name from format 'Name Initial. - Title - Upwork'
+    if (title.includes(' - ')) {
+      const parts = title.split(' - ');
+      if (parts.length > 0) {
+        name = parts[0].trim();
+      }
+      if (parts.length > 1) {
+        title = parts[1].trim();
+      }
+    }
+
+    if (!name || name.length < 2) return null;
+
+    const bio = item.description || '';
+
+    // Extract rate
+    let rate = 0;
+    const rateMatch = bio.match(/\$([0-9.]+)\s*\/\s*hr/i);
+    if (rateMatch) {
+      rate = parseFloat(rateMatch[1]);
+    }
+
+    // Extract Success Rate
+    let successRate = 0;
+    const successMatch = bio.match(/([0-9]+)%\s*Job\s*Success/i);
+    if (successMatch) {
+      successRate = parseInt(successMatch[1]);
+    }
 
     return {
-      id: `upwork-${index}-${Date.now()}`,
+      id: `upwork-google-${index}-${Date.now()}`,
       name,
       platform: 'Upwork' as FreelancePlatform,
-      platformUsername: profileUrl.split('/').filter(Boolean).pop() || `user-${index}`,
+      platformUsername: profileUrl.split('~').pop()?.split('/').filter(Boolean).pop() || `user-${index}`,
       profileUrl,
       title,
-      country: item.country || item.location || 'Unknown',
-      hourlyRate: this.parseRate(item.rate || item.hourlyRate || item.price),
-      jobSuccessRate: this.parseSuccessRate(item.success || item.jobSuccess),
-      certifications: item.badges || [],
-      bio: item.description || item.bio || '',
+      country: 'Unknown',
+      hourlyRate: rate,
+      jobSuccessRate: successRate,
+      certifications: [],
+      bio: bio,
       scrapedAt: new Date().toISOString(),
       talentScore: 0, // Calculated later
-      skills: Array.isArray(item.skills) ? item.skills : [],
-      badges: item.badges || [],
-      yearsExperience: this.estimateExperience(item),
-      totalEarnings: this.parseNumber(item.totalEarnings),
-      totalJobs: this.parseNumber(item.totalJobs),
-      totalHours: this.parseNumber(item.totalHours),
+      skills: [],
+      badges: [],
+      yearsExperience: 0,
+      totalEarnings: 0,
+      totalJobs: 0,
+      totalHours: 0,
     };
   }
 
@@ -619,12 +633,13 @@ export class MarketplaceSearchService {
   }
 
   private getUpworkQueryVariation(base: string, attempt: number): string {
+    const sitePrefix = 'site:upwork.com/freelancers OR site:upwork.com/o/profiles';
     const variations = [
-      base,
-      `"${base}" top rated`,
-      `${base} "level 1" OR "rising talent"`,
-      `${base} freelance remote`,
-      `${base} expert OR senior`,
+      `${sitePrefix} "${base}"`,
+      `${sitePrefix} "${base}" "top rated"`,
+      `${sitePrefix} ${base} "100% Job Success"`,
+      `${sitePrefix} ${base} freelance remote`,
+      `${sitePrefix} ${base} expert OR senior`,
     ];
     return variations[Math.min(attempt - 1, variations.length - 1)];
   }
