@@ -48,6 +48,12 @@ export interface EnrichedCandidateInCampaign {
   talentScore: number; // 0-100 composite score
   addedAt: string;
 
+  // Deep AI Analysis
+  psychologicalProfile?: string; // Analysis of work style, mentality, motivation
+  businessMoment?: string; // Career stage, positioning, trajectory
+  salesAngle?: string; // How to approach this candidate
+  bottleneck?: string; // What limits their growth
+
   // Pipeline status
   kanbanLane: 'todo' | 'contacted' | 'replied' | 'rejected' | 'hired';
   notes?: string;

@@ -325,6 +325,11 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         talentScore: (enriched as any).talentScore || 0,
         addedAt: enriched.scrapedAt || new Date().toISOString(),
         kanbanLane: 'todo' as const,
+        // Include deep AI analysis
+        psychologicalProfile: (enriched as any).psychologicalProfile,
+        businessMoment: (enriched as any).businessMoment,
+        salesAngle: (enriched as any).salesAngle,
+        bottleneck: (enriched as any).bottleneck,
       }));
 
       // Deduplicate: Filter out candidates that already exist in campaign
@@ -909,7 +914,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
                     PERFIL PSICOLÓGICO
                   </div>
                   <p className="text-sm text-slate-300 leading-relaxed">
-                    {(selectedCandidate as any).psychologicalProfile || 'No analizado (Perfil encolado para enriquecimiento AI).'}
+                    {selectedCandidate.psychologicalProfile || 'No analizado (Perfil encolado para enriquecimiento AI).'}
                   </p>
                 </div>
 
@@ -920,7 +925,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
                     MOMENTO EMPRESARIAL
                   </div>
                   <p className="text-sm text-slate-300 leading-relaxed">
-                    {(selectedCandidate as any).businessMoment || 'No analizado (Perfil encolado para enriquecimiento AI).'}
+                    {selectedCandidate.businessMoment || 'No analizado (Perfil encolado para enriquecimiento AI).'}
                   </p>
                 </div>
 
@@ -931,7 +936,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
                     ÁNGULO DE VENTA
                   </div>
                   <p className="text-sm text-slate-300 leading-relaxed">
-                    {(selectedCandidate as any).salesAngle || 'No analizado (Perfil encolado para enriquecimiento AI).'}
+                    {selectedCandidate.salesAngle || 'No analizado (Perfil encolado para enriquecimiento AI).'}
                   </p>
                 </div>
 
@@ -942,7 +947,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
                     CUELLO DE BOTELLA
                   </div>
                   <p className="text-sm text-slate-300 leading-relaxed">
-                    {(selectedCandidate as any).bottleneck || 'No analizado (Perfil encolado para enriquecimiento AI).'}
+                    {selectedCandidate.bottleneck || 'No analizado (Perfil encolado para enriquecimiento AI).'}
                   </p>
                 </div>
 
