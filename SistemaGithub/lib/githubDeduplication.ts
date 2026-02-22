@@ -1,4 +1,4 @@
-import { supabase } from '../../SistemaGithub/lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { GitHubMetrics } from '../../types/database';
 import { GitHubCandidatePersistence } from '../../SistemaGithub/lib/githubCandidatePersistence';
 

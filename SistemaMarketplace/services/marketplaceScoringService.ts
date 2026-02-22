@@ -123,10 +123,10 @@ export class MarketplaceScoringService {
     }
 
     const candidateSkillsLower = candidate.skills.map(s =>
-      (s.name || s).toLowerCase()
+      (typeof s === 'string' ? s : (s as any).name || '').toLowerCase()
     );
     const filterSkillsLower = filter.skills.map((s: any) =>
-      (s.name || s).toLowerCase()
+      (typeof s === 'string' ? s : (s as any).name || '').toLowerCase()
     );
 
     let matches = 0;

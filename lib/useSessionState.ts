@@ -6,7 +6,7 @@
  * del navegador (se pierde al cerrar la pestaña).
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 export function useSessionState<T>(
   key: string,

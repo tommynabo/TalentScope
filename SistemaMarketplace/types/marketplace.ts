@@ -16,11 +16,13 @@ export enum CandidateStatus {
 }
 
 export interface ScrapingFilter {
-  keyword: string;
-  minHourlyRate: number;
-  minJobSuccessRate: number;
-  certifications: string[];
-  platforms: FreelancePlatform[];
+  keyword?: string;
+  minHourlyRate?: number;
+  minJobSuccessRate?: number;
+  certifications?: string[];
+  platforms?: FreelancePlatform[];
+  skills?: string[];
+  maxResults?: number;
 }
 
 export interface ScrapedCandidate {
@@ -44,6 +46,7 @@ export interface ScrapedCandidate {
   totalEarnings?: number;
   totalJobs?: number;
   totalHours?: number;
+  email?: string;
 }
 
 export interface EnrichedCandidate extends ScrapedCandidate {

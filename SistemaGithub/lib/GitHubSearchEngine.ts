@@ -1,7 +1,7 @@
 
-import { GitHubFilterCriteria, GitHubCandidate, CrossLinkedCandidate } from '../../types/database';
+import { GitHubFilterCriteria, GitHubCandidate } from '../../types/database';
 import { githubService } from '../../lib/githubService';
-import { ApifyCrossSearchService, performCrossSearch } from '../../lib/apifyCrossSearchService';
+import { ApifyCrossSearchService, performCrossSearch, CrossLinkedCandidate } from '../../lib/apifyCrossSearchService';
 import { UnbreakableExecutor, initializeUnbreakableMarker } from '../../lib/UnbreakableExecution';
 import { PRESET_PRODUCT_ENGINEERS } from '../../lib/githubPresets';
 
@@ -14,7 +14,7 @@ export type LogCallback = (message: string) => void;
 export class GitHubSearchEngine {
     private isRunning = false;
     private userIntentedStop = false;
-    
+
     private abortController: AbortController | null = null;
     private unbreakableExecutor: UnbreakableExecutor | null = null;
 
@@ -40,8 +40,8 @@ export class GitHubSearchEngine {
     public async startGitHubSearch(
         query: string,
         maxResults: number,
-        options: { 
-            language: string; 
+        options: {
+            language: string;
             maxAge: number;
             githubFilters?: GitHubFilterCriteria;
             campaignId?: string;
@@ -89,7 +89,7 @@ export class GitHubSearchEngine {
     public async startCrossSearch(
         query: string,
         maxResults: number,
-        options: { 
+        options: {
             language: string;
             maxAge: number;
             githubFilters?: GitHubFilterCriteria;
@@ -141,7 +141,7 @@ export class GitHubSearchEngine {
     ): Promise<void> {
         try {
             onLog("🔍 Iniciando búsqueda en GitHub Code Scan...");
-            
+
             // Use provided filters or fallback to PRESET_PRODUCT_ENGINEERS
             const githubFilters = options.githubFilters || PRESET_PRODUCT_ENGINEERS;
             if (!options.githubFilters) {
@@ -194,7 +194,7 @@ export class GitHubSearchEngine {
     ): Promise<void> {
         try {
             onLog("🔍 Iniciando búsqueda cruzada GitHub ↔ LinkedIn...");
-            
+
             // Use provided filters or fallback to PRESET_PRODUCT_ENGINEERS
             const githubFilters = options.githubFilters || PRESET_PRODUCT_ENGINEERS;
             if (!options.githubFilters) {

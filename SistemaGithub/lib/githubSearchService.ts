@@ -1,4 +1,4 @@
-import { supabase } from '../../SistemaGithub/lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { GitHubMetrics } from '../../types/database';
 
 /**
@@ -86,7 +86,7 @@ export const GitHubSearchService = {
             if (!stored) return null;
 
             const data = JSON.parse(stored);
-            
+
             // Verificar que no haya expirado
             if (data.expiresAt && Date.now() > data.expiresAt) {
                 sessionStorage.removeItem(`github_search_${campaignId}`);
