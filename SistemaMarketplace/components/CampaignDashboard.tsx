@@ -238,6 +238,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         minJobSuccessRate: campaign.searchTerms.minJobSuccessRate,
         certifications: campaign.searchTerms.certifications || [],
         platforms: [campaign.platform as FreelancePlatform],
+        maxResults: leadCount, // ← CRITICO: Pasar el número exacto de leads solicitados
       };
 
       setLogs(prev => [...prev, `📊 FASE 1: Scraping en ${campaign.platform.toUpperCase()}...`]);
