@@ -1,6 +1,5 @@
 import { ScrapingFilter, ScrapedCandidate, FreelancePlatform } from '../types/marketplace';
 import { MarketplaceScoringService } from './marketplaceScoringService';
-import { dedupService } from './marketplaceDeduplicationService';
 
 /**
  * MarketplaceSearchService v3 - REWRITE
@@ -180,21 +179,16 @@ export class MarketplaceSearchService {
         const results = await this.scrapeUpworkOnce(query, remainingNeeded);
         console.log(`   ✅ ${results.length} candidates retrieved`);
 
-        // Filter duplicates against previously found candidates and register new ones
+        // Filter duplicates against previously found candidates
         const newCandidates = results.filter(c => {
-          // Check against profiles seen in this session
+          // Only check against profiles seen in this session (simple dedup)
           if (c.profileUrl && seenProfiles.has(c.profileUrl)) {
             return false;
           }
-          // Check against global deduplication service
-          if (dedupService.isDuplicate(c)) {
-            return false;
-          }
-          // If not a duplicate, add to seen and register
+          // Mark as seen for future checks
           if (c.profileUrl) {
             seenProfiles.add(c.profileUrl);
           }
-          dedupService.registerCandidate(c);
           return true;
         });
 
@@ -382,17 +376,14 @@ export class MarketplaceSearchService {
         const results = await this.scrapeFiverrOnce(query);
         console.log(`   ✅ ${results.length} sellers retrieved`);
 
+        // Filter duplicates against profiles seen in this session
         const newCandidates = results.filter(c => {
           if (c.profileUrl && seenProfiles.has(c.profileUrl)) {
-            return false;
-          }
-          if (dedupService.isDuplicate(c)) {
             return false;
           }
           if (c.profileUrl) {
             seenProfiles.add(c.profileUrl);
           }
-          dedupService.registerCandidate(c);
           return true;
         });
 
@@ -532,17 +523,14 @@ export class MarketplaceSearchService {
         const results = await this.scrapeLinkedInOnce(query);
         console.log(`   ✅ ${results.length} professionals retrieved`);
 
+        // Filter duplicates against profiles seen in this session
         const newCandidates = results.filter(c => {
           if (c.profileUrl && seenProfiles.has(c.profileUrl)) {
-            return false;
-          }
-          if (dedupService.isDuplicate(c)) {
             return false;
           }
           if (c.profileUrl) {
             seenProfiles.add(c.profileUrl);
           }
-          dedupService.registerCandidate(c);
           return true;
         });
 

@@ -145,7 +145,7 @@ export class ApifyService {
 
   private async scrapeUpworkWithBuffer(filter: ScrapingFilter, maxRetries: number = 5): Promise<ScrapedCandidate[]> {
     const buffer: ScrapedCandidate[] = [];
-    const targetCount = filter.maxResults || 50; // Use maxResults
+    const targetCount = 50; // Objetivo de candidatos
     const seenProfiles = new Set<string>(); // Dedup por profileUrl
     let attempt = 0;
 
@@ -153,7 +153,7 @@ export class ApifyService {
 
     while (buffer.length < targetCount && attempt < maxRetries) {
       attempt++;
-
+      
       // Crear variación de query
       const queryKeyword = this.getUpworkQueryVariation(filter.keyword, attempt);
       console.log(`\n[Intento ${attempt}/${maxRetries}] 🔍 Buscando "${queryKeyword}"...`);
@@ -174,7 +174,7 @@ export class ApifyService {
           continue;
         }
 
-        // Filtrar duplicados y agregar al buffer sin exceder el target
+        // Filtrar duplicados (por profileUrl/platformUsername) y agregar al buffer
         const newCandidates = tempResults.filter(c => {
           const key = c.profileUrl || c.platformUsername;
           if (seenProfiles.has(key)) {
@@ -184,17 +184,10 @@ export class ApifyService {
           return true;
         });
 
-        for (const candidate of newCandidates) {
-          if (buffer.length < targetCount) {
-            buffer.push(candidate);
-          } else {
-            break;
-          }
-        }
-
+        buffer.push(...newCandidates);
         console.log(`   📦 Buffer: ${buffer.length}/${targetCount} candidatos acumulados`);
 
-        if (buffer.length === targetCount) {
+        if (buffer.length >= targetCount) {
           console.log(`   ✅ Meta alcanzada en intento ${attempt}`);
           break;
         }
@@ -204,17 +197,16 @@ export class ApifyService {
     }
 
     console.log(`\n✅ Búsqueda completada: ${buffer.length} candidatos únicos encontrados`);
-    return buffer.slice(0, targetCount); // Retorna máximo targetCount
+    return buffer.slice(0, 50); // Retorna máximo 50
   }
 
   private getUpworkQueryVariation(baseKeyword: string, attempt: number): string {
-    const sitePrefix = 'site:upwork.com/freelancers OR site:upwork.com/o/profiles';
     const variations = [
-      `${sitePrefix} "${baseKeyword}" "Spanish"`,
-      `${sitePrefix} "${baseKeyword}" "top rated" "Spanish"`,
-      `${sitePrefix} ${baseKeyword} "100% Job Success" Español`,
-      `${sitePrefix} ${baseKeyword} freelance remote Spanish`,
-      `${sitePrefix} ${baseKeyword} expert OR senior Español`,
+      baseKeyword, // Intento 1: Keyword base
+      `"${baseKeyword}" Top Rated`, // Intento 2: Con badge
+      `${baseKeyword} "rising talent" OR "level 1"`, // Intento 3: Nivel bajo
+      `${baseKeyword} freelance remote`, // Intento 4: Con atributos
+      `${baseKeyword} experienced OR expert OR senior`, // Intento 5: Experiencia
     ];
 
     const selected = variations[Math.min(attempt - 1, variations.length - 1)];
@@ -224,7 +216,7 @@ export class ApifyService {
 
   private extractPageFunctionResults(results: any[]): any[] {
     if (!results || !Array.isArray(results)) return [];
-
+    
     const extracted: any[] = [];
     for (const r of results) {
       if (r && r.pageFunctionResult) {
@@ -241,135 +233,167 @@ export class ApifyService {
   }
 
   private async runUpworkDedicated(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
-    const dorkQuery = filter.keyword;
+    const keyword = encodeURIComponent(filter.keyword);
+    // Many dedicated actors prefer direct query, others prefer searchUrl
+    // Provide both to be safe
+    const searchUrl = `https://www.upwork.com/nx/search/talent/?q=${keyword}&sort=relevance`;
 
-    console.log(`🔗 Upwork Dork: ${dorkQuery}`);
-    const actorId = 'apify/google-search-scraper';
+    console.log(`🔗 Upwork URL: ${searchUrl}`);
+    const actorId = this.actors.upwork;
 
+    // For dedicated actors like powerai/upwork-talent-search-scraper or trudax/upwork-freelancers-scraper
     const input: Record<string, any> = {
-      queries: dorkQuery,
-      resultsPerPage: 100,
-      maxPagesPerQuery: 1,
-      languageCode: "es",
-      mobileResults: false,
-      includeUnfilteredResults: false,
-      saveHtml: false,
-      saveHtmlToKeyValueStore: false
+      searchQuery: filter.keyword,
+      search: filter.keyword,
+      query: filter.keyword,
+      searchUrl: searchUrl,
+      startUrls: [{ url: searchUrl }],
+      maxResults: 50,
+      maxItems: 50
     };
+
+    // Real pageFunction for apify/web-scraper - SIMPLIFIED, working extraction
+    if (actorId === 'apify/web-scraper') {
+      input.pageFunction = `
+        async function pageFunction(context) {
+          const { page } = context;
+          
+          // Simple extraction - find ALL links that look like Upwork profiles
+          const results = [];
+          
+          try {
+            // Get all links on the page
+            const links = await page.$$('a[href*="/o/"], a[href*="/freelancers/"]');
+            
+            for (const link of links.slice(0, 50)) {
+              try {
+                // Get href
+                const href = await link.evaluate(el => el.href);
+                
+                // Get text
+                const text = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
+                
+                if (href && text && text.length > 2) {
+                  results.push({
+                    name: text,
+                    profileUrl: href,
+                    title: 'Freelancer'
+                  });
+                }
+              } catch (e) {
+                // Skip this link
+              }
+            }
+          } catch (e) {
+            // If selector didn't find anything, try a different approach
+          }
+          
+          // If no results, try ANY link that might be a profile
+          if (results.length === 0) {
+            try {
+              const allLinks = await page.$$('a');
+              for (const link of allLinks.slice(0, 100)) {
+                try {
+                  const href = await link.evaluate(el => el.href || '');
+                  const text = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
+                  
+                  // Check if looks like Upwork profile
+                  if ((href.includes('/o/') || href.includes('/freelancers/')) && text && text.length > 2) {
+                    results.push({
+                      name: text,
+                      profileUrl: href,
+                      title: 'Freelancer'
+                    });
+                  }
+                  
+                  if (results.length >= 50) break;
+                } catch (e) {
+                  // Continue
+                }
+              }
+            } catch (e) {
+              // Fallback failed too
+            }
+          }
+          
+          return results.slice(0, 50);
+        }
+      `;
+      input.proxyConfiguration = { useApifyProxy: true };
+    }
 
     const rawResults = await this.executeActor(actorId, input);
 
     if (!rawResults || rawResults.length === 0) {
-      console.warn('⚠️ Upwork (Google): El actor no devolvió resultados.');
+      console.warn('⚠️ Upwork: El actor no devolvió resultados.');
       return [];
     }
 
-    // Google Search Scraper returns results inside organicResults array
-    let organicResults: any[] = [];
+    // Extract pageFunctionResult if it exists (apify/web-scraper wraps results)
+    const results = this.extractPageFunctionResults(rawResults);
 
-    for (const item of rawResults) {
-      if (item.organicResults && Array.isArray(item.organicResults)) {
-        organicResults = organicResults.concat(item.organicResults);
+    // Filter out actual error items (not all items - be lenient)
+    // Only filter if item is explicitly marked as error
+    let validResults = results.filter((r: any) => {
+      if (typeof r === 'object' && r !== null) {
+        // Skip only if explicitly marked as error and has nothing else
+        if (r['#error'] && !r.name && !r.profileUrl) {
+          return false;
+        }
+        // Keep anything with basic info
+        return r.name || r.profileUrl || r.title;
+      }
+      return false;
+    });
+
+    // If we got nothing after filtering, return original results
+    if (validResults.length === 0) {
+      validResults = results.filter((r: any) => typeof r === 'object' && r !== null);
+      if (validResults.length === 0) {
+        console.warn('⚠️ Upwork: Los resultados no tienen formato válido.');
+        return [];
       }
     }
 
-    if (organicResults.length === 0) {
-      console.warn('⚠️ Upwork (Google): No se encontraron organicResults.');
-      return [];
-    }
-
-    // Filter valid Upwork profiles
-    const validResults = organicResults.filter((r: any) => {
-      if (!r.url) return false;
-      return r.url.includes('upwork.com/freelancers') || r.url.includes('upwork.com/o/profiles');
-    });
-
     console.log(`✅ Upwork: ${validResults.length} resultados raw del actor`);
-
-    // Hard slice the Google Search Scraper results to prevent over-fetching
-    const limit = filter.maxResults || 50;
-    const slicedResults = validResults.slice(0, limit);
-
-    return this.normalizeUpworkResults(slicedResults, filter);
+    return this.normalizeUpworkResults(validResults, filter);
   }
 
   private normalizeUpworkResults(results: any[], filter: ScrapingFilter): ScrapedCandidate[] {
     return results
       .map((item: any, index: number) => {
-        const profileUrl = item.url || '';
-        let title = item.title || 'Upwork Freelancer';
-        let name = 'Upwork Freelancer';
+        const name = item.name || item.freelancerName || item.title_name || 'Unknown';
+        const title = item.title || item.headline || item.occupation || 'Freelancer';
+        const rate = this.parseRate(item.rate || item.hourlyRate || item.price || item.chargeRate);
+        const successRate = this.parseSuccessRate(item.success || item.jobSuccess || item.jobSuccessRate);
+        const country = item.country || item.location || 'Unknown';
+        const profileUrl = item.url || item.profileUrl || item.link || '';
+        const badges = item.badges || [];
+        const skills = item.skills || item.topSkills || [];
+        const totalEarnings = this.parseNumber(item.totalEarnings || item.earnings);
+        const totalJobs = this.parseNumber(item.totalJobs || item.jobs);
+        const totalHours = this.parseNumber(item.totalHours || item.hours);
 
-        // Extract name from title or URL
-        if (title.includes(' - ')) {
-          const parts = title.split(' - ');
-          if (parts.length > 0) {
-            name = parts[0].trim();
-          }
-          if (parts.length > 1) {
-            title = parts[1].trim();
-          }
-        } else if (profileUrl.includes('/freelancers/')) {
-          const parts = profileUrl.split('/freelancers/');
-          if (parts.length > 1) {
-            name = parts[1].split('/')[0].split('~')[0].replace(/[^a-zA-Z0-9]/g, ' ').trim();
-            if (name.length > 0) {
-              name = name.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-            }
-          }
-        } else if (profileUrl.includes('/o/profiles/')) {
-          const parts = profileUrl.split('/o/profiles/');
-          if (parts.length > 1) {
-            name = parts[1].split('/')[0].split('~')[0].replace(/[^a-zA-Z0-9]/g, ' ').trim();
-            if (name.length > 0) {
-              name = name.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-            }
-          }
-        }
-
-        if (name === 'Upwork Freelancer' && title.length > 0) {
-          name = title.split('|')[0].replace(/Upwork/gi, '').trim();
-        }
-        if (name.length === 0) name = 'Upwork Freelancer';
-
-
-        const bio = item.description || '';
-
-        // Extract rate (from description snippet)
-        let rate = 0;
-        const rateMatch = bio.match(/\$([0-9.]+)\s*\/\s*hr/i);
-        if (rateMatch) {
-          rate = parseFloat(rateMatch[1]);
-        }
-
-        // Extract Success Rate (from description snippet)
-        let successRate = 0;
-        const successMatch = bio.match(/([0-9]+)%\s*Job\s*Success/i);
-        if (successMatch) {
-          successRate = parseInt(successMatch[1]);
-        }
-
-        // For Google Search results, most detailed fields are not available directly
         const candidate: ScrapedCandidate = {
-          id: `upwork-${index}-${Date.now()}`,
+          id: `upwork-${item.userId || item.id || item.ciphertext || index}-${Date.now()}`,
           name,
           platform: 'Upwork' as FreelancePlatform,
-          platformUsername: profileUrl.split('~').pop()?.split('/').filter(Boolean).pop() || `user-${index}`,
+          platformUsername: profileUrl.split('/').filter(Boolean).pop() || `user-${index}`,
           profileUrl,
           title,
-          country: 'Unknown', // Not directly available from Google snippet
+          country,
           hourlyRate: rate,
           jobSuccessRate: successRate,
-          certifications: [], // Not directly available
-          bio: bio,
+          certifications: badges,
+          bio: item.description || item.bio || item.overview || '',
           scrapedAt: new Date().toISOString(),
           talentScore: 0, // Will be calculated below
-          skills: [], // Not directly available
-          badges: [], // Not directly available
-          yearsExperience: 0, // Not directly available
-          totalEarnings: 0, // Not directly available
-          totalJobs: 0, // Not directly available
-          totalHours: 0, // Not directly available
+          skills: Array.isArray(skills) ? skills : [],
+          badges,
+          yearsExperience: this.estimateExperience(item),
+          totalEarnings,
+          totalJobs,
+          totalHours,
         };
 
         // Calculate TalentScore
@@ -378,8 +402,7 @@ export class ApifyService {
       })
       .filter(c => c.name !== 'Unknown' && c.name.trim().length > 0)
       .filter(c => c.talentScore >= 1) // Very lenient threshold - can be filtered by user
-      .sort((a, b) => b.talentScore - a.talentScore)
-      .slice(0, filter.maxResults || 50); // Final hard cap to be absolutely certain
+      .sort((a, b) => b.talentScore - a.talentScore); // Best first
   }
 
   // ─── FIVERR SCRAPING ────────────────────────────────────────────────────
@@ -403,7 +426,7 @@ export class ApifyService {
 
   private async scrapeFiverrWithBuffer(filter: ScrapingFilter, maxRetries: number = 5): Promise<ScrapedCandidate[]> {
     const buffer: ScrapedCandidate[] = [];
-    const targetCount = filter.maxResults || 40; // Use maxResults
+    const targetCount = 40; // Objetivo para Fiverr (menos que Upwork)
     const seenProfiles = new Set<string>(); // Dedup por profileUrl
     let attempt = 0;
 
@@ -411,7 +434,7 @@ export class ApifyService {
 
     while (buffer.length < targetCount && attempt < maxRetries) {
       attempt++;
-
+      
       // Crear variación de query
       const queryKeyword = this.getFiverrQueryVariation(filter.keyword, attempt);
       console.log(`\n[Intento ${attempt}/${maxRetries}] 🔍 Buscando "${queryKeyword}"...`);
@@ -441,17 +464,10 @@ export class ApifyService {
           return true;
         });
 
-        for (const candidate of newCandidates) {
-          if (buffer.length < targetCount) {
-            buffer.push(candidate);
-          } else {
-            break;
-          }
-        }
-
+        buffer.push(...newCandidates);
         console.log(`   📦 Buffer: ${buffer.length}/${targetCount} candidatos acumulados`);
 
-        if (buffer.length === targetCount) {
+        if (buffer.length >= targetCount) {
           console.log(`   ✅ Meta alcanzada en intento ${attempt}`);
           break;
         }
@@ -461,17 +477,16 @@ export class ApifyService {
     }
 
     console.log(`\n✅ Búsqueda completada: ${buffer.length} candidatos únicos encontrados`);
-    return buffer.slice(0, targetCount);
+    return buffer.slice(0, 40);
   }
 
   private getFiverrQueryVariation(baseKeyword: string, attempt: number): string {
-    const sitePrefix = 'site:fiverr.com';
     const variations = [
-      `${sitePrefix} "${baseKeyword}" "Spanish"`,
-      `${sitePrefix} "${baseKeyword}" "top rated" "Spanish"`,
-      `${sitePrefix} "${baseKeyword}" seller Español`,
-      `${sitePrefix} "${baseKeyword}" portfolio Spanish`,
-      `${sitePrefix} "${baseKeyword}" studio Español`,
+      baseKeyword,
+      `"${baseKeyword}" rating high`,
+      `${baseKeyword} "top rated" OR "pro"`,
+      `${baseKeyword} seller "english" OR "spanish"`,
+      `${baseKeyword} portfolio reviews`,
     ];
 
     const selected = variations[Math.min(attempt - 1, variations.length - 1)];
@@ -480,116 +495,167 @@ export class ApifyService {
   }
 
   private async runFiverrScraper(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
-    const dorkQuery = filter.keyword; // From getFiverrQueryVariation
+    const keyword = encodeURIComponent(filter.keyword);
+    // Search for sellers (people), not gigs, by default if possible
+    const searchUrl = `https://www.fiverr.com/search/gigs?query=${keyword}&source=top-bar&ref_ctx_id=2&search_in=everywhere`;
 
-    console.log(`🔗 Fiverr Dork: ${dorkQuery}`);
+    console.log(`🔗 Fiverr URL: ${searchUrl}`);
+    const actorId = this.actors.fiverr;
 
-    // We force Google Search Scraper because Fiverr Cloudflare blocks direct scrape too
-    const actorId = 'apify/google-search-scraper';
-
+    // Dedicated Fiverr actors like newpo/fiverr-scraper usually accept search queries
     const input: Record<string, any> = {
-      queries: dorkQuery,
-      resultsPerPage: 100,
-      maxPagesPerQuery: 1,
-      languageCode: "es",
-      mobileResults: false,
-      includeUnfilteredResults: false,
-      saveHtml: false,
-      saveHtmlToKeyValueStore: false
+      searchQuery: filter.keyword,
+      search: filter.keyword,
+      query: filter.keyword,
+      searchUrl: searchUrl,
+      startUrls: [{ url: searchUrl }],
+      maxItems: 50,
+      maxResults: 50
     };
+
+    // Real pageFunction for apify/web-scraper - SIMPLIFIED, working extraction
+    if (actorId === 'apify/web-scraper') {
+      input.pageFunction = `
+        async function pageFunction(context) {
+          const { page } = context;
+          
+          const results = [];
+          
+          try {
+            // Get all links
+            const links = await page.$$('a');
+            
+            for (const link of links.slice(0, 100)) {
+              try {
+                const href = await link.evaluate(el => el.href || '');
+                const text = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
+                
+                // Fiverr seller links typically have pattern /[username] or contain /user/
+                // OR are seller profile links
+                if (text && text.length > 1 && href && href.includes('fiverr.com')) {
+                  // Check if it looks like a seller profile URL
+                  if (href.match(/fiverr\\.com\\/[a-z0-9_-]+\\/?$/i) || 
+                      href.includes('/user/') ||
+                      href.includes('seller')) {
+                    results.push({
+                      seller: text,
+                      sellerUrl: href,
+                      title: 'Seller'
+                    });
+                  }
+                }
+                
+                if (results.length >= 50) break;
+              } catch (e) {
+                // Continue
+              }
+            }
+          } catch (e) {
+            // Fallback
+          }
+          
+          // If nothing found, try to extract from any Fiverr links
+          if (results.length === 0) {
+            try {
+              const links = await page.$$('a[href*="fiverr"]');
+              for (const link of links.slice(0, 50)) {
+                try {
+                  const href = await link.evaluate(el => el.href || '');
+                  const text = await link.evaluate(el => (el.textContent || el.innerText || '').trim());
+                  
+                  if (text && href) {
+                    results.push({
+                      seller: text,
+                      sellerUrl: href,
+                      title: 'Seller'
+                    });
+                  }
+                } catch (e) {
+                  // Skip
+                }
+              }
+            } catch (e) {
+              // Fallback failed
+            }
+          }
+          
+          return results.slice(0, 50);
+        }
+      `;
+      input.proxyConfiguration = { useApifyProxy: true };
+    }
 
     const rawResults = await this.executeActor(actorId, input);
 
     if (!rawResults || rawResults.length === 0) {
-      console.error('❌ Fiverr (Google): El actor no devolvió resultados.');
+      console.error('❌ Fiverr: El actor no devolvió resultados.');
       return [];
     }
 
-    // Google Search Scraper returns results inside organicResults array
-    let organicResults: any[] = [];
+    // Extract pageFunctionResult if it exists (apify/web-scraper wraps results)
+    const results = this.extractPageFunctionResults(rawResults);
 
-    for (const item of rawResults) {
-      if (item.organicResults && Array.isArray(item.organicResults)) {
-        organicResults = organicResults.concat(item.organicResults);
+    // Better error filtering - be lenient
+    let validResults = results.filter((r: any) => {
+      if (typeof r === 'object' && r !== null) {
+        // Skip only if explicitly error and empty
+        if (r['#error'] && !r.seller && !r.sellerUrl && !r.title) {
+          return false;
+        }
+        return r.seller || r.sellerUrl || r.title;
+      }
+      return false;
+    });
+
+    // If nothing valid, return all objects
+    if (validResults.length === 0) {
+      validResults = results.filter((r: any) => typeof r === 'object' && r !== null);
+      if (validResults.length === 0) {
+        console.warn('⚠️ Fiverr: Los resultados no tienen formato válido.');
+        return [];
       }
     }
 
-    if (organicResults.length === 0) {
-      console.warn('⚠️ Fiverr (Google): No se encontraron organicResults.');
-      return [];
-    }
-
-    // Filter valid Fiverr profiles or gigs
-    const validResults = organicResults.filter((r: any) => {
-      if (!r.url) return false;
-      return r.url.includes('fiverr.com/');
-    });
-
-    console.log(`✅ Fiverr: ${validResults.length} resultados raw de Google`);
-
-    // Hard slice the Google Search Scraper results to prevent over-fetching
-    const limit = filter.maxResults || 40;
-    const slicedResults = validResults.slice(0, limit);
-
-    return this.normalizeFiverrResults(slicedResults, filter);
+    console.log(`✅ Fiverr: ${validResults.length} resultados raw`);
+    return this.normalizeFiverrResults(validResults, filter);
   }
 
   private normalizeFiverrResults(results: any[], filter: ScrapingFilter): ScrapedCandidate[] {
     return results
+      .filter((item: any) => {
+        const seller = (item.seller || '').toLowerCase();
+        return seller && seller.length > 2 && !seller.includes('fiverr') && item.title;
+      })
       .map((item: any, index: number) => {
-        // Parse Google snippet data
-        const profileUrl = item.url || '';
-        let title = item.title || 'Fiverr Freelancer';
-
-        let name = 'Fiverr Seller';
-        // Extract real name or username from URL or title
-        if (title.includes('|') || title.includes('-')) {
-          name = title.split(/[|-]/)[0].replace(/Fiverr/gi, '').trim();
-        } else if (profileUrl.includes('fiverr.com/')) {
-          const parts = profileUrl.split('fiverr.com/');
-          if (parts.length > 1) {
-            const username = parts[1].split('/')[0].split('?')[0];
-            if (username && !['categories', 'search', 'gigs'].includes(username)) {
-              name = username;
-            }
-          }
-        }
-
-        const bio = item.description || '';
-
-        // Simple regex attempts for rating
-        let ratingMatch = bio.match(/([0-9.]+)\s*\(\s*([0-9,]+)\s*\)/);
-        let rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
-        let successRate = rating > 0 ? (rating / 5) * 100 : 0; // Convert 5 star to 100%
+        const badges: string[] = [];
+        if (item.level) badges.push(item.level);
+        const reviewCount = parseInt(String(item.reviews || '0').replace(/[kK]/g, '000').replace(/\+/g, ''));
+        if (reviewCount > 100) badges.push('Highly Reviewed');
 
         const candidate: ScrapedCandidate = {
-          id: `fiverr-google-${index}-${Date.now()}`,
-          name,
+          id: `fiverr-${item.sellerUrl?.split('/').pop() || index}-${Date.now()}`,
+          name: item.seller || 'Unknown Seller',
           platform: 'Fiverr' as FreelancePlatform,
-          platformUsername: name.replace(/\s+/g, '').toLowerCase() || `seller-${index}`,
-          profileUrl,
-          title,
+          platformUsername: item.seller?.toLowerCase().replace(/\s+/g, '') || 'unknown',
+          profileUrl: item.sellerUrl || 'https://www.fiverr.com',
+          title: item.title || 'Gig Provider',
           country: 'Unknown',
-          hourlyRate: 0, // Fiverr tends to be project-based
-          jobSuccessRate: successRate,
-          certifications: [],
-          bio: bio,
+          hourlyRate: this.parseRate(item.price),
+          jobSuccessRate: this.parseRating(item.rating),
+          certifications: badges,
+          bio: item.reviews ? `${item.reviews} reviews` : '',
           scrapedAt: new Date().toISOString(),
           talentScore: 0,
-          skills: [filter.keyword],
-          badges: [],
+          skills: [],
+          badges,
           yearsExperience: 0,
-          totalEarnings: 0,
-          totalJobs: 0,
-          totalHours: 0,
         };
 
         candidate.talentScore = this.calculateTalentScore(candidate, filter);
         return candidate;
       })
       .filter(c => c.talentScore >= 1) // Very lenient - filter in UI
-      .sort((a, b) => b.talentScore - a.talentScore)
-      .slice(0, filter.maxResults || 40); // Final hard cap
+      .sort((a, b) => b.talentScore - a.talentScore);
   }
 
   // ─── LINKEDIN SCRAPING ──────────────────────────────────────────────────
@@ -613,7 +679,7 @@ export class ApifyService {
 
   private async scrapeLinkedInWithBuffer(filter: ScrapingFilter, maxRetries: number = 5): Promise<ScrapedCandidate[]> {
     const buffer: ScrapedCandidate[] = [];
-    const targetCount = filter.maxResults || 50; // Use maxResults
+    const targetCount = 30; // Objetivo para LinkedIn (menos dados disponibles)
     const seenLinkedInProfiles = new Set<string>(); // Dedup por profileUrl
     let attempt = 0;
 
@@ -621,7 +687,7 @@ export class ApifyService {
 
     while (buffer.length < targetCount && attempt < maxRetries) {
       attempt++;
-
+      
       // Crear variación de query
       const queryKeyword = this.getLinkedInQueryVariation(filter.keyword, attempt);
       console.log(`\n[Intento ${attempt}/${maxRetries}] 🔍 Buscando "${queryKeyword}"...`);
