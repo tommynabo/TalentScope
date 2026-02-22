@@ -270,8 +270,12 @@ export class MarketplaceSearchService {
 
     console.log(`✅ Upwork (Google): ${validResults.length} raw valid results`);
 
+    // Hard slice the Google Search Scraper results to prevent over-fetching
+    const limit = 50; // Assuming a default limit if filter.maxResults is not available here
+    const slicedResults = validResults.slice(0, limit);
+
     // Convert to ScrapedCandidate format
-    const candidates = validResults
+    const candidates = slicedResults
       .map((item, idx) => this.parseUpworkItem(item, idx))
       .filter((c): c is ScrapedCandidate => c !== null)
       .filter(c => c.name.trim().length > 0);

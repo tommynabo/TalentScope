@@ -2,13 +2,15 @@ import { ScrapedCandidate, EnrichedCandidate } from '../types/marketplace';
 
 export class AIEnrichmentService {
   private openaiApiKey: string;
+  private apifyApiKey: string;
   private modelId: string = 'gpt-4o-mini'; // Usa mini para mejor precio
 
-  constructor(openaiApiKey: string) {
+  constructor(openaiApiKey: string, apifyApiKey: string = import.meta.env.VITE_APIFY_API_KEY) {
     if (!openaiApiKey) {
       throw new Error('OpenAI API key is required');
     }
     this.openaiApiKey = openaiApiKey;
+    this.apifyApiKey = apifyApiKey;
   }
 
   async validateConnection(): Promise<boolean> {
@@ -33,7 +35,7 @@ export class AIEnrichmentService {
       // Parse OpenAI response
       const parsed = this.parseEnrichmentResponse(enrichedData, candidate);
 
-      return {
+      const enrichedResponse: EnrichedCandidate = {
         ...candidate,
         linkedInUrl: parsed.linkedInUrl,
         emails: parsed.emails,
@@ -48,12 +50,20 @@ export class AIEnrichmentService {
         salesAngle: parsed.salesAngle,
         bottleneck: parsed.bottleneck,
       };
+
+      // Intentar buscar email y LinkedIn reales con Apify si tenemos algo útil del perfil (opcional)
+      const realEmail = await this.findRealEmail(enrichedResponse, parsed.companyOrPortfolio);
+      if (realEmail) {
+        enrichedResponse.emails.push(realEmail);
+      }
+
+      return enrichedResponse;
     } catch (error) {
       console.error('Enrichment error:', error);
       // Return candidate with minimal enrichment on error
       return {
         ...candidate,
-        emails: this.generatePlausibleEmails(candidate),
+        emails: [], // Do not hallucinate emails
         photoValidated: false,
         identityConfidenceScore: 0.4,
       };
@@ -85,6 +95,7 @@ Please provide:
 8. Momento Empresarial: En qué etapa de su carrera/negocio se encuentra (ej: empezando, escalando, experto consolidado). (En Español)
 9. Ángulo de Venta: Cuál es el mejor enfoque persuasivo para venderle una oportunidad o colaboración. (En Español)
 10. Cuello de Botella: Su principal desafío actual según su perfil (ej: falta de tiempo por exceso de trabajo, tarifas bajas, falta de posicionamiento). (En Español)
+11. Empresa Actual o Portfolio: Extrae el nombre de la empresa donde trabaja, su marca personal o la URL de su portfolio si lo menciona. (Si no hay, pon null).
 
 Respond ONLY as valid JSON, no markdown:
 {
@@ -92,6 +103,7 @@ Respond ONLY as valid JSON, no markdown:
   "linkedInId": "string or null",
   "businessEmails": ["email1@domain.com", "email2@domain.com"],
   "personalEmails": ["personal@email.com"],
+  "companyOrPortfolio": "string or null",
   "photoValidated": boolean,
   "confidenceScore": number,
   "skills": ["skill1", "skill2", "skill3"],
@@ -141,6 +153,7 @@ Respond ONLY as valid JSON, no markdown:
   ): {
     linkedInUrl?: string;
     emails: string[];
+    companyOrPortfolio?: string;
     photoValidated: boolean;
     confidenceScore: number;
     skills?: string[];
@@ -164,7 +177,8 @@ Respond ONLY as valid JSON, no markdown:
         emails: [
           ...(parsed.businessEmails || []),
           ...(parsed.personalEmails || []),
-        ].filter((e: string) => e && this.isValidEmail(e)),
+        ].filter((e: string) => e && this.isValidEmail(e) && !e.includes('upwork.com') && !e.includes('fiverr.com')), // No dummy emails
+        companyOrPortfolio: parsed.companyOrPortfolio,
         photoValidated: parsed.photoValidated || false,
         confidenceScore: Math.max(0, Math.min(1, parsed.confidenceScore || 0.5)),
         skills: parsed.skills || [],
@@ -177,35 +191,83 @@ Respond ONLY as valid JSON, no markdown:
     } catch (error) {
       console.warn('Failed to parse OpenAI response:', error);
       return {
-        emails: this.generatePlausibleEmails(fallback),
+        emails: [],
         photoValidated: false,
         confidenceScore: 0.5,
       };
     }
   }
 
-  private generatePlausibleEmails(candidate: ScrapedCandidate): string[] {
-    // Generate plausible emails based on name/username
-    const nameParts = candidate.name.toLowerCase().split(' ');
-    const firstName = nameParts[0] || candidate.platformUsername;
-    const lastName = nameParts[1] || '';
-    const username = candidate.platformUsername.toLowerCase();
+  private async findRealEmail(candidate: ScrapedCandidate, companyOrPortfolio: string | null | undefined): Promise<string | null> {
+    if (!this.apifyApiKey) return null;
 
-    const domains = [
-      'gmail.com',
-      'outlook.com',
-      'yahoo.com',
-      'protonmail.com',
-      'work.com',
-    ];
+    try {
+      let searchQuery = `"${candidate.name}" email OR contacto`;
+      if (companyOrPortfolio && companyOrPortfolio !== 'null') {
+        searchQuery = `"${candidate.name}" "${companyOrPortfolio}" email OR contacto`;
+      } else if (candidate.platform === 'Upwork' || candidate.platform === 'Fiverr') {
+        // For platforms like Upwork/Fiverr, try to find their personal site or company
+        searchQuery = `"${candidate.name}" freelance portfolio email OR contacto`;
+      }
 
-    const emails = [
-      `${firstName}.${lastName}@${domains[0]}`.replace(/\.@/, '@'),
-      `${username}@${domains[1]}`,
-      `${firstName}@${domains[2]}`,
-    ].filter((e) => this.isValidEmail(e));
+      const input = {
+        queries: searchQuery,
+        resultsPerPage: 10,
+        maxPagesPerQuery: 1,
+        languageCode: "es", // Enforce Spanish language for Better Local Results
+        mobileResults: false,
+        includeUnfilteredResults: false,
+        saveHtml: false,
+        saveHtmlToKeyValueStore: false
+      };
 
-    return [...new Set(emails)]; // Remove duplicates
+      const response = await fetch(`https://api.apify.com/v2/acts/apify~google-search-scraper/runs?token=${this.apifyApiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input)
+      });
+
+      if (!response.ok) return null;
+      const runData = await response.json();
+      const runId = runData.data.id;
+
+      // Poll for completion
+      let isRunning = true;
+      while (isRunning) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const statusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${this.apifyApiKey}`);
+        const statusData = await statusRes.json();
+        if (statusData.data.status !== 'RUNNING' && statusData.data.status !== 'READY') {
+          isRunning = false;
+        }
+      }
+
+      // Fetch dataset
+      const resultRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${this.apifyApiKey}`);
+      const dataset = await resultRes.json();
+
+      if (!dataset || !dataset.length) return null;
+
+      for (const result of dataset) {
+        if (!result.organicResults) continue;
+
+        for (const item of result.organicResults) {
+          if (item.url && item.url.includes('linkedin.com')) continue; // usually private without auth
+
+          if (item.description) {
+            const emailMatch = item.description.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi);
+            if (emailMatch && emailMatch.length > 0) {
+              const validEmails = emailMatch.filter((e: string) => this.isValidEmail(e) && !e.includes('upwork.com') && !e.includes('fiverr.com'));
+              if (validEmails.length > 0) return validEmails[0];
+            }
+          }
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Error finding real email with Apify:', error);
+      return null;
+    }
   }
 
   private isValidEmail(email: string): boolean {

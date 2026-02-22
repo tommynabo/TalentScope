@@ -285,7 +285,12 @@ export class ApifyService {
     });
 
     console.log(`✅ Upwork: ${validResults.length} resultados raw del actor`);
-    return this.normalizeUpworkResults(validResults, filter);
+
+    // Hard slice the Google Search Scraper results to prevent over-fetching
+    const limit = filter.maxResults || 50;
+    const slicedResults = validResults.slice(0, limit);
+
+    return this.normalizeUpworkResults(slicedResults, filter);
   }
 
   private normalizeUpworkResults(results: any[], filter: ScrapingFilter): ScrapedCandidate[] {
@@ -373,7 +378,8 @@ export class ApifyService {
       })
       .filter(c => c.name !== 'Unknown' && c.name.trim().length > 0)
       .filter(c => c.talentScore >= 1) // Very lenient threshold - can be filtered by user
-      .sort((a, b) => b.talentScore - a.talentScore); // Best first
+      .sort((a, b) => b.talentScore - a.talentScore)
+      .slice(0, filter.maxResults || 50); // Final hard cap to be absolutely certain
   }
 
   // ─── FIVERR SCRAPING ────────────────────────────────────────────────────
@@ -520,7 +526,12 @@ export class ApifyService {
     });
 
     console.log(`✅ Fiverr: ${validResults.length} resultados raw de Google`);
-    return this.normalizeFiverrResults(validResults, filter);
+
+    // Hard slice the Google Search Scraper results to prevent over-fetching
+    const limit = filter.maxResults || 40;
+    const slicedResults = validResults.slice(0, limit);
+
+    return this.normalizeFiverrResults(slicedResults, filter);
   }
 
   private normalizeFiverrResults(results: any[], filter: ScrapingFilter): ScrapedCandidate[] {
@@ -577,7 +588,8 @@ export class ApifyService {
         return candidate;
       })
       .filter(c => c.talentScore >= 1) // Very lenient - filter in UI
-      .sort((a, b) => b.talentScore - a.talentScore);
+      .sort((a, b) => b.talentScore - a.talentScore)
+      .slice(0, filter.maxResults || 40); // Final hard cap
   }
 
   // ─── LINKEDIN SCRAPING ──────────────────────────────────────────────────
