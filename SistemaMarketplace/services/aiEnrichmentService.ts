@@ -330,13 +330,29 @@ CRITICAL: Respond ONLY with valid JSON. NO markdown, NO explanations, NO preambl
   }
 
   async enrichBatch(candidates: ScrapedCandidate[]): Promise<EnrichedCandidate[]> {
+    console.log(`\n📊 Starting batch enrichment for ${candidates.length} candidates...`);
+    
     // Process in parallel with OpenAI (rate limiting handled by service)
     const enriched = await Promise.allSettled(
-      candidates.map((c) => this.enrichCandidate(c))
+      candidates.map((c, idx) => {
+        console.log(`   [${idx + 1}/${candidates.length}] Processing: ${c.name}`);
+        return this.enrichCandidate(c);
+      })
     );
 
-    return enriched
-      .map((result) => (result.status === 'fulfilled' ? result.value : null))
-      .filter((c) => c !== null) as EnrichedCandidate[];
+    // Track results
+    const successful = enriched.filter(r => r.status === 'fulfilled').map(r => (r as any).value);
+    const failed = enriched.filter(r => r.status === 'rejected');
+
+    if (failed.length > 0) {
+      console.warn(`⚠️ ${failed.length} candidates failed to enrich`);
+      failed.forEach(f => {
+        console.error(`   ❌ Error:`, (f as any).reason);
+      });
+    }
+
+    console.log(`✅ Batch enrichment complete: ${successful.length}/${candidates.length} successful`);
+
+    return successful.filter((c) => c !== null) as EnrichedCandidate[];
   }
 }

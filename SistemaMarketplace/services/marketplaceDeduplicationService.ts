@@ -78,6 +78,15 @@ export class MarketplaceDeduplicationService {
   }
 
   /**
+   * Register multiple candidates at once (for initializing from existing campaign)
+   */
+  registerCandidates(candidates: ScrapedCandidate[]): void {
+    console.log(`🔄 Initializing dedup service with ${candidates.length} existing candidates...`);
+    candidates.forEach(candidate => this.registerCandidate(candidate));
+    console.log(`✅ Dedup service initialized`);
+  }
+
+  /**
    * Deduplicate an array of candidates
    * Returns only unique candidates (keeps first occurrence)
    */

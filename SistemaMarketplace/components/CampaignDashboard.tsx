@@ -9,6 +9,7 @@ import { Campaign, EnrichedCandidateInCampaign } from '../types/campaigns';
 import { KanbanBoard } from './KanbanBoard';
 import { ManualEnrichmentModal } from './ManualEnrichmentModal';
 import { MarketplaceRaidService } from '../services/marketplaceRaidService';
+import { dedupService } from '../services/marketplaceDeduplicationService';
 import { ScrapingFilter, FreelancePlatform } from '../types/marketplace';
 
 import Toast from '../../components/Toast';
@@ -210,6 +211,31 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
 
       setLogs(prev => [...prev, `✅ Servicio marketplace inicializado`]);
 
+      // ⭐ CRITICAL: Initialize deduplication service with existing candidates from campaign
+      if (campaign.candidates.length > 0) {
+        // Convert campaign candidates back to ScrapedCandidate format for dedup registration
+        const existingScraped = campaign.candidates.map(c => ({
+          id: c.candidateId,
+          name: c.name,
+          platform: c.platform,
+          platformUsername: c.name.toLowerCase().replace(/\s+/g, '-'),
+          profileUrl: c.linkedInUrl || `https://${c.platform.toLowerCase()}.com/${c.name}`,
+          title: '',
+          country: '',
+          hourlyRate: c.hourlyRate,
+          jobSuccessRate: c.jobSuccessRate,
+          certifications: [],
+          bio: '',
+          scrapedAt: c.addedAt,
+          talentScore: c.talentScore,
+          skills: [],
+          badges: [],
+          yearsExperience: 0,
+          email: c.email,
+        }));
+        dedupService.registerCandidates(existingScraped);
+      }
+
       // Validate connections
       setLogs(prev => [...prev, `🔗 Validando conexiones a APIs...`]);
       const connections = await raidService.validateAllConnections();
@@ -301,8 +327,43 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         kanbanLane: 'todo' as const,
       }));
 
+      // Deduplicate: Filter out candidates that already exist in campaign
+      const existingProfileUrls = new Set(campaign.candidates.map(c => c.linkedInUrl || c.email));
+      const dedupedNewCandidates = newCandidates.filter(candidate => {
+        // Check by LinkedIn URL
+        if (candidate.linkedInUrl && existingProfileUrls.has(candidate.linkedInUrl)) {
+          console.log(`⚠️ Duplicate detected (LinkedIn): ${candidate.name}`);
+          return false;
+        }
+        // Check by email
+        if (candidate.email && existingProfileUrls.has(candidate.email)) {
+          console.log(`⚠️ Duplicate detected (Email): ${candidate.name}`);
+          return false;
+        }
+        // Check by name (fuzzy)
+        const nameExists = campaign.candidates.some(c => 
+          c.name.toLowerCase().trim() === candidate.name.toLowerCase().trim()
+        );
+        if (nameExists) {
+          console.log(`⚠️ Duplicate detected (Name): ${candidate.name}`);
+          return false;
+        }
+        return true;
+      });
+
+      if (dedupedNewCandidates.length === 0) {
+        setLogs(prev => [...prev, `⚠️ Todos los candidatos encontrados ya existen en la campaña`]);
+        setSearching(false);
+        return;
+      }
+
+      if (dedupedNewCandidates.length < newCandidates.length) {
+        const duplicatesCount = newCandidates.length - dedupedNewCandidates.length;
+        setLogs(prev => [...prev, `⚠️ ${duplicatesCount} candidatos eliminados por duplicados`]);
+      }
+
       // Add to campaign
-      const updatedCandidates = [...campaign.candidates, ...newCandidates];
+      const updatedCandidates = [...campaign.candidates, ...dedupedNewCandidates];
       const stats = {
         total: updatedCandidates.length,
         inTodo: updatedCandidates.filter(c => c.kanbanLane === 'todo').length,
@@ -316,9 +377,9 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
 
       onUpdateCampaign({ ...campaign, candidates: updatedCandidates, stats });
 
-      setLogs(prev => [...prev, `✅ ${newCandidates.length} candidatos REALES añadidos al pipeline exitosamente`]);
+      setLogs(prev => [...prev, `✅ ${dedupedNewCandidates.length} candidatos REALES añadidos al pipeline exitosamente`]);
       setLogs(prev => [...prev, `🚀 Búsqueda completada con éxito`]);
-      setToast({ show: true, message: `✅ ${newCandidates.length} nuevos candidatos REALES añadidos` });
+      setToast({ show: true, message: `✅ ${dedupedNewCandidates.length} nuevos candidatos enriquecidos añadidos` });
     } catch (error) {
       console.error('Search error:', error);
       setLogs(prev => [...prev, `❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`]);
