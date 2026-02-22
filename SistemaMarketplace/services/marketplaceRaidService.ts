@@ -15,7 +15,7 @@ export class MarketplaceRaidService {
     supabaseKey?: string
   ) {
     this.searchService = new MarketplaceSearchService(apifyKey);
-    this.aiEnrichmentService = new AIEnrichmentService(openaiKey);
+    this.aiEnrichmentService = new AIEnrichmentService(openaiKey, apifyKey);
   }
 
   static getInstance(

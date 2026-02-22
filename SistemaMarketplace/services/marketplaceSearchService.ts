@@ -164,17 +164,20 @@ export class MarketplaceSearchService {
     const buffer: ScrapedCandidate[] = [];
     const seenProfiles = new Set<string>();
     let attempt = 0;
+    const targetCount = filter.maxResults || 50;
 
-    console.log(`🔍 Upwork: Starting buffer search... target=${filter.maxResults || 50}`);
+    console.log(`🔍 Upwork: Starting buffer search... target=${targetCount}`);
 
-    while (buffer.length < (filter.maxResults || 50) && attempt < maxAttempts) {
+    while (buffer.length < targetCount && attempt < maxAttempts) {
       attempt++;
 
       const query = this.getUpworkQueryVariation(filter.keyword, attempt);
       console.log(`\n[Attempt ${attempt}/${maxAttempts}] Searching: "${query}"`);
 
       try {
-        const results = await this.scrapeUpworkOnce(query);
+        // Calculate how many more candidates we need (important: pass remaining needed)
+        const remainingNeeded = targetCount - buffer.length;
+        const results = await this.scrapeUpworkOnce(query, remainingNeeded);
         console.log(`   ✅ ${results.length} candidates retrieved`);
 
         // Filter duplicates against previously found candidates and register new ones
@@ -195,19 +198,19 @@ export class MarketplaceSearchService {
           return true;
         });
 
-        // Add to buffer, but don't exceed maxResults
+        // Add to buffer, but don't exceed target
         for (const candidate of newCandidates) {
-          if (buffer.length < (filter.maxResults || 50)) {
+          if (buffer.length < targetCount) {
             buffer.push(candidate);
           } else {
             break; // Stop adding if we reached the limit
           }
         }
 
-        console.log(`   📦 Buffer: ${buffer.length}/${filter.maxResults || 50}`);
+        console.log(`   📦 Buffer: ${buffer.length}/${targetCount}`);
 
         // Break early if we hit exactly what we need
-        if (buffer.length === (filter.maxResults || 50)) {
+        if (buffer.length === targetCount) {
           break;
         }
       } catch (err) {
@@ -216,10 +219,10 @@ export class MarketplaceSearchService {
     }
 
     console.log(`\n✅ Upwork search complete: ${buffer.length} unique candidates`);
-    return buffer.slice(0, filter.maxResults || 50).sort((a, b) => (b.talentScore || 0) - (a.talentScore || 0));
+    return buffer.slice(0, targetCount).sort((a, b) => (b.talentScore || 0) - (a.talentScore || 0));
   }
 
-  private async scrapeUpworkOnce(query: string): Promise<ScrapedCandidate[]> {
+  private async scrapeUpworkOnce(query: string, remainingNeeded: number = 50): Promise<ScrapedCandidate[]> {
     const dorkQuery = query;
 
     console.log(`🔗 Upwork Dork: ${dorkQuery}`);
@@ -270,9 +273,8 @@ export class MarketplaceSearchService {
 
     console.log(`✅ Upwork (Google): ${validResults.length} raw valid results`);
 
-    // Hard slice the Google Search Scraper results to prevent over-fetching
-    const limit = 50; // Assuming a default limit if filter.maxResults is not available here
-    const slicedResults = validResults.slice(0, limit);
+    // Slice only the amount we need (respect the buffer limit)
+    const slicedResults = validResults.slice(0, remainingNeeded);
 
     // Convert to ScrapedCandidate format
     const candidates = slicedResults

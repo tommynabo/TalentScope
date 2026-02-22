@@ -1,9 +1,11 @@
 import { ScrapedCandidate, EnrichedCandidate } from '../types/marketplace';
+import { ContactResearchService } from './contactResearchService';
 
 export class AIEnrichmentService {
   private openaiApiKey: string;
   private apifyApiKey: string;
   private modelId: string = 'gpt-4o-mini'; // Usa mini para mejor precio
+  private contactResearch: ContactResearchService;
 
   constructor(openaiApiKey: string, apifyApiKey: string = import.meta.env.VITE_APIFY_API_KEY) {
     if (!openaiApiKey) {
@@ -11,6 +13,7 @@ export class AIEnrichmentService {
     }
     this.openaiApiKey = openaiApiKey;
     this.apifyApiKey = apifyApiKey;
+    this.contactResearch = new ContactResearchService(apifyApiKey, openaiApiKey);
   }
 
   async validateConnection(): Promise<boolean> {
@@ -26,21 +29,35 @@ export class AIEnrichmentService {
 
   async enrichCandidate(candidate: ScrapedCandidate): Promise<EnrichedCandidate> {
     try {
-      // Generate enrichment prompt
-      const enrichmentPrompt = this.generateEnrichmentPrompt(candidate);
+      console.log(`\n🤖 Starting AI enrichment for ${candidate.name}...`);
 
-      // Call OpenAI to extract/infer information
+      // Step 1: Research REAL LinkedIn & email addresses
+      const [linkedInResult, emailResult, portfoliosResult] = await Promise.all([
+        this.contactResearch.findLinkedInProfile(candidate),
+        this.contactResearch.findEmailAddresses(candidate, null),
+        this.contactResearch.findPortfolios(candidate),
+      ]);
+
+      console.log(`   ✅ Research complete: LinkedIn=${linkedInResult.linkedInUrl ? '✓' : '✗'}, Emails=${emailResult.emails.length}, Portfolios=${portfoliosResult.websites.length}`);
+
+      // Step 2: AI analysis of profile with deep insights
+      const enrichmentPrompt = this.generateEnrichmentPrompt(candidate, portfoliosResult);
       const enrichedData = await this.callOpenAI(enrichmentPrompt);
-
-      // Parse OpenAI response
       const parsed = this.parseEnrichmentResponse(enrichedData, candidate);
+
+      // Combine real research with AI analysis
+      // Emails: Priority to real found emails, fallback to AI inferred
+      const allEmails = [
+        ...emailResult.emails, // Real emails first
+        ...(parsed.emails || []).filter(e => !emailResult.emails.includes(e)), // AI emails if not already found
+      ].filter((e, i, arr) => arr.indexOf(e) === i); // Deduplicate
 
       const enrichedResponse: EnrichedCandidate = {
         ...candidate,
-        linkedInUrl: parsed.linkedInUrl,
-        emails: parsed.emails,
+        linkedInUrl: linkedInResult.linkedInUrl || parsed.linkedInUrl,
+        emails: allEmails.slice(0, 5), // Limit to 5 emails
         photoValidated: parsed.photoValidated,
-        identityConfidenceScore: parsed.confidenceScore,
+        identityConfidenceScore: Math.max(linkedInResult.confidence, parsed.confidenceScore),
         skills: parsed.skills || candidate.skills || [],
         yearsExperience: typeof parsed.experience === 'number'
           ? parsed.experience
@@ -51,12 +68,8 @@ export class AIEnrichmentService {
         bottleneck: parsed.bottleneck,
       };
 
-      // Intentar buscar email y LinkedIn reales con Apify si tenemos algo útil del perfil (opcional)
-      const realEmail = await this.findRealEmail(enrichedResponse, parsed.companyOrPortfolio);
-      if (realEmail) {
-        enrichedResponse.emails.push(realEmail);
-      }
-
+      console.log(`   ✅ Enrichment complete: emails=${enrichedResponse.emails.length}, confidence=${enrichedResponse.identityConfidenceScore.toFixed(2)}`);
+      
       return enrichedResponse;
     } catch (error) {
       console.error('Enrichment error:', error);
@@ -70,13 +83,14 @@ export class AIEnrichmentService {
     }
   }
 
-  private generateEnrichmentPrompt(candidate: ScrapedCandidate): string {
-    return `Analyze this freelancer profile data and extract structured information.
-CRÍTICO: TU LENGUAJE DOMINANTE DEBE SER 100% ESPAÑOL. TODAS TUS RESPUESTAS, ANÁLISIS Y TEXTOS DEBEN ESTAR EN ESPAÑOL Y SOLO ESPAÑOL.
+  private generateEnrichmentPrompt(candidate: ScrapedCandidate, portfolios: { websites: string[]; portfolioContent: string }): string {
+    return `Analyze this freelancer profile DEEPLY and extract ONLY VERIFIED information. Do NOT hallucinate data.
 
-Profile Name: ${candidate.name}
+=== PERFIL DEL FREELANCER ===
+Name: ${candidate.name}
 Platform: ${candidate.platform}
 Username: ${candidate.platformUsername}
+Profile URL: ${candidate.profileUrl}
 Title: ${candidate.title}
 Job Success Rate: ${candidate.jobSuccessRate}%
 Bio: ${candidate.bio}
@@ -84,35 +98,37 @@ Hourly Rate: $${candidate.hourlyRate}
 Country: ${candidate.country}
 Certifications: ${candidate.certifications?.join(', ') || 'None'}
 
-Please provide:
-1. Probable LinkedIn profile URL or ID (infer from name and profile)
-2. Plausible business/professional emails (format: firstname.lastname@domain or firstname@company)
-3. Assessment of profile legitimacy (true/false)
-4. Confidence score (0-1) of identity verification
-5. Core skills and specializations based on title and certifications (En Español)
-6. Estimated years of experience based on success rate
-7. Perfil Psicológico: Breve análisis de su personalidad y mentalidad laboral basado en cómo se presenta en su bio y título. (En Español)
-8. Momento Empresarial: En qué etapa de su carrera/negocio se encuentra (ej: empezando, escalando, experto consolidado). (En Español)
-9. Ángulo de Venta: Cuál es el mejor enfoque persuasivo para venderle una oportunidad o colaboración. (En Español)
-10. Cuello de Botella: Su principal desafío actual según su perfil (ej: falta de tiempo por exceso de trabajo, tarifas bajas, falta de posicionamiento). (En Español)
-11. Empresa Actual o Portfolio: Extrae el nombre de la empresa donde trabaja, su marca personal o la URL de su portfolio si lo menciona. (Si no hay, pon null).
+=== PORTFOLIO RESEARCH (from real web search) ===
+${portfolios.websites.length > 0 ? `Found portfolios: ${portfolios.websites.join(', ')}` : 'No portfolios found'}
+Portfolio content analysis: ${portfolios.portfolioContent}
 
-Respond ONLY as valid JSON, no markdown:
+=== INSTRUCTIONS ===
+CRITICAL: You are analyzing a REAL freelancer profile. Your task:
+1. Extract ONLY what you can confirm from the bio, title, and certifications
+2. DO NOT generate fictional emails (e.g., name@upwork.com)
+3. DO NOT invent LinkedIn URLs if you cannot infer them from the name/profile
+4. Be conservative with confidence scores - only mark HIGH when data is explicit
+5. ALL RESPONSES MUST BE IN 100% SPANISH. No English except JSON field names.
+
+Provide structured analysis in this JSON format ONLY:
+
 {
-  "linkedInUrl": "string or null",
-  "linkedInId": "string or null",
-  "businessEmails": ["email1@domain.com", "email2@domain.com"],
-  "personalEmails": ["personal@email.com"],
-  "companyOrPortfolio": "string or null",
-  "photoValidated": boolean,
-  "confidenceScore": number,
-  "skills": ["skill1", "skill2", "skill3"],
-  "experience": "X años or null",
-  "psychologicalProfile": "string",
-  "businessMoment": "string",
-  "salesAngle": "string",
-  "bottleneck": "string"
-}`;
+  "linkedInUrl": "null or inferred LinkedIn URL if possible from name",
+  "linkedInId": "null or LinkedIn username/id if inferrable",
+  "businessEmails": ["ONLY if explicitly mentioned in bio or portfolio - otherwise empty array"],
+  "personalEmails": ["ONLY if verifiable - otherwise empty array"],
+  "companyOrPortfolio": "Company name or portfolio URL mentioned in bio or inferred from context",
+  "photoValidated": true/false (based on profile completeness and consistency),
+  "confidenceScore": 0.0-1.0 (CONSERVATIVE - 0.9+ only if name/title highly specific, <0.5 if generic),
+  "skills": ["extracted from title and certifications ONLY - in Spanish"],
+  "experience": "number of years inferred from job success rate and profile maturity, null if unknown",
+  "psychologicalProfile": "2-3 sentence analysis in Spanish of work style based on bio content",
+  "businessMoment": "Current career stage in Spanish (ej: 'Consolidando carrera como developer especializado')",
+  "salesAngle": "How to approach them in Spanish - what would motivate them based on profile",
+  "bottleneck": "Main challenge limiting their growth based on rate, feedback, or bio hints"
+}
+
+Respond ONLY with valid JSON, no markdown or explanation.`;
   }
 
   private async callOpenAI(prompt: string): Promise<string> {
@@ -195,78 +211,6 @@ Respond ONLY as valid JSON, no markdown:
         photoValidated: false,
         confidenceScore: 0.5,
       };
-    }
-  }
-
-  private async findRealEmail(candidate: ScrapedCandidate, companyOrPortfolio: string | null | undefined): Promise<string | null> {
-    if (!this.apifyApiKey) return null;
-
-    try {
-      let searchQuery = `"${candidate.name}" email OR contacto`;
-      if (companyOrPortfolio && companyOrPortfolio !== 'null') {
-        searchQuery = `"${candidate.name}" "${companyOrPortfolio}" email OR contacto`;
-      } else if (candidate.platform === 'Upwork' || candidate.platform === 'Fiverr') {
-        // For platforms like Upwork/Fiverr, try to find their personal site or company
-        searchQuery = `"${candidate.name}" freelance portfolio email OR contacto`;
-      }
-
-      const input = {
-        queries: searchQuery,
-        resultsPerPage: 10,
-        maxPagesPerQuery: 1,
-        languageCode: "es", // Enforce Spanish language for Better Local Results
-        mobileResults: false,
-        includeUnfilteredResults: false,
-        saveHtml: false,
-        saveHtmlToKeyValueStore: false
-      };
-
-      const response = await fetch(`https://api.apify.com/v2/acts/apify~google-search-scraper/runs?token=${this.apifyApiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input)
-      });
-
-      if (!response.ok) return null;
-      const runData = await response.json();
-      const runId = runData.data.id;
-
-      // Poll for completion
-      let isRunning = true;
-      while (isRunning) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const statusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${this.apifyApiKey}`);
-        const statusData = await statusRes.json();
-        if (statusData.data.status !== 'RUNNING' && statusData.data.status !== 'READY') {
-          isRunning = false;
-        }
-      }
-
-      // Fetch dataset
-      const resultRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${this.apifyApiKey}`);
-      const dataset = await resultRes.json();
-
-      if (!dataset || !dataset.length) return null;
-
-      for (const result of dataset) {
-        if (!result.organicResults) continue;
-
-        for (const item of result.organicResults) {
-          if (item.url && item.url.includes('linkedin.com')) continue; // usually private without auth
-
-          if (item.description) {
-            const emailMatch = item.description.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi);
-            if (emailMatch && emailMatch.length > 0) {
-              const validEmails = emailMatch.filter((e: string) => this.isValidEmail(e) && !e.includes('upwork.com') && !e.includes('fiverr.com'));
-              if (validEmails.length > 0) return validEmails[0];
-            }
-          }
-        }
-      }
-      return null;
-    } catch (error) {
-      console.error('Error finding real email with Apify:', error);
-      return null;
     }
   }
 

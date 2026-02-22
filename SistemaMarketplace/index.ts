@@ -21,6 +21,7 @@ export { MarketplaceScoringService } from './services/marketplaceScoringService'
 export { MarketplaceDeduplicationService, dedupService } from './services/marketplaceDeduplicationService';
 export { ApifyService } from './services/apifyService';
 export { AIEnrichmentService } from './services/aiEnrichmentService';
+export { ContactResearchService } from './services/contactResearchService';
 export { FreeEnrichmentService } from './services/freeEnrichmentService';
 
 export { MarketplaceCSVExport } from './utils/csvExport';
