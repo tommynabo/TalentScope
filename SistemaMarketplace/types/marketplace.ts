@@ -23,6 +23,9 @@ export interface ScrapingFilter {
   platforms?: FreelancePlatform[];
   skills?: string[];
   maxResults?: number;
+  // Existing candidates to skip during scraping
+  existingProfileUrls?: string[];
+  existingEmails?: string[];
 }
 
 export interface ScrapedCandidate {

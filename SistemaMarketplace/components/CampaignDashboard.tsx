@@ -264,7 +264,10 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         minJobSuccessRate: campaign.searchTerms.minJobSuccessRate,
         certifications: campaign.searchTerms.certifications || [],
         platforms: [campaign.platform as FreelancePlatform],
-        maxResults: leadCount, // ← CRITICO: Pasar el número exacto de leads solicitados
+        maxResults: leadCount,
+        // Pass existing candidates so scraper skips them
+        existingProfileUrls: campaign.candidates.map(c => c.linkedInUrl).filter(Boolean) as string[],
+        existingEmails: campaign.candidates.map(c => c.email).filter(Boolean) as string[],
       };
 
       setLogs(prev => [...prev, `📊 FASE 1: Scraping en ${campaign.platform.toUpperCase()}...`]);
@@ -332,39 +335,25 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         bottleneck: (enriched as any).bottleneck,
       }));
 
-      // Deduplicate: Filter out candidates that already exist in campaign
-      const existingProfileUrls = new Set(campaign.candidates.map(c => c.linkedInUrl || c.email));
+      // Safety check: Filter out any candidates that somehow slipped through
+      // (The scraper should have already filtered these out)
       const dedupedNewCandidates = newCandidates.filter(candidate => {
-        // Check by LinkedIn URL
-        if (candidate.linkedInUrl && existingProfileUrls.has(candidate.linkedInUrl)) {
-          console.log(`⚠️ Duplicate detected (LinkedIn): ${candidate.name}`);
-          return false;
-        }
-        // Check by email
-        if (candidate.email && existingProfileUrls.has(candidate.email)) {
-          console.log(`⚠️ Duplicate detected (Email): ${candidate.name}`);
-          return false;
-        }
-        // Check by name (fuzzy)
-        const nameExists = campaign.candidates.some(c => 
-          c.name.toLowerCase().trim() === candidate.name.toLowerCase().trim()
+        const alreadyExists = campaign.candidates.some(c => 
+          (c.linkedInUrl && candidate.linkedInUrl && c.linkedInUrl === candidate.linkedInUrl) ||
+          (c.email && candidate.email && c.email === candidate.email) ||
+          (c.name.toLowerCase().trim() === candidate.name.toLowerCase().trim())
         );
-        if (nameExists) {
-          console.log(`⚠️ Duplicate detected (Name): ${candidate.name}`);
-          return false;
+        
+        if (alreadyExists) {
+          console.warn(`⏭️ Safety filter: Skipped duplicate ${candidate.name}`);
         }
-        return true;
+        return !alreadyExists;
       });
 
       if (dedupedNewCandidates.length === 0) {
-        setLogs(prev => [...prev, `⚠️ Todos los candidatos encontrados ya existen en la campaña`]);
+        setLogs(prev => [...prev, `⚠️ No new candidates found - all results already exist in campaign`]);
         setSearching(false);
         return;
-      }
-
-      if (dedupedNewCandidates.length < newCandidates.length) {
-        const duplicatesCount = newCandidates.length - dedupedNewCandidates.length;
-        setLogs(prev => [...prev, `⚠️ ${duplicatesCount} candidatos eliminados por duplicados`]);
       }
 
       // Add to campaign
