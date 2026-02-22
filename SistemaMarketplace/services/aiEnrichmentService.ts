@@ -41,9 +41,24 @@ export class AIEnrichmentService {
       console.log(`   ✅ Research complete: LinkedIn=${linkedInResult.linkedInUrl ? '✓' : '✗'}, Emails=${emailResult.emails.length}, Portfolios=${portfoliosResult.websites.length}`);
 
       // Step 2: AI analysis of profile with deep insights
+      console.log(`   🔍 Running deep profile analysis with AI...`);
       const enrichmentPrompt = this.generateEnrichmentPrompt(candidate, portfoliosResult);
       const enrichedData = await this.callOpenAI(enrichmentPrompt);
       const parsed = this.parseEnrichmentResponse(enrichedData, candidate);
+
+      // Log extracted analysis
+      if (parsed.psychologicalProfile) {
+        console.log(`   👤 Psychological: ${parsed.psychologicalProfile.substring(0, 80)}...`);
+      }
+      if (parsed.businessMoment) {
+        console.log(`   📈 Business Moment: ${parsed.businessMoment.substring(0, 80)}...`);
+      }
+      if (parsed.bottleneck) {
+        console.log(`   ⚠️  Bottleneck: ${parsed.bottleneck.substring(0, 80)}...`);
+      }
+      if (parsed.salesAngle) {
+        console.log(`   🎯 Sales Angle: ${parsed.salesAngle.substring(0, 80)}...`);
+      }
 
       // Combine real research with AI analysis
       // Emails: Priority to real found emails, fallback to AI inferred
@@ -84,51 +99,125 @@ export class AIEnrichmentService {
   }
 
   private generateEnrichmentPrompt(candidate: ScrapedCandidate, portfolios: { websites: string[]; portfolioContent: string }): string {
-    return `Analyze this freelancer profile DEEPLY and extract ONLY VERIFIED information. Do NOT hallucinate data.
+    return `You are an expert recruiter and talent analyst. Analyze this freelancer profile DEEPLY and provide REAL, DATA-DRIVEN insights.
 
-=== PERFIL DEL FREELANCER ===
+════════════════════════════════════════════════════════════════════════
+📋 UPWORK PROFILE DATA
+════════════════════════════════════════════════════════════════════════
 Name: ${candidate.name}
-Platform: ${candidate.platform}
-Username: ${candidate.platformUsername}
-Profile URL: ${candidate.profileUrl}
 Title: ${candidate.title}
+Hourly Rate: $${candidate.hourlyRate}/h
 Job Success Rate: ${candidate.jobSuccessRate}%
-Bio: ${candidate.bio}
-Hourly Rate: $${candidate.hourlyRate}
 Country: ${candidate.country}
-Certifications: ${candidate.certifications?.join(', ') || 'None'}
+Profile URL: ${candidate.profileUrl}
+Bio/Description: "${candidate.bio}"
+Certifications: ${candidate.certifications?.join(', ') || 'None listed'}
 
-=== PORTFOLIO RESEARCH (from real web search) ===
-${portfolios.websites.length > 0 ? `Found portfolios: ${portfolios.websites.join(', ')}` : 'No portfolios found'}
-Portfolio content analysis: ${portfolios.portfolioContent}
+════════════════════════════════════════════════════════════════════════
+🌐 PORTFOLIO & ONLINE PRESENCE
+════════════════════════════════════════════════════════════════════════
+Portfolios Found: ${portfolios.websites.length > 0 ? portfolios.websites.join(', ') : 'No portfolios found'}
+Portfolio Analysis: ${portfolios.portfolioContent}
 
-=== INSTRUCTIONS ===
-CRITICAL: You are analyzing a REAL freelancer profile. Your task:
-1. Extract ONLY what you can confirm from the bio, title, and certifications
-2. DO NOT generate fictional emails (e.g., name@upwork.com)
-3. DO NOT invent LinkedIn URLs if you cannot infer them from the name/profile
-4. Be conservative with confidence scores - only mark HIGH when data is explicit
-5. ALL RESPONSES MUST BE IN 100% SPANISH. No English except JSON field names.
+════════════════════════════════════════════════════════════════════════
+🔍 YOUR ANALYSIS TASK - DEEP PROFESSIONAL INSIGHTS
+════════════════════════════════════════════════════════════════════════
 
-Provide structured analysis in this JSON format ONLY:
+Analyze EACH section below systematically. Extract REAL insights, not generic statements.
+
+### 1. PROFESSIONAL PROFILE ANALYSIS
+- What is their actual specialization? (From title, bio, certifications)
+- What is their POSITIONING in the market? (Premium? Budget? Specialist?)
+- Are they generalist or specialist? (Evidence?)
+- How specialized are their skills? What makes them unique?
+
+### 2. EXPERIENCE & CAREER STAGE
+- Based on Job Success Rate (${candidate.jobSuccessRate}%): Are they established or struggling?
+  * 90%+ = Well-established, consistent quality
+  * 80-90% = Developing track record
+  * 70-80% = Learning, variable quality
+  * <70% = Early stage or quality issues
+- How many years of experience? (Infer from consistency, rate positioning)
+- Career trajectory: Are they growing, stable, or declining?
+
+### 3. PSYCHOLOGICAL & WORK STYLE
+- Work Mentality: Do they seem eager to learn? Confident? Defensive?
+- Communication: Professional tone in bio? Clear or vague?
+- Motivation: What drives them? Money? Mastery? Impact?
+- Risk Profile: Do they play it safe or take on challenging projects?
+- Reliability: What does Job Success Rate tell you about their consistency?
+
+### 4. BUSINESS POSITIONING & MOMENT
+- Career Stage: Are they starting, scaling, consolidating, or plateauing?
+- What's their business strategy? (Low price/high volume? Premium/selective?)
+- Are they "desperate for work" or "selective about clients"? (Infer from rate + success rate)
+- Growth trajectory: Are they hiring more clients, less? Specializing or broadening?
+
+### 5. REAL MOTIVATIONS & BOTTLENECKS
+- What's ACTUALLY limiting their growth?
+  * Too expensive for market? (Rate too high)
+  * Not expensive enough? (Undervalued)
+  * Limited time? (Fully booked?)
+  * Skill gaps? (Struggling with certain tech?)
+  * Positioning issues? (Generic title)
+  * Geographic limitations? (Timezone, language?)
+  * Confidence/pipeline? (Inconsistent jobs?)
+- What would motivate THEM specifically?
+
+### 6. SALES ANGLE - HOW TO APPROACH
+Think about their actual situation, NOT generic advice:
+- If they're desperate: Offer quick cash, flexibility
+- If they're selective: Offer interesting projects, growth, impact
+- If they're strategic: Offer long-term relationships, retainers
+- If they're struggling: Offer mentorship, steady income
+- If they're premium: Offer premium clients, exclusivity
+
+════════════════════════════════════════════════════════════════════════
+📝 RESPONSE FORMAT - JSON ONLY
+════════════════════════════════════════════════════════════════════════
+
+Respond ONLY with valid JSON (no markdown, no explanations). Every field must be:
+✓ Data-driven (based on profile data)
+✓ Specific (not generic)
+✓ In Spanish (100%)
+✓ Actionable (can be used immediately)
 
 {
-  "linkedInUrl": "null or inferred LinkedIn URL if possible from name",
-  "linkedInId": "null or LinkedIn username/id if inferrable",
-  "businessEmails": ["ONLY if explicitly mentioned in bio or portfolio - otherwise empty array"],
-  "personalEmails": ["ONLY if verifiable - otherwise empty array"],
-  "companyOrPortfolio": "Company name or portfolio URL mentioned in bio or inferred from context",
-  "photoValidated": true/false (based on profile completeness and consistency),
-  "confidenceScore": 0.0-1.0 (CONSERVATIVE - 0.9+ only if name/title highly specific, <0.5 if generic),
-  "skills": ["extracted from title and certifications ONLY - in Spanish"],
-  "experience": "number of years inferred from job success rate and profile maturity, null if unknown",
-  "psychologicalProfile": "2-3 sentence analysis in Spanish of work style based on bio content",
-  "businessMoment": "Current career stage in Spanish (ej: 'Consolidando carrera como developer especializado')",
-  "salesAngle": "How to approach them in Spanish - what would motivate them based on profile",
-  "bottleneck": "Main challenge limiting their growth based on rate, feedback, or bio hints"
+  "linkedInUrl": null,
+  "linkedInId": null,
+  "businessEmails": [],
+  "personalEmails": [],
+  "companyOrPortfolio": null,
+  "photoValidated": false,
+  "confidenceScore": 0.5,
+  
+  "skills": ["skill1", "skill2"],
+  "experience": 5,
+  
+  "psychologicalProfile": "PERSON: Desarrollador muy [trait1] y [trait2]. STYLE: [how they work]. MOTIVATION: [what drives them]. RELIABILITY: [consistency indicator based on JSR]. COMMUNICATION: [professional tone assessment].",
+  
+  "businessMoment": "STAGE: [starting/scaling/consolidating/plateauing]. STRATEGY: [their market strategy]. POSITIONING: [premium/mid/budget]. TRAJECTORY: [growing/stable/struggling] because [specific reason].",
+  
+  "salesAngle": "APPROACH: [specific tactic based on their situation]. VALUE PROP: [what would genuinely motivate them]. POSITIONING: [how to frame opportunity]. URGENCY: [why now is good timing for them].",
+  
+  "bottleneck": "PRIMARY: [main limiting factor with evidence]. SECONDARY: [if applicable]. IMPACT: [how it's limiting growth]. FIXABLE: [yes/no and how]."
 }
 
-Respond ONLY with valid JSON, no markdown or explanation.`;
+════════════════════════════════════════════════════════════════════════
+⚡ CRITICAL RULES
+════════════════════════════════════════════════════════════════════════
+✓ Use ACTUAL numbers and data from the profile
+✓ Be SPECIFIC - avoid "hard worker", use evidence instead
+✓ Be REALISTIC - this person is real, not a stereotype
+✓ Link claims to data - if you say they're struggling, cite JSR or rate
+✓ Think like a recruiter - what's ACTUALLY useful here?
+✗ NO generic profiles like "Excellent developer, hard working"
+✗ NO hallucinated data
+✗ NO generic motivations - be specific to THIS person
+✗ NO vague analyses - every statement must be backed by profile data
+✗ NO English - 100% SPANISH in all text fields
+
+START YOUR ANALYSIS NOW:`;
   }
 
   private async callOpenAI(prompt: string): Promise<string> {
@@ -143,15 +232,25 @@ Respond ONLY with valid JSON, no markdown or explanation.`;
         messages: [
           {
             role: 'system',
-            content: 'You are a data enrichment specialist. Extract and infer professional information from freelancer profiles. Always respond with valid JSON.',
+            content: `You are an elite professional talent analyst and recruiter with 20+ years of experience.
+Your task is to analyze freelancer profiles and extract DEEP, ACTIONABLE insights based on real data.
+
+KEY PRINCIPLES:
+- Be specific, not generic. Every statement must be backed by profile data.
+- Think like a strategic recruiter. What would actually help land this person?
+- Be realistic. This is a real person, not a stereotype.
+- Analyze motivations, bottlenecks, and positioning based on ACTUAL numbers.
+- Provide insights that reveal the person's true situation and needs.
+
+CRITICAL: Respond ONLY with valid JSON. NO markdown, NO explanations, NO preamble.`,
           },
           {
             role: 'user',
             content: prompt,
           },
         ],
-        temperature: 0.3, // Low temperature for consistency
-        max_tokens: 500,
+        temperature: 0.7, // More creative analysis while staying grounded
+        max_tokens: 1200, // More space for detailed analysis
       }),
     });
 
@@ -188,21 +287,32 @@ Respond ONLY with valid JSON, no markdown or explanation.`;
 
       const parsed = JSON.parse(cleanedResponse);
 
+      // Extract experience as number if it's a number, otherwise try to parse
+      let experienceValue: string | undefined = undefined;
+      if (parsed.experience !== null && parsed.experience !== undefined) {
+        if (typeof parsed.experience === 'number') {
+          experienceValue = parsed.experience.toString();
+        } else if (typeof parsed.experience === 'string') {
+          experienceValue = parsed.experience;
+        }
+      }
+
       return {
-        linkedInUrl: parsed.linkedInUrl,
+        linkedInUrl: parsed.linkedInUrl || undefined,
         emails: [
           ...(parsed.businessEmails || []),
           ...(parsed.personalEmails || []),
-        ].filter((e: string) => e && this.isValidEmail(e) && !e.includes('upwork.com') && !e.includes('fiverr.com')), // No dummy emails
-        companyOrPortfolio: parsed.companyOrPortfolio,
+        ].filter((e: string) => e && this.isValidEmail(e) && !e.includes('upwork.com') && !e.includes('fiverr.com')),
+        companyOrPortfolio: parsed.companyOrPortfolio || undefined,
         photoValidated: parsed.photoValidated || false,
         confidenceScore: Math.max(0, Math.min(1, parsed.confidenceScore || 0.5)),
-        skills: parsed.skills || [],
-        experience: parsed.experience,
-        psychologicalProfile: parsed.psychologicalProfile || "Perfil profesional enfocado en ejecución de proyectos en su área técnica.",
-        businessMoment: parsed.businessMoment || "Consolidando presencia como talento independiente.",
-        salesAngle: parsed.salesAngle || "Destacar la oportunidad de trabajar en proyectos de mayor impacto y rentabilidad.",
-        bottleneck: parsed.bottleneck || "Escalabilidad limitada de sus ingresos por la cantidad de horas disponibles.",
+        skills: parsed.skills && Array.isArray(parsed.skills) ? parsed.skills : [],
+        experience: experienceValue,
+        // Deep analysis fields - these SHOULD be detailed now, not generic
+        psychologicalProfile: parsed.psychologicalProfile || undefined,
+        businessMoment: parsed.businessMoment || undefined,
+        salesAngle: parsed.salesAngle || undefined,
+        bottleneck: parsed.bottleneck || undefined,
       };
     } catch (error) {
       console.warn('Failed to parse OpenAI response:', error);
