@@ -162,6 +162,7 @@ export class MarketplaceSearchService {
     }
 
     const buffer: ScrapedCandidate[] = [];
+    const seenProfiles = new Set<string>();
     let attempt = 0;
 
     console.log(`🔍 Upwork: Starting buffer search... target=${filter.maxResults || 50}`);
@@ -176,25 +177,37 @@ export class MarketplaceSearchService {
         const results = await this.scrapeUpworkOnce(query);
         console.log(`   ✅ ${results.length} candidates retrieved`);
 
-        // Filter duplicates against previously found candidates
+        // Filter duplicates against previously found candidates and register new ones
         const newCandidates = results.filter(c => {
-          if (buffer.some(b => this.isSameCandidate(b, c))) {
+          // Check against profiles seen in this session
+          if (c.profileUrl && seenProfiles.has(c.profileUrl)) {
             return false;
           }
+          // Check against global deduplication service
           if (dedupService.isDuplicate(c)) {
             return false;
           }
+          // If not a duplicate, add to seen and register
+          if (c.profileUrl) {
+            seenProfiles.add(c.profileUrl);
+          }
+          dedupService.registerCandidate(c);
           return true;
         });
 
-        // Register all new candidates
-        newCandidates.forEach(c => dedupService.registerCandidate(c));
-        buffer.push(...newCandidates);
+        // Add to buffer, but don't exceed maxResults
+        for (const candidate of newCandidates) {
+          if (buffer.length < (filter.maxResults || 50)) {
+            buffer.push(candidate);
+          } else {
+            break; // Stop adding if we reached the limit
+          }
+        }
 
         console.log(`   📦 Buffer: ${buffer.length}/${filter.maxResults || 50}`);
 
-        if (buffer.length >= (filter.maxResults || 50)) {
-          console.log(`   ✅ Target reached at attempt ${attempt}`);
+        // Break early if we hit exactly what we need
+        if (buffer.length === (filter.maxResults || 50)) {
           break;
         }
       } catch (err) {
@@ -217,7 +230,7 @@ export class MarketplaceSearchService {
       queries: dorkQuery,
       resultsPerPage: 100,
       maxPagesPerQuery: 1,
-      languageCode: "",
+      languageCode: "es", // Enforce Spanish language
       mobileResults: false,
       includeUnfilteredResults: false,
       saveHtml: false,
@@ -349,6 +362,7 @@ export class MarketplaceSearchService {
     }
 
     const buffer: ScrapedCandidate[] = [];
+    const seenProfiles = new Set<string>();
     let attempt = 0;
 
     console.log(`🔍 Fiverr: Starting buffer search...`);
@@ -363,21 +377,30 @@ export class MarketplaceSearchService {
         console.log(`   ✅ ${results.length} sellers retrieved`);
 
         const newCandidates = results.filter(c => {
-          if (buffer.some(b => this.isSameCandidate(b, c))) {
+          if (c.profileUrl && seenProfiles.has(c.profileUrl)) {
             return false;
           }
           if (dedupService.isDuplicate(c)) {
             return false;
           }
+          if (c.profileUrl) {
+            seenProfiles.add(c.profileUrl);
+          }
+          dedupService.registerCandidate(c);
           return true;
         });
 
-        newCandidates.forEach(c => dedupService.registerCandidate(c));
-        buffer.push(...newCandidates);
+        for (const candidate of newCandidates) {
+          if (buffer.length < (filter.maxResults || 40)) {
+            buffer.push(candidate);
+          } else {
+            break;
+          }
+        }
 
         console.log(`   📦 Buffer: ${buffer.length}/${filter.maxResults || 40}`);
 
-        if (buffer.length >= (filter.maxResults || 40)) {
+        if (buffer.length === (filter.maxResults || 40)) {
           break;
         }
       } catch (err) {
@@ -489,6 +512,7 @@ export class MarketplaceSearchService {
     }
 
     const buffer: ScrapedCandidate[] = [];
+    const seenProfiles = new Set<string>();
     let attempt = 0;
 
     console.log(`🔍 LinkedIn: Starting search...`);
@@ -503,21 +527,30 @@ export class MarketplaceSearchService {
         console.log(`   ✅ ${results.length} professionals retrieved`);
 
         const newCandidates = results.filter(c => {
-          if (buffer.some(b => this.isSameCandidate(b, c))) {
+          if (c.profileUrl && seenProfiles.has(c.profileUrl)) {
             return false;
           }
           if (dedupService.isDuplicate(c)) {
             return false;
           }
+          if (c.profileUrl) {
+            seenProfiles.add(c.profileUrl);
+          }
+          dedupService.registerCandidate(c);
           return true;
         });
 
-        newCandidates.forEach(c => dedupService.registerCandidate(c));
-        buffer.push(...newCandidates);
+        for (const candidate of newCandidates) {
+          if (buffer.length < (filter.maxResults || 50)) {
+            buffer.push(candidate);
+          } else {
+            break;
+          }
+        }
 
         console.log(`   📦 Buffer: ${buffer.length}/${filter.maxResults || 50}`);
 
-        if (buffer.length >= (filter.maxResults || 50)) {
+        if (buffer.length === (filter.maxResults || 50)) {
           break;
         }
       } catch (err) {
@@ -634,34 +667,36 @@ export class MarketplaceSearchService {
 
   private getUpworkQueryVariation(base: string, attempt: number): string {
     const sitePrefix = 'site:upwork.com/freelancers OR site:upwork.com/o/profiles';
+    // Siempre incluir "Español" o variaciones para asegurar candidatos de habla hispana
     const variations = [
-      `${sitePrefix} "${base}"`,
-      `${sitePrefix} "${base}" "top rated"`,
-      `${sitePrefix} ${base} "100% Job Success"`,
-      `${sitePrefix} ${base} freelance remote`,
-      `${sitePrefix} ${base} expert OR senior`,
+      `${sitePrefix} "${base}" "Spanish"`,
+      `${sitePrefix} "${base}" "top rated" "Spanish"`,
+      `${sitePrefix} ${base} "100% Job Success" Español`,
+      `${sitePrefix} ${base} freelance remote Spanish`,
+      `${sitePrefix} ${base} expert OR senior Español`,
     ];
     return variations[Math.min(attempt - 1, variations.length - 1)];
   }
 
   private getFiverrQueryVariation(base: string, attempt: number): string {
+    const sitePrefix = 'site:fiverr.com';
     const variations = [
-      base,
-      `"${base}" rating high`,
-      `${base} "top rated"`,
-      `${base} seller`,
-      `${base} portfolio`,
+      `${sitePrefix} "${base}" "Spanish"`,
+      `${sitePrefix} "${base}" "top rated" "Spanish"`,
+      `${sitePrefix} "${base}" seller Español`,
+      `${sitePrefix} "${base}" portfolio Spanish`,
+      `${sitePrefix} "${base}" studio Español`,
     ];
     return variations[Math.min(attempt - 1, variations.length - 1)];
   }
 
   private getLinkedInQueryVariation(base: string, attempt: number): string {
     const variations = [
-      base,
-      `${base} skill:${base}`,
-      `${base} title:${base}`,
-      `${base} location:Remote`,
-      `${base} experience:5+`,
+      `${base} Spanish`,
+      `${base} Español skill:${base}`,
+      `${base} title:${base} Spanish`,
+      `${base} location:Remote Español`,
+      `${base} experience:5+ Spanish`,
     ];
     return variations[Math.min(attempt - 1, variations.length - 1)];
   }

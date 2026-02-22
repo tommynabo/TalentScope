@@ -43,6 +43,10 @@ export class AIEnrichmentService {
         yearsExperience: typeof parsed.experience === 'number'
           ? parsed.experience
           : (candidate.yearsExperience || 0),
+        psychologicalProfile: parsed.psychologicalProfile,
+        businessMoment: parsed.businessMoment,
+        salesAngle: parsed.salesAngle,
+        bottleneck: parsed.bottleneck,
       };
     } catch (error) {
       console.error('Enrichment error:', error);
@@ -57,7 +61,8 @@ export class AIEnrichmentService {
   }
 
   private generateEnrichmentPrompt(candidate: ScrapedCandidate): string {
-    return `Analyze this freelancer profile data and extract structured information:
+    return `Analyze this freelancer profile data and extract structured information.
+CRÍTICO: TU LENGUAJE DOMINANTE DEBE SER 100% ESPAÑOL. TODAS TUS RESPUESTAS, ANÁLISIS Y TEXTOS DEBEN ESTAR EN ESPAÑOL Y SOLO ESPAÑOL.
 
 Profile Name: ${candidate.name}
 Platform: ${candidate.platform}
@@ -74,8 +79,12 @@ Please provide:
 2. Plausible business/professional emails (format: firstname.lastname@domain or firstname@company)
 3. Assessment of profile legitimacy (true/false)
 4. Confidence score (0-1) of identity verification
-5. Core skills and specializations based on title and certifications
+5. Core skills and specializations based on title and certifications (En Español)
 6. Estimated years of experience based on success rate
+7. Perfil Psicológico: Breve análisis de su personalidad y mentalidad laboral basado en cómo se presenta en su bio y título. (En Español)
+8. Momento Empresarial: En qué etapa de su carrera/negocio se encuentra (ej: empezando, escalando, experto consolidado). (En Español)
+9. Ángulo de Venta: Cuál es el mejor enfoque persuasivo para venderle una oportunidad o colaboración. (En Español)
+10. Cuello de Botella: Su principal desafío actual según su perfil (ej: falta de tiempo por exceso de trabajo, tarifas bajas, falta de posicionamiento). (En Español)
 
 Respond ONLY as valid JSON, no markdown:
 {
@@ -86,7 +95,11 @@ Respond ONLY as valid JSON, no markdown:
   "photoValidated": boolean,
   "confidenceScore": number,
   "skills": ["skill1", "skill2", "skill3"],
-  "experience": "X years or null"
+  "experience": "X años or null",
+  "psychologicalProfile": "string",
+  "businessMoment": "string",
+  "salesAngle": "string",
+  "bottleneck": "string"
 }`;
   }
 
@@ -132,6 +145,10 @@ Respond ONLY as valid JSON, no markdown:
     confidenceScore: number;
     skills?: string[];
     experience?: string;
+    psychologicalProfile?: string;
+    businessMoment?: string;
+    salesAngle?: string;
+    bottleneck?: string;
   } {
     try {
       // Clean up response if wrapped in markdown code blocks
@@ -152,6 +169,10 @@ Respond ONLY as valid JSON, no markdown:
         confidenceScore: Math.max(0, Math.min(1, parsed.confidenceScore || 0.5)),
         skills: parsed.skills || [],
         experience: parsed.experience,
+        psychologicalProfile: parsed.psychologicalProfile || "Perfil profesional enfocado en ejecución de proyectos en su área técnica.",
+        businessMoment: parsed.businessMoment || "Consolidando presencia como talento independiente.",
+        salesAngle: parsed.salesAngle || "Destacar la oportunidad de trabajar en proyectos de mayor impacto y rentabilidad.",
+        bottleneck: parsed.bottleneck || "Escalabilidad limitada de sus ingresos por la cantidad de horas disponibles.",
       };
     } catch (error) {
       console.warn('Failed to parse OpenAI response:', error);

@@ -206,10 +206,9 @@ export const PipelineList: React.FC<PipelineListProps> = ({ campaign, onUpdateCa
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300">Estado</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300">Nombre</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300">Email</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300">Contacto</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300">Tarifa</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300">Success %</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300">LinkedIn</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
@@ -233,26 +232,21 @@ export const PipelineList: React.FC<PipelineListProps> = ({ campaign, onUpdateCa
                     </select>
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-200">{candidate.name}</td>
-                  <td className="px-4 py-3 text-sm text-slate-400">{candidate.email}</td>
+                  <td className="px-4 py-3 text-sm text-slate-400">
+                    <div className="flex flex-col gap-1">
+                      {candidate.email ? <span className="truncate max-w-[150px]" title={candidate.email}>{candidate.email}</span> : <span className="text-slate-500 text-xs">Sin email</span>}
+                      {candidate.linkedInUrl && (
+                        <a href={candidate.linkedInUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-xs flex items-center gap-1">
+                          Ver LinkedIn
+                        </a>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-sm text-slate-300 font-medium">
-                    ${candidate.hourlyRate.toFixed(0)}
+                    \${candidate.hourlyRate.toFixed(0)}
                   </td>
                   <td className="px-4 py-3 text-sm text-emerald-400 font-medium">
                     {candidate.jobSuccessRate.toFixed(0)}%
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {candidate.linkedInUrl ? (
-                      <a
-                        href={candidate.linkedInUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300"
-                      >
-                        Ver
-                      </a>
-                    ) : (
-                      <span className="text-slate-500">N/A</span>
-                    )}
                   </td>
                 </tr>
               ))}

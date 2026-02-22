@@ -3,7 +3,7 @@ import {
   ChevronLeft, Target, Send, MessageSquare, Calendar,
   Search, Play, Loader2, ExternalLink, Terminal,
   ChevronDown, ChevronUp, X, Columns, List, Download, Trash2,
-  DollarSign, Award, Globe, User
+  DollarSign, Award, Globe, User, Brain, Briefcase, AlertCircle, Wrench
 } from 'lucide-react';
 import { Campaign, EnrichedCandidateInCampaign } from '../types/campaigns';
 import { KanbanBoard } from './KanbanBoard';
@@ -668,7 +668,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
                       </div>
                     </th>
                     <th className="px-3 lg:px-4 py-2">Estado</th>
-                    <th className="px-3 lg:px-4 py-2">Email</th>
+                    <th className="px-3 lg:px-4 py-2">Contacto</th>
                     <th
                       className="px-3 lg:px-4 py-2 cursor-pointer hover:text-slate-300 transition-colors select-none"
                       onClick={() => toggleSort('talentScore')}
@@ -737,7 +737,14 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
                             </span>
                           </td>
                           <td className="px-3 lg:px-4 py-2">
-                            <p className="text-xs text-slate-400 truncate max-w-[150px]">{candidate.email || 'N/A'}</p>
+                            <div className="flex flex-col gap-1">
+                              {candidate.email ? <span className="text-xs text-slate-400 truncate max-w-[150px]" title={candidate.email}>{candidate.email}</span> : <span className="text-xs text-slate-600 truncate max-w-[150px]">Sin email</span>}
+                              {candidate.linkedInUrl && (
+                                <a href={candidate.linkedInUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-[10px] flex items-center gap-1">
+                                  Ver LinkedIn
+                                </a>
+                              )}
+                            </div>
                           </td>
                           <td className="px-3 lg:px-4 py-2">
                             <div className="flex items-center gap-2">
@@ -833,83 +840,95 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Details */}
+                {/* Perfil Psicológico */}
+                <div className="bg-slate-800/30 p-4 rounded-xl border border-purple-500/20">
+                  <div className="flex items-center gap-2 mb-2 text-purple-400 font-semibold text-sm">
+                    <Brain className="h-4 w-4" />
+                    PERFIL PSICOLÓGICO
+                  </div>
+                  <p className="text-sm text-slate-300 leading-relaxed">
+                    {(selectedCandidate as any).psychologicalProfile || 'No analizado (Perfil encolado para enriquecimiento AI).'}
+                  </p>
+                </div>
+
+                {/* Momento Empresarial */}
+                <div className="bg-slate-800/30 p-4 rounded-xl border border-blue-500/20">
+                  <div className="flex items-center gap-2 mb-2 text-blue-400 font-semibold text-sm">
+                    <Briefcase className="h-4 w-4" />
+                    MOMENTO EMPRESARIAL
+                  </div>
+                  <p className="text-sm text-slate-300 leading-relaxed">
+                    {(selectedCandidate as any).businessMoment || 'No analizado (Perfil encolado para enriquecimiento AI).'}
+                  </p>
+                </div>
+
+                {/* Ángulo de Venta */}
                 <div className="bg-slate-800/30 p-4 rounded-xl border border-emerald-500/20">
                   <div className="flex items-center gap-2 mb-2 text-emerald-400 font-semibold text-sm">
-                    <Globe className="h-4 w-4" />
-                    INFORMACIÓN
+                    <Target className="h-4 w-4" />
+                    ÁNGULO DE VENTA
                   </div>
-                  <div className="space-y-2 text-sm text-slate-300">
-                    <p><span className="text-slate-500">Plataforma:</span> {selectedCandidate.platform}</p>
-                    <p><span className="text-slate-500">Tarifa:</span> ${selectedCandidate.hourlyRate.toFixed(0)}/hora</p>
-                    <p><span className="text-slate-500">Job Success:</span> {selectedCandidate.jobSuccessRate.toFixed(0)}%</p>
-                    <p><span className="text-slate-500">Email:</span> {selectedCandidate.email || 'No disponible'}</p>
-                    <p><span className="text-slate-500">Añadido:</span> {new Date(selectedCandidate.addedAt).toLocaleDateString('es-ES')}</p>
+                  <p className="text-sm text-slate-300 leading-relaxed">
+                    {(selectedCandidate as any).salesAngle || 'No analizado (Perfil encolado para enriquecimiento AI).'}
+                  </p>
+                </div>
+
+                {/* Cuello de Botella */}
+                <div className="bg-slate-800/30 p-4 rounded-xl border border-red-500/20">
+                  <div className="flex items-center gap-2 mb-2 text-red-400 font-semibold text-sm">
+                    <AlertCircle className="h-4 w-4" />
+                    CUELLO DE BOTELLA
+                  </div>
+                  <p className="text-sm text-slate-300 leading-relaxed">
+                    {(selectedCandidate as any).bottleneck || 'No analizado (Perfil encolado para enriquecimiento AI).'}
+                  </p>
+                </div>
+
+                {/* Habilidades Clave */}
+                <div className="bg-slate-800/30 p-4 rounded-xl border border-orange-500/20">
+                  <div className="flex items-center gap-2 mb-2 text-orange-400 font-semibold text-sm">
+                    <Wrench className="h-4 w-4" />
+                    HABILIDADES CLAVE
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {selectedCandidate.skills && selectedCandidate.skills.length > 0 ? (
+                      selectedCandidate.skills.map((skill, i) => (
+                        <span key={i} className="px-2 py-1 bg-slate-800 text-slate-300 text-xs rounded border border-slate-700">
+                          {skill}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-sm text-slate-500">Ninguna detectada.</span>
+                    )}
                   </div>
                 </div>
 
-                {/* Contact & Actions */}
-                <div className="bg-slate-800/30 p-4 rounded-xl border border-blue-500/20">
-                  <div className="flex items-center gap-2 mb-2 text-blue-400 font-semibold text-sm">
-                    <MessageSquare className="h-4 w-4" />
-                    CONTACTO
+                {/* Lane Selector & Notes */}
+                <div className="bg-slate-800/30 p-4 rounded-xl border border-slate-700/50 flex flex-col justify-between">
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Cambiar estado del pipeline</p>
+                    <select
+                      value={selectedCandidate.kanbanLane}
+                      onChange={(e) => {
+                        handleUpdateCandidate(selectedCandidate, e.target.value);
+                        setSelectedCandidate({ ...selectedCandidate, kanbanLane: e.target.value as any });
+                      }}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 text-sm focus:border-emerald-500 transition-colors"
+                    >
+                      {Object.entries(laneLabels).map(([key, label]) => (
+                        <option key={key} value={key}>{label}</option>
+                      ))}
+                    </select>
                   </div>
-                  <div className="space-y-3">
-                    {selectedCandidate.email && (
-                      <div>
-                        <p className="text-xs text-slate-500 mb-1">Email</p>
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm text-slate-300 truncate">{selectedCandidate.email}</p>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(selectedCandidate.email);
-                              setToast({ show: true, message: '✅ Email copiado!' });
-                            }}
-                            className="px-2 py-1 bg-blue-600/20 text-blue-400 rounded text-xs hover:bg-blue-600/30"
-                          >
-                            Copiar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {selectedCandidate.linkedInUrl && (
-                      <div>
-                        <p className="text-xs text-slate-500 mb-1">LinkedIn</p>
-                        <a
-                          href={selectedCandidate.linkedInUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                        >
-                          <ExternalLink className="h-3 w-3" /> Abrir perfil
-                        </a>
-                      </div>
-                    )}
 
-                    {/* Lane Selector */}
-                    <div>
-                      <p className="text-xs text-slate-500 mb-1">Cambiar estado</p>
-                      <select
-                        value={selectedCandidate.kanbanLane}
-                        onChange={(e) => {
-                          handleUpdateCandidate(selectedCandidate, e.target.value);
-                          setSelectedCandidate({ ...selectedCandidate, kanbanLane: e.target.value as any });
-                        }}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 text-sm"
-                      >
-                        {Object.entries(laneLabels).map(([key, label]) => (
-                          <option key={key} value={key}>{label}</option>
-                        ))}
-                      </select>
+                  {selectedCandidate.notes && (
+                    <div className="mt-4">
+                      <p className="text-xs text-slate-500 mb-1">Notas Adicionales</p>
+                      <p className="text-sm text-slate-300 p-2 bg-slate-900/50 rounded-lg border border-slate-800">
+                        {selectedCandidate.notes}
+                      </p>
                     </div>
-
-                    {selectedCandidate.notes && (
-                      <div>
-                        <p className="text-xs text-slate-500 mb-1">Notas</p>
-                        <p className="text-sm text-slate-300">{selectedCandidate.notes}</p>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
             </div>

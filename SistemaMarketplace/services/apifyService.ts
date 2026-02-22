@@ -145,7 +145,7 @@ export class ApifyService {
 
   private async scrapeUpworkWithBuffer(filter: ScrapingFilter, maxRetries: number = 5): Promise<ScrapedCandidate[]> {
     const buffer: ScrapedCandidate[] = [];
-    const targetCount = 50; // Objetivo de candidatos
+    const targetCount = filter.maxResults || 50; // Use maxResults
     const seenProfiles = new Set<string>(); // Dedup por profileUrl
     let attempt = 0;
 
@@ -174,7 +174,7 @@ export class ApifyService {
           continue;
         }
 
-        // Filtrar duplicados (por profileUrl/platformUsername) y agregar al buffer
+        // Filtrar duplicados y agregar al buffer sin exceder el target
         const newCandidates = tempResults.filter(c => {
           const key = c.profileUrl || c.platformUsername;
           if (seenProfiles.has(key)) {
@@ -184,10 +184,17 @@ export class ApifyService {
           return true;
         });
 
-        buffer.push(...newCandidates);
+        for (const candidate of newCandidates) {
+          if (buffer.length < targetCount) {
+            buffer.push(candidate);
+          } else {
+            break;
+          }
+        }
+
         console.log(`   📦 Buffer: ${buffer.length}/${targetCount} candidatos acumulados`);
 
-        if (buffer.length >= targetCount) {
+        if (buffer.length === targetCount) {
           console.log(`   ✅ Meta alcanzada en intento ${attempt}`);
           break;
         }
@@ -197,17 +204,17 @@ export class ApifyService {
     }
 
     console.log(`\n✅ Búsqueda completada: ${buffer.length} candidatos únicos encontrados`);
-    return buffer.slice(0, 50); // Retorna máximo 50
+    return buffer.slice(0, targetCount); // Retorna máximo targetCount
   }
 
   private getUpworkQueryVariation(baseKeyword: string, attempt: number): string {
     const sitePrefix = 'site:upwork.com/freelancers OR site:upwork.com/o/profiles';
     const variations = [
-      `${sitePrefix} "${baseKeyword}"`,
-      `${sitePrefix} "${baseKeyword}" "top rated"`,
-      `${sitePrefix} ${baseKeyword} "100% Job Success"`,
-      `${sitePrefix} ${baseKeyword} freelance remote`,
-      `${sitePrefix} ${baseKeyword} expert OR senior`,
+      `${sitePrefix} "${baseKeyword}" "Spanish"`,
+      `${sitePrefix} "${baseKeyword}" "top rated" "Spanish"`,
+      `${sitePrefix} ${baseKeyword} "100% Job Success" Español`,
+      `${sitePrefix} ${baseKeyword} freelance remote Spanish`,
+      `${sitePrefix} ${baseKeyword} expert OR senior Español`,
     ];
 
     const selected = variations[Math.min(attempt - 1, variations.length - 1)];
@@ -243,7 +250,7 @@ export class ApifyService {
       queries: dorkQuery,
       resultsPerPage: 100,
       maxPagesPerQuery: 1,
-      languageCode: "",
+      languageCode: "es",
       mobileResults: false,
       includeUnfilteredResults: false,
       saveHtml: false,
@@ -390,7 +397,7 @@ export class ApifyService {
 
   private async scrapeFiverrWithBuffer(filter: ScrapingFilter, maxRetries: number = 5): Promise<ScrapedCandidate[]> {
     const buffer: ScrapedCandidate[] = [];
-    const targetCount = 40; // Objetivo para Fiverr (menos que Upwork)
+    const targetCount = filter.maxResults || 40; // Use maxResults
     const seenProfiles = new Set<string>(); // Dedup por profileUrl
     let attempt = 0;
 
@@ -428,10 +435,17 @@ export class ApifyService {
           return true;
         });
 
-        buffer.push(...newCandidates);
+        for (const candidate of newCandidates) {
+          if (buffer.length < targetCount) {
+            buffer.push(candidate);
+          } else {
+            break;
+          }
+        }
+
         console.log(`   📦 Buffer: ${buffer.length}/${targetCount} candidatos acumulados`);
 
-        if (buffer.length >= targetCount) {
+        if (buffer.length === targetCount) {
           console.log(`   ✅ Meta alcanzada en intento ${attempt}`);
           break;
         }
@@ -441,16 +455,17 @@ export class ApifyService {
     }
 
     console.log(`\n✅ Búsqueda completada: ${buffer.length} candidatos únicos encontrados`);
-    return buffer.slice(0, 40);
+    return buffer.slice(0, targetCount);
   }
 
   private getFiverrQueryVariation(baseKeyword: string, attempt: number): string {
+    const sitePrefix = 'site:fiverr.com';
     const variations = [
-      baseKeyword,
-      `"${baseKeyword}" rating high`,
-      `${baseKeyword} "top rated" OR "pro"`,
-      `${baseKeyword} seller "english" OR "spanish"`,
-      `${baseKeyword} portfolio reviews`,
+      `${sitePrefix} "${baseKeyword}" "Spanish"`,
+      `${sitePrefix} "${baseKeyword}" "top rated" "Spanish"`,
+      `${sitePrefix} "${baseKeyword}" seller Español`,
+      `${sitePrefix} "${baseKeyword}" portfolio Spanish`,
+      `${sitePrefix} "${baseKeyword}" studio Español`,
     ];
 
     const selected = variations[Math.min(attempt - 1, variations.length - 1)];
@@ -470,7 +485,7 @@ export class ApifyService {
       queries: dorkQuery,
       resultsPerPage: 100,
       maxPagesPerQuery: 1,
-      languageCode: "",
+      languageCode: "es",
       mobileResults: false,
       includeUnfilteredResults: false,
       saveHtml: false,
@@ -586,7 +601,7 @@ export class ApifyService {
 
   private async scrapeLinkedInWithBuffer(filter: ScrapingFilter, maxRetries: number = 5): Promise<ScrapedCandidate[]> {
     const buffer: ScrapedCandidate[] = [];
-    const targetCount = 30; // Objetivo para LinkedIn (menos dados disponibles)
+    const targetCount = filter.maxResults || 50; // Use maxResults
     const seenLinkedInProfiles = new Set<string>(); // Dedup por profileUrl
     let attempt = 0;
 

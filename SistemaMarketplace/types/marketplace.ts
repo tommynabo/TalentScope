@@ -60,6 +60,10 @@ export interface EnrichedCandidate extends ScrapedCandidate {
   emails: string[];
   photoValidated: boolean;
   identityConfidenceScore: number;
+  psychologicalProfile?: string;
+  businessMoment?: string;
+  salesAngle?: string;
+  bottleneck?: string;
 }
 
 export interface OutreachCampaign {
