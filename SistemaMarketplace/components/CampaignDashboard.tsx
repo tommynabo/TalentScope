@@ -29,6 +29,22 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
   onUpdateCampaign,
   onBack,
 }) => {
+  // Helper function to normalize URLs
+  const normalizeUrl = (url: string): string => {
+    if (!url) return '';
+    try {
+      const parsed = new URL(url);
+      let normalized = parsed.hostname || '';
+      if (normalized.startsWith('www.')) {
+        normalized = normalized.slice(4);
+      }
+      normalized += parsed.pathname;
+      return normalized.toLowerCase().replace(/\/$/, '');
+    } catch {
+      return url.toLowerCase().trim();
+    }
+  };
+
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [sortConfig, setSortConfig] = useState<{ field: SortField; direction: SortDirection }>({ field: 'talentScore', direction: 'desc' });
   const [selectedCandidate, setSelectedCandidate] = useState<EnrichedCandidateInCampaign | null>(null);
@@ -338,15 +354,29 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       // Safety check: Filter out any candidates that somehow slipped through
       // (The scraper should have already filtered these out)
       const dedupedNewCandidates = newCandidates.filter(candidate => {
-        const alreadyExists = campaign.candidates.some(c => 
-          (c.linkedInUrl && candidate.linkedInUrl && c.linkedInUrl === candidate.linkedInUrl) ||
-          (c.email && candidate.email && c.email === candidate.email) ||
-          (c.name.toLowerCase().trim() === candidate.name.toLowerCase().trim())
-        );
+        const alreadyExists = campaign.candidates.some(c => {
+          // Normalize URLs for comparison
+          if (c.linkedInUrl && candidate.linkedInUrl) {
+            const normalizedC = normalizeUrl(c.linkedInUrl);
+            const normalizedCandidate = normalizeUrl(candidate.linkedInUrl);
+            if (normalizedC && normalizedCandidate && normalizedC === normalizedCandidate) {
+              console.warn(`⏭️ Safety filter: Duplicate URL ${normalizedC}`);
+              return true;
+            }
+          }
+          // Compare emails
+          if (c.email && candidate.email && c.email.toLowerCase() === candidate.email.toLowerCase()) {
+            console.warn(`⏭️ Safety filter: Duplicate email ${c.email}`);
+            return true;
+          }
+          // Compare names
+          if (c.name.toLowerCase().trim() === candidate.name.toLowerCase().trim()) {
+            console.warn(`⏭️ Safety filter: Duplicate name ${c.name}`);
+            return true;
+          }
+          return false;
+        });
         
-        if (alreadyExists) {
-          console.warn(`⏭️ Safety filter: Skipped duplicate ${candidate.name}`);
-        }
         return !alreadyExists;
       });
 

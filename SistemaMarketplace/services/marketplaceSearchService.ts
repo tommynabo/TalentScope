@@ -27,6 +27,27 @@ export class MarketplaceSearchService {
   }
 
   /**
+   * Normalize URLs for consistent comparison
+   * Handles various domain formats and protocols
+   */
+  private normalizeUrl(url: string): string {
+    if (!url) return '';
+    try {
+      const parsed = new URL(url);
+      // Remove protocol and www
+      let normalized = parsed.hostname || '';
+      if (normalized.startsWith('www.')) {
+        normalized = normalized.slice(4);
+      }
+      // Add pathname
+      normalized += parsed.pathname;
+      return normalized.toLowerCase().replace(/\/$/, '');
+    } catch {
+      return url.toLowerCase().trim();
+    }
+  }
+
+  /**
    * CORE EXTRACTION: Get raw items from Apify actor dataset
    * Returns the EXACT items from dataset without interpretation
    */
@@ -163,7 +184,10 @@ export class MarketplaceSearchService {
 
     const buffer: ScrapedCandidate[] = [];
     const seenProfiles = new Set<string>();
-    const existingUrls = new Set<string>(filter.existingProfileUrls || []);
+    // Normalize existing URLs for comparison
+    const existingUrls = new Set<string>(
+      (filter.existingProfileUrls || []).map(url => this.normalizeUrl(url))
+    );
     const existingEmails = new Set<string>(filter.existingEmails || []);
     let attempt = 0;
     const targetCount = filter.maxResults || 50;
@@ -182,28 +206,29 @@ export class MarketplaceSearchService {
       try {
         // Calculate how many more candidates we need
         const remainingNeeded = targetCount - buffer.length;
-        const results = await this.scrapeUpworkOnce(query, remainingNeeded * 2); // Fetch 2x to account for duplicates
+        const results = await this.scrapeUpworkOnce(query, remainingNeeded * 2);
         console.log(`   ✅ ${results.length} candidates retrieved`);
 
         // Filter out duplicates (within session and existing)
         const newCandidates = results.filter(c => {
           // Skip if seen in this session
-          if (c.profileUrl && seenProfiles.has(c.profileUrl)) {
+          if (c.profileUrl && seenProfiles.has(this.normalizeUrl(c.profileUrl))) {
             return false;
           }
           // Skip if it's an existing candidate from campaign
-          if (c.profileUrl && existingUrls.has(c.profileUrl)) {
-            console.log(`   ⏭️ Skipping existing: ${c.name}`);
+          const normalizedUrl = this.normalizeUrl(c.profileUrl);
+          if (normalizedUrl && existingUrls.has(normalizedUrl)) {
+            console.log(`   ⏭️ Skipping existing: ${c.name} (${normalizedUrl})`);
             return false;
           }
           // Skip if email already exists
-          if (c.email && existingEmails.has(c.email)) {
+          if (c.email && existingEmails.has(c.email.toLowerCase())) {
             console.log(`   ⏭️ Skipping existing email: ${c.email}`);
             return false;
           }
           // Mark as seen for future checks
           if (c.profileUrl) {
-            seenProfiles.add(c.profileUrl);
+            seenProfiles.add(this.normalizeUrl(c.profileUrl));
           }
           return true;
         });
@@ -379,7 +404,10 @@ export class MarketplaceSearchService {
 
     const buffer: ScrapedCandidate[] = [];
     const seenProfiles = new Set<string>();
-    const existingUrls = new Set<string>(filter.existingProfileUrls || []);
+    // Normalize existing URLs for comparison
+    const existingUrls = new Set<string>(
+      (filter.existingProfileUrls || []).map(url => this.normalizeUrl(url))
+    );
     const existingEmails = new Set<string>(filter.existingEmails || []);
     let attempt = 0;
     const targetCount = filter.maxResults || 40;
@@ -400,19 +428,20 @@ export class MarketplaceSearchService {
 
         // Filter duplicates and existing candidates
         const newCandidates = results.filter(c => {
-          if (c.profileUrl && seenProfiles.has(c.profileUrl)) {
+          if (c.profileUrl && seenProfiles.has(this.normalizeUrl(c.profileUrl))) {
             return false;
           }
-          if (c.profileUrl && existingUrls.has(c.profileUrl)) {
-            console.log(`   ⏭️ Skipping existing: ${c.name}`);
+          const normalizedUrl = this.normalizeUrl(c.profileUrl);
+          if (normalizedUrl && existingUrls.has(normalizedUrl)) {
+            console.log(`   ⏭️ Skipping existing: ${c.name} (${normalizedUrl})`);
             return false;
           }
-          if (c.email && existingEmails.has(c.email)) {
+          if (c.email && existingEmails.has(c.email.toLowerCase())) {
             console.log(`   ⏭️ Skipping existing email: ${c.email}`);
             return false;
           }
           if (c.profileUrl) {
-            seenProfiles.add(c.profileUrl);
+            seenProfiles.add(this.normalizeUrl(c.profileUrl));
           }
           return true;
         });
@@ -540,7 +569,10 @@ export class MarketplaceSearchService {
 
     const buffer: ScrapedCandidate[] = [];
     const seenProfiles = new Set<string>();
-    const existingUrls = new Set<string>(filter.existingProfileUrls || []);
+    // Normalize existing URLs for comparison
+    const existingUrls = new Set<string>(
+      (filter.existingProfileUrls || []).map(url => this.normalizeUrl(url))
+    );
     const existingEmails = new Set<string>(filter.existingEmails || []);
     let attempt = 0;
     const targetCount = filter.maxResults || 50;
@@ -561,19 +593,20 @@ export class MarketplaceSearchService {
 
         // Filter duplicates and existing candidates
         const newCandidates = results.filter(c => {
-          if (c.profileUrl && seenProfiles.has(c.profileUrl)) {
+          if (c.profileUrl && seenProfiles.has(this.normalizeUrl(c.profileUrl))) {
             return false;
           }
-          if (c.profileUrl && existingUrls.has(c.profileUrl)) {
-            console.log(`   ⏭️ Skipping existing: ${c.name}`);
+          const normalizedUrl = this.normalizeUrl(c.profileUrl);
+          if (normalizedUrl && existingUrls.has(normalizedUrl)) {
+            console.log(`   ⏭️ Skipping existing: ${c.name} (${normalizedUrl})`);
             return false;
           }
-          if (c.email && existingEmails.has(c.email)) {
+          if (c.email && existingEmails.has(c.email.toLowerCase())) {
             console.log(`   ⏭️ Skipping existing email: ${c.email}`);
             return false;
           }
           if (c.profileUrl) {
-            seenProfiles.add(c.profileUrl);
+            seenProfiles.add(this.normalizeUrl(c.profileUrl));
           }
           return true;
         });
