@@ -48,6 +48,38 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [sortConfig, setSortConfig] = useState<{ field: SortField; direction: SortDirection }>({ field: 'talentScore', direction: 'desc' });
   const [selectedCandidate, setSelectedCandidate] = useState<EnrichedCandidateInCampaign | null>(null);
+  const [isEditingMessages, setIsEditingMessages] = useState(false);
+  const [editedIcebreaker, setEditedIcebreaker] = useState('');
+  const [editedFollowup, setEditedFollowup] = useState('');
+
+  useEffect(() => {
+    if (selectedCandidate) {
+      setIsEditingMessages(false);
+      setEditedIcebreaker(selectedCandidate.walead_messages?.icebreaker || `Hola ${selectedCandidate.name}, vi tu trabajo, ¡me encantaría conectar y compartir ideas sobre innovación!`);
+      setEditedFollowup(selectedCandidate.walead_messages?.followup_message || `Hola ${selectedCandidate.name}, gracias por aceptar mi conexión. He estado siguiendo tu trabajo y creo que hay oportunidades interesantes para colaborar.`);
+    }
+  }, [selectedCandidate?.candidateId]);
+
+  const handleSaveMessages = () => {
+    if (!selectedCandidate) return;
+
+    const updatedCandidate = {
+      ...selectedCandidate,
+      walead_messages: {
+        icebreaker: editedIcebreaker,
+        followup_message: editedFollowup
+      }
+    };
+
+    const updated = campaign.candidates.map(c =>
+      c.candidateId === updatedCandidate.candidateId ? updatedCandidate : c
+    );
+
+    onUpdateCampaign({ ...campaign, candidates: updated });
+    setSelectedCandidate(updatedCandidate);
+    setIsEditingMessages(false);
+    setToast({ show: true, message: '✅ Mensajes guardados' });
+  };
   const [toast, setToast] = useState({ show: false, message: '' });
   const [showExportOptions, setShowExportOptions] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -989,6 +1021,15 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
 
               <div className="flex justify-between items-center pt-2">
                 <span className="text-slate-500 text-xs">Información generada por la IA de enriquecimiento.</span>
+                {isEditingMessages ? (
+                  <button onClick={handleSaveMessages} className="flex items-center gap-2 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm transition-colors">
+                    <span>💾</span> Guardar
+                  </button>
+                ) : (
+                  <button onClick={() => setIsEditingMessages(true)} className="flex items-center gap-2 px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 rounded-lg text-sm transition-colors">
+                    <span>✏️</span> Editar Mensajes
+                  </button>
+                )}
               </div>
 
               {/* Outreach Messages */}
@@ -1001,19 +1042,29 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
                     <span className="bg-blue-500/20 text-blue-300 text-[10px] font-bold px-1.5 py-0.5 rounded">1</span>
                     <p className="text-xs font-bold text-blue-400 tracking-wider uppercase">Invitación Inicial</p>
                   </div>
-                  <p className="text-sm text-slate-200 leading-relaxed flex-1">
-                    "{selectedCandidate.walead_messages?.icebreaker || `Hola ${selectedCandidate.name}, vi tu trabajo, ¡me encantaría conectar y compartir ideas sobre innovación!`}"
-                  </p>
-                  <button
-                    onClick={() => {
-                      const msg = selectedCandidate.walead_messages?.icebreaker || `Hola ${selectedCandidate.name}, vi tu trabajo, ¡me encantaría conectar y compartir ideas sobre innovación!`;
-                      navigator.clipboard.writeText(msg);
-                      setToast({ show: true, message: 'Invitación copiada al portapapeles' });
-                    }}
-                    className="mt-4 w-full flex-grow-0 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors flex justify-center items-center gap-2"
-                  >
-                    <span>📋</span> Copiar
-                  </button>
+                  {isEditingMessages ? (
+                    <textarea
+                      value={editedIcebreaker}
+                      onChange={(e) => setEditedIcebreaker(e.target.value)}
+                      className="w-full flex-1 bg-slate-900 border border-blue-500/50 rounded-lg p-3 text-sm text-white resize-none focus:outline-none focus:border-blue-400 min-h-[120px]"
+                    />
+                  ) : (
+                    <p className="text-sm text-slate-200 leading-relaxed flex-1">
+                      "{selectedCandidate.walead_messages?.icebreaker || `Hola ${selectedCandidate.name}, vi tu trabajo, ¡me encantaría conectar y compartir ideas sobre innovación!`}"
+                    </p>
+                  )}
+                  {!isEditingMessages && (
+                    <button
+                      onClick={() => {
+                        const msg = selectedCandidate.walead_messages?.icebreaker || `Hola ${selectedCandidate.name}, vi tu trabajo, ¡me encantaría conectar y compartir ideas sobre innovación!`;
+                        navigator.clipboard.writeText(msg);
+                        setToast({ show: true, message: 'Invitación copiada al portapapeles' });
+                      }}
+                      className="mt-4 w-full flex-grow-0 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors flex justify-center items-center gap-2"
+                    >
+                      <span>📋</span> Copiar
+                    </button>
+                  )}
                 </div>
 
                 {/* Post-Acceptance */}
@@ -1023,19 +1074,29 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
                     <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-1.5 py-0.5 rounded">2</span>
                     <p className="text-xs font-bold text-emerald-400 tracking-wider uppercase">Post-Aceptación</p>
                   </div>
-                  <p className="text-sm text-slate-200 leading-relaxed flex-1">
-                    "{selectedCandidate.walead_messages?.followup_message || `Hola ${selectedCandidate.name}, gracias por aceptar mi conexión. He estado siguiendo tu trabajo y creo que hay oportunidades interesantes para colaborar.`}"
-                  </p>
-                  <button
-                    onClick={() => {
-                      const msg = selectedCandidate.walead_messages?.followup_message || `Hola ${selectedCandidate.name}, gracias por aceptar mi conexión. He estado siguiendo tu trabajo y creo que hay oportunidades interesantes para colaborar.`;
-                      navigator.clipboard.writeText(msg);
-                      setToast({ show: true, message: 'Mensaje de seguimiento copiado al portapapeles' });
-                    }}
-                    className="mt-4 w-full flex-grow-0 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white rounded-lg text-sm font-medium transition-colors flex justify-center items-center gap-2"
-                  >
-                    <span>📋</span> Copiar
-                  </button>
+                  {isEditingMessages ? (
+                    <textarea
+                      value={editedFollowup}
+                      onChange={(e) => setEditedFollowup(e.target.value)}
+                      className="w-full flex-1 bg-slate-900 border border-emerald-500/50 rounded-lg p-3 text-sm text-white resize-none focus:outline-none focus:border-emerald-400 min-h-[120px]"
+                    />
+                  ) : (
+                    <p className="text-sm text-slate-200 leading-relaxed flex-1">
+                      "{selectedCandidate.walead_messages?.followup_message || `Hola ${selectedCandidate.name}, gracias por aceptar mi conexión. He estado siguiendo tu trabajo y creo que hay oportunidades interesantes para colaborar.`}"
+                    </p>
+                  )}
+                  {!isEditingMessages && (
+                    <button
+                      onClick={() => {
+                        const msg = selectedCandidate.walead_messages?.followup_message || `Hola ${selectedCandidate.name}, gracias por aceptar mi conexión. He estado siguiendo tu trabajo y creo que hay oportunidades interesantes para colaborar.`;
+                        navigator.clipboard.writeText(msg);
+                        setToast({ show: true, message: 'Mensaje de seguimiento copiado al portapapeles' });
+                      }}
+                      className="mt-4 w-full flex-grow-0 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white rounded-lg text-sm font-medium transition-colors flex justify-center items-center gap-2"
+                    >
+                      <span>📋</span> Copiar
+                    </button>
+                  )}
                 </div>
 
               </div>
