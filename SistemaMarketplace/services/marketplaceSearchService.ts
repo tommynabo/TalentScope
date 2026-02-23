@@ -311,6 +311,19 @@ export class MarketplaceSearchService {
     const profileUrl = item.url || '';
     if (!profileUrl || !profileUrl.includes('upwork')) return null;
 
+    // Ignore generic platform pages or listings that are not user profiles
+    // e.g. https://www.upwork.com/ or pages that do not contain '/freelancers/' or '/o/profiles/'
+    try {
+      const parsed = new URL(profileUrl);
+      const path = parsed.pathname.toLowerCase();
+      if (!path.includes('/freelancers/') && !path.includes('/o/profiles/') && !path.includes('/profiles/')) {
+        return null;
+      }
+    } catch (err) {
+      // If URL parsing fails, drop the item
+      return null;
+    }
+
     let title = item.title || 'Upwork Freelancer';
     let name = 'Upwork Freelancer';
 
@@ -326,6 +339,9 @@ export class MarketplaceSearchService {
     }
 
     if (!name || name.length < 2) return null;
+
+    // Filter out results where the extracted name looks like the platform itself
+    if (name.toLowerCase().includes('upwork') || name.toLowerCase().includes('freelancer')) return null;
 
     const bio = item.description || '';
 
