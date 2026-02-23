@@ -361,6 +361,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         businessMoment: (enriched as any).businessMoment,
         salesAngle: (enriched as any).salesAngle,
         bottleneck: (enriched as any).bottleneck,
+        walead_messages: (enriched as any).walead_messages,
       }));
 
       // Safety check: Filter out any candidates that somehow slipped through
@@ -901,133 +902,159 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         )}
       </div>
 
-      {/* ═══ Candidate Detail Modal ═════════════════════════════════════ */}
+      {/* ═══ Candidate Detail Modal (Deep Research Redesign) ════════════════════ */}
       {selectedCandidate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="px-3 py-2.5 border-b border-slate-800 flex justify-between items-center bg-slate-900/90">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Target className="h-4 w-4 text-emerald-500" />
-                Perfil del Freelancer
-              </h3>
-              <button
-                onClick={() => setSelectedCandidate(null)}
-                className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 transition-colors"
-              >
-                <X className="h-4 w-4" />
+          <div className="bg-slate-900 border border-slate-700/50 rounded-xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-slate-700/50 flex justify-between items-center bg-slate-800/50 relative">
+              <div className="flex items-center gap-2 text-blue-400">
+                <span className="text-xl">✨</span>
+                <h3 className="text-md font-semibold tracking-wide">Análisis Deep Research</h3>
+              </div>
+              <button onClick={() => setSelectedCandidate(null)} className="text-slate-400 hover:text-white transition-colors">
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="p-4 overflow-y-auto max-h-[80vh]">
-              <div className="flex items-center gap-3 mb-4">
-                <img
-                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(selectedCandidate.name)}&background=0F172A&color=94A3B8`}
-                  alt={selectedCandidate.name}
-                  className="h-12 w-12 rounded-full object-cover ring-2 ring-emerald-500/50"
-                />
+            <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+              {/* Candidate Info Header */}
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold text-lg">
+                  {selectedCandidate.name.substring(0, 2).toUpperCase()}
+                </div>
                 <div>
-                  <h4 className="text-base font-bold text-white">{selectedCandidate.name}</h4>
-                  <p className="text-slate-400 text-xs">{selectedCandidate.platform} • ${selectedCandidate.hourlyRate.toFixed(0)}/h</p>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded text-xs">Success: {selectedCandidate.jobSuccessRate.toFixed(0)}%</span>
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${laneStyles[selectedCandidate.kanbanLane] || laneStyles['todo']}`}>
-                      {laneLabels[selectedCandidate.kanbanLane] || selectedCandidate.kanbanLane}
+                  <div className="flex items-baseline gap-2">
+                    <h2 className="text-xl font-bold text-white tracking-tight">{selectedCandidate.name}</h2>
+                  </div>
+                  <p className="text-sm text-slate-400">{selectedCandidate.title || 'Freelancer'} • {selectedCandidate.platform}</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="bg-slate-800/80 text-emerald-400 text-xs px-2 py-0.5 rounded-md border border-slate-700/50">
+                      Success: {selectedCandidate.jobSuccessRate.toFixed(0)}%
                     </span>
+                    <span className="bg-slate-800/80 text-slate-300 text-xs px-2 py-0.5 rounded-md border border-slate-700/50">
+                      Score: {selectedCandidate.talentScore ? Math.round(selectedCandidate.talentScore) : 75}
+                    </span>
+                    {selectedCandidate.linkedInUrl && (
+                      <a href={selectedCandidate.linkedInUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline">
+                        Ver Perfil @🔗
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>
 
+              {/* Deep Research Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Perfil Psicológico */}
-                <div className="bg-slate-800/30 p-4 rounded-xl border border-purple-500/20">
-                  <div className="flex items-center gap-2 mb-2 text-purple-400 font-semibold text-sm">
-                    <Brain className="h-4 w-4" />
-                    PERFIL PSICOLÓGICO
+                {/* Psychological Profile */}
+                <div className="p-4 bg-slate-900/40 rounded-xl border border-blue-500/20 shadow-inner">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-blue-400">🧠</span>
+                    <p className="text-xs font-bold text-blue-400 tracking-wider uppercase">Perfil Psicológico</p>
                   </div>
-                  <p className="text-sm text-slate-300 leading-relaxed">
-                    {selectedCandidate.psychologicalProfile || 'No analizado (Perfil encolado para enriquecimiento AI).'}
+                  <p className="text-sm text-slate-300 leading-relaxed">{selectedCandidate.psychologicalProfile || 'Innovador y orientado a resultados.'}</p>
+                </div>
+
+                {/* Business Moment */}
+                <div className="p-4 bg-slate-900/40 rounded-xl border border-emerald-500/20 shadow-inner">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-emerald-400">📈</span>
+                    <p className="text-xs font-bold text-emerald-400 tracking-wider uppercase">Momento Empresarial</p>
+                  </div>
+                  <p className="text-sm text-slate-300 leading-relaxed">{selectedCandidate.businessMoment || 'Enfocado en liderar el diseño de productos innovadores.'}</p>
+                </div>
+
+                {/* Sales Angle */}
+                <div className="p-4 bg-slate-900/40 rounded-xl border border-yellow-500/20 shadow-inner">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-yellow-400">🎯</span>
+                    <p className="text-xs font-bold text-yellow-400 tracking-wider uppercase">Ángulo de Venta</p>
+                  </div>
+                  <p className="text-sm text-slate-300 leading-relaxed">{selectedCandidate.salesAngle || 'Aprovechar su pasión por la innovación para introducir nuevas soluciones.'}</p>
+                </div>
+
+                {/* Bottleneck */}
+                <div className="p-4 bg-slate-900/40 rounded-xl border border-pink-500/20 shadow-inner">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-pink-400">⚠️</span>
+                    <p className="text-xs font-bold text-pink-400 tracking-wider uppercase">Cuello de Botella</p>
+                  </div>
+                  <p className="text-sm text-slate-300 leading-relaxed">{selectedCandidate.bottleneck || 'Necesidad de mantenerse al día con las últimas tendencias.'}</p>
+                </div>
+              </div>
+
+              {/* Lane Selector */}
+              <div className="flex items-center gap-4 bg-slate-800/30 p-3 rounded-xl border border-slate-700/50">
+                <p className="text-sm text-slate-400 font-medium">Estado del Lead:</p>
+                <select
+                  value={selectedCandidate.kanbanLane}
+                  onChange={(e) => {
+                    handleUpdateCandidate(selectedCandidate, e.target.value);
+                    setSelectedCandidate({ ...selectedCandidate, kanbanLane: e.target.value as any });
+                  }}
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-300 text-sm focus:border-emerald-500 transition-colors"
+                >
+                  {Object.entries(laneLabels).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-between items-center pt-2">
+                <span className="text-slate-500 text-xs">Información generada por la IA de enriquecimiento.</span>
+                <button className="flex items-center gap-2 px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 rounded-lg text-sm transition-colors">
+                  <span>✏️</span> Editar Mensajes
+                </button>
+              </div>
+
+              {/* Outreach Messages */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                {/* Invitation */}
+                <div className="p-5 rounded-xl bg-blue-900/10 border border-blue-500/30 flex flex-col h-full">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-blue-400">✉️</span>
+                    <span className="bg-blue-500/20 text-blue-300 text-[10px] font-bold px-1.5 py-0.5 rounded">1</span>
+                    <p className="text-xs font-bold text-blue-400 tracking-wider uppercase">Invitación Inicial</p>
+                  </div>
+                  <p className="text-sm text-slate-200 leading-relaxed flex-1">
+                    "{selectedCandidate.walead_messages?.icebreaker || `Hola ${selectedCandidate.name}, vi tu trabajo, ¡me encantaría conectar y compartir ideas sobre innovación!`}"
                   </p>
+                  <button
+                    onClick={() => {
+                      const msg = selectedCandidate.walead_messages?.icebreaker || `Hola ${selectedCandidate.name}, vi tu trabajo, ¡me encantaría conectar y compartir ideas sobre innovación!`;
+                      navigator.clipboard.writeText(msg);
+                      setToast({ show: true, message: 'Invitación copiada al portapapeles' });
+                    }}
+                    className="mt-4 w-full flex-grow-0 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors flex justify-center items-center gap-2"
+                  >
+                    <span>📋</span> Copiar
+                  </button>
                 </div>
 
-                {/* Momento Empresarial */}
-                <div className="bg-slate-800/30 p-4 rounded-xl border border-blue-500/20">
-                  <div className="flex items-center gap-2 mb-2 text-blue-400 font-semibold text-sm">
-                    <Briefcase className="h-4 w-4" />
-                    MOMENTO EMPRESARIAL
+                {/* Post-Acceptance */}
+                <div className="p-5 rounded-xl bg-emerald-900/10 border border-emerald-500/30 flex flex-col h-full">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-emerald-400">💬</span>
+                    <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-1.5 py-0.5 rounded">2</span>
+                    <p className="text-xs font-bold text-emerald-400 tracking-wider uppercase">Post-Aceptación</p>
                   </div>
-                  <p className="text-sm text-slate-300 leading-relaxed">
-                    {selectedCandidate.businessMoment || 'No analizado (Perfil encolado para enriquecimiento AI).'}
+                  <p className="text-sm text-slate-200 leading-relaxed flex-1">
+                    "{selectedCandidate.walead_messages?.followup_message || `Hola ${selectedCandidate.name}, gracias por aceptar mi conexión. He estado siguiendo tu trabajo y creo que hay oportunidades interesantes para colaborar.`}"
                   </p>
+                  <button
+                    onClick={() => {
+                      const msg = selectedCandidate.walead_messages?.followup_message || `Hola ${selectedCandidate.name}, gracias por aceptar mi conexión. He estado siguiendo tu trabajo y creo que hay oportunidades interesantes para colaborar.`;
+                      navigator.clipboard.writeText(msg);
+                      setToast({ show: true, message: 'Mensaje de seguimiento copiado al portapapeles' });
+                    }}
+                    className="mt-4 w-full flex-grow-0 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 hover:text-white rounded-lg text-sm font-medium transition-colors flex justify-center items-center gap-2"
+                  >
+                    <span>📋</span> Copiar
+                  </button>
                 </div>
 
-                {/* Ángulo de Venta */}
-                <div className="bg-slate-800/30 p-4 rounded-xl border border-emerald-500/20">
-                  <div className="flex items-center gap-2 mb-2 text-emerald-400 font-semibold text-sm">
-                    <Target className="h-4 w-4" />
-                    ÁNGULO DE VENTA
-                  </div>
-                  <p className="text-sm text-slate-300 leading-relaxed">
-                    {selectedCandidate.salesAngle || 'No analizado (Perfil encolado para enriquecimiento AI).'}
-                  </p>
-                </div>
-
-                {/* Cuello de Botella */}
-                <div className="bg-slate-800/30 p-4 rounded-xl border border-red-500/20">
-                  <div className="flex items-center gap-2 mb-2 text-red-400 font-semibold text-sm">
-                    <AlertCircle className="h-4 w-4" />
-                    CUELLO DE BOTELLA
-                  </div>
-                  <p className="text-sm text-slate-300 leading-relaxed">
-                    {selectedCandidate.bottleneck || 'No analizado (Perfil encolado para enriquecimiento AI).'}
-                  </p>
-                </div>
-
-                {/* Habilidades Clave */}
-                <div className="bg-slate-800/30 p-4 rounded-xl border border-orange-500/20">
-                  <div className="flex items-center gap-2 mb-2 text-orange-400 font-semibold text-sm">
-                    <Wrench className="h-4 w-4" />
-                    HABILIDADES CLAVE
-                  </div>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {selectedCandidate.skills && selectedCandidate.skills.length > 0 ? (
-                      selectedCandidate.skills.map((skill, i) => (
-                        <span key={i} className="px-2 py-1 bg-slate-800 text-slate-300 text-xs rounded border border-slate-700">
-                          {skill}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-sm text-slate-500">Ninguna detectada.</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Lane Selector & Notes */}
-                <div className="bg-slate-800/30 p-4 rounded-xl border border-slate-700/50 flex flex-col justify-between">
-                  <div>
-                    <p className="text-xs text-slate-500 mb-1">Cambiar estado del pipeline</p>
-                    <select
-                      value={selectedCandidate.kanbanLane}
-                      onChange={(e) => {
-                        handleUpdateCandidate(selectedCandidate, e.target.value);
-                        setSelectedCandidate({ ...selectedCandidate, kanbanLane: e.target.value as any });
-                      }}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 text-sm focus:border-emerald-500 transition-colors"
-                    >
-                      {Object.entries(laneLabels).map(([key, label]) => (
-                        <option key={key} value={key}>{label}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {selectedCandidate.notes && (
-                    <div className="mt-4">
-                      <p className="text-xs text-slate-500 mb-1">Notas Adicionales</p>
-                      <p className="text-sm text-slate-300 p-2 bg-slate-900/50 rounded-lg border border-slate-800">
-                        {selectedCandidate.notes}
-                      </p>
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
           </div>

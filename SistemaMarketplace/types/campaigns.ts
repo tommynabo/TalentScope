@@ -54,6 +54,12 @@ export interface EnrichedCandidateInCampaign {
   salesAngle?: string; // How to approach this candidate
   bottleneck?: string; // What limits their growth
 
+  // AI Generated Outreach
+  walead_messages?: {
+    icebreaker: string;
+    followup_message: string;
+  };
+
   // Pipeline status
   kanbanLane: 'todo' | 'contacted' | 'replied' | 'rejected' | 'hired';
   notes?: string;
