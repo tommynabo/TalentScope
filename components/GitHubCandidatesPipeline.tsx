@@ -82,10 +82,17 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
     });
 
     // 2. Group by stable YYYY-MM-DD key (prevents duplicate groups)
-        const { groups, sortedKeys } = groupCandidatesByDateDesc(sortedCandidates);
+    const candidatesByDate = sortedCandidates.reduce((groups, candidate) => {
+        const key = toDateKey(candidate.created_at);
+        if (!groups[key]) {
+            groups[key] = [];
+        }
+        groups[key].push(candidate);
+        return groups;
+    }, {} as Record<string, GitHubMetrics[]>);
 
     // 3. Sort date keys descending (newest first) — "2026-02-19" > "2026-02-17"
-        const sortedDates = sortedKeys;
+    const sortedDates = Object.keys(candidatesByDate).sort((a, b) => b.localeCompare(a));
 
     if (candidates.length === 0) {
         return (
