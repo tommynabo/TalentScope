@@ -354,9 +354,7 @@ const CandidateQuickView: React.FC<{ candidate: EnrichedCandidate | null; onClos
           )}
 
           <div className="flex justify-end pt-2">
-            <button className="flex items-center gap-2 px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 rounded-lg text-sm transition-colors">
-              <span>✏️</span> Editar Mensajes
-            </button>
+            {/* Removed Edit Messages button by request */}
           </div>
 
           {/* Outreach Messages */}

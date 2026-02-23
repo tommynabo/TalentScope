@@ -985,27 +985,10 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
               </div>
 
               {/* Lane Selector */}
-              <div className="flex items-center gap-4 bg-slate-800/30 p-3 rounded-xl border border-slate-700/50">
-                <p className="text-sm text-slate-400 font-medium">Estado del Lead:</p>
-                <select
-                  value={selectedCandidate.kanbanLane}
-                  onChange={(e) => {
-                    handleUpdateCandidate(selectedCandidate, e.target.value);
-                    setSelectedCandidate({ ...selectedCandidate, kanbanLane: e.target.value as any });
-                  }}
-                  className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-300 text-sm focus:border-emerald-500 transition-colors"
-                >
-                  {Object.entries(laneLabels).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Removed by request */}
 
               <div className="flex justify-between items-center pt-2">
                 <span className="text-slate-500 text-xs">Información generada por la IA de enriquecimiento.</span>
-                <button className="flex items-center gap-2 px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 rounded-lg text-sm transition-colors">
-                  <span>✏️</span> Editar Mensajes
-                </button>
               </div>
 
               {/* Outreach Messages */}
