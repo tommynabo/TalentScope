@@ -81,10 +81,11 @@ export class AIEnrichmentService {
         businessMoment: parsed.businessMoment,
         salesAngle: parsed.salesAngle,
         bottleneck: parsed.bottleneck,
+        walead_messages: parsed.walead_messages,
       };
 
       console.log(`   ✅ Enrichment complete: emails=${enrichedResponse.emails.length}, confidence=${enrichedResponse.identityConfidenceScore.toFixed(2)}`);
-      
+
       return enrichedResponse;
     } catch (error) {
       console.error('Enrichment error:', error);
@@ -172,6 +173,11 @@ Think about their actual situation, NOT generic advice:
 - If they're struggling: Offer mentorship, steady income
 - If they're premium: Offer premium clients, exclusivity
 
+### 7. OUTREACH MESSAGES (WALEAD MESSAGES)
+Craft 2 short verification messages targeting the candidate, strictly applying the "Sales Angle" you defined above.
+- Message 1 (Icebreaker): A very short, punchy, cold invite message. Less than 2 sentences. Make it engaging, informal but professional, without being overly wordy. 
+- Message 2 (Follow-up): A very short, punchy message to follow up. Less than 2 sentences. It should go straight to the point to discuss opportunities, applying the sales angle naturally. 
+
 ════════════════════════════════════════════════════════════════════════
 📝 RESPONSE FORMAT - JSON ONLY
 ════════════════════════════════════════════════════════════════════════
@@ -200,7 +206,11 @@ Respond ONLY with valid JSON (no markdown, no explanations). Every field must be
   
   "salesAngle": "APPROACH: [specific tactic based on their situation]. VALUE PROP: [what would genuinely motivate them]. POSITIONING: [how to frame opportunity]. URGENCY: [why now is good timing for them].",
   
-  "bottleneck": "PRIMARY: [main limiting factor with evidence]. SECONDARY: [if applicable]. IMPACT: [how it's limiting growth]. FIXABLE: [yes/no and how]."
+  "bottleneck": "PRIMARY: [main limiting factor with evidence]. SECONDARY: [if applicable]. IMPACT: [how it's limiting growth]. FIXABLE: [yes/no and how].",
+  "walead_messages": {
+    "icebreaker": "[Mensaje muy corto tipo invitación inicial que aplique el sales angle]",
+    "followup_message": "[Mensaje muy directo tras aceptar invitación, al grano]"
+  }
 }
 
 ════════════════════════════════════════════════════════════════════════
@@ -277,6 +287,10 @@ CRITICAL: Respond ONLY with valid JSON. NO markdown, NO explanations, NO preambl
     businessMoment?: string;
     salesAngle?: string;
     bottleneck?: string;
+    walead_messages?: {
+      icebreaker: string;
+      followup_message: string;
+    };
   } {
     try {
       // Clean up response if wrapped in markdown code blocks
@@ -313,6 +327,7 @@ CRITICAL: Respond ONLY with valid JSON. NO markdown, NO explanations, NO preambl
         businessMoment: parsed.businessMoment || undefined,
         salesAngle: parsed.salesAngle || undefined,
         bottleneck: parsed.bottleneck || undefined,
+        walead_messages: parsed.walead_messages || undefined,
       };
     } catch (error) {
       console.warn('Failed to parse OpenAI response:', error);
@@ -331,7 +346,7 @@ CRITICAL: Respond ONLY with valid JSON. NO markdown, NO explanations, NO preambl
 
   async enrichBatch(candidates: ScrapedCandidate[]): Promise<EnrichedCandidate[]> {
     console.log(`\n📊 Starting batch enrichment for ${candidates.length} candidates...`);
-    
+
     // Process in parallel with OpenAI (rate limiting handled by service)
     const enriched = await Promise.allSettled(
       candidates.map((c, idx) => {

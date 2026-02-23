@@ -115,25 +115,29 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
   };
 
   const groupedCandidates = useMemo(() => {
-    const groups: { label: string; count: number; candidates: EnrichedCandidateInCampaign[] }[] = [];
-    let currentKey = '';
+    const groupsMap = new Map<string, { label: string; dateVal: number; count: number; candidates: EnrichedCandidateInCampaign[] }>();
 
     for (const c of sortedCandidates) {
       const dateStr = c.addedAt;
       const date = new Date(dateStr);
-      const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+      const dayKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-      if (dayKey !== currentKey) {
-        currentKey = dayKey;
-        groups.push({ label: formatDateLabel(dateStr), count: 0, candidates: [] });
+      if (!groupsMap.has(dayKey)) {
+        const dateVal = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+        groupsMap.set(dayKey, {
+          label: formatDateLabel(dateStr),
+          dateVal,
+          count: 0,
+          candidates: []
+        });
       }
 
-      const group = groups[groups.length - 1];
+      const group = groupsMap.get(dayKey)!;
       group.candidates.push(c);
       group.count++;
     }
 
-    return groups;
+    return Array.from(groupsMap.values()).sort((a, b) => b.dateVal - a.dateVal);
   }, [sortedCandidates]);
 
   // ─── Candidate actions ────────────────────────────────────────────────
@@ -384,7 +388,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
           }
           return false;
         });
-        
+
         return !alreadyExists;
       });
 

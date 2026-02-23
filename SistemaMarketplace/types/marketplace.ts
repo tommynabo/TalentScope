@@ -69,6 +69,10 @@ export interface EnrichedCandidate extends ScrapedCandidate {
   businessMoment?: string;
   salesAngle?: string;
   bottleneck?: string;
+  walead_messages?: {
+    icebreaker: string;
+    followup_message: string;
+  };
 }
 
 export interface OutreachCampaign {

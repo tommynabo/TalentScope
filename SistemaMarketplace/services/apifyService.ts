@@ -153,7 +153,7 @@ export class ApifyService {
 
     while (buffer.length < targetCount && attempt < maxRetries) {
       attempt++;
-      
+
       // Crear variación de query
       const queryKeyword = this.getUpworkQueryVariation(filter.keyword, attempt);
       console.log(`\n[Intento ${attempt}/${maxRetries}] 🔍 Buscando "${queryKeyword}"...`);
@@ -216,7 +216,7 @@ export class ApifyService {
 
   private extractPageFunctionResults(results: any[]): any[] {
     if (!results || !Array.isArray(results)) return [];
-    
+
     const extracted: any[] = [];
     for (const r of results) {
       if (r && r.pageFunctionResult) {
@@ -401,6 +401,7 @@ export class ApifyService {
         return candidate;
       })
       .filter(c => c.name !== 'Unknown' && c.name.trim().length > 0)
+      .filter(c => c.name.toLowerCase().trim() !== 'upwork')
       .filter(c => c.talentScore >= 1) // Very lenient threshold - can be filtered by user
       .sort((a, b) => b.talentScore - a.talentScore); // Best first
   }
@@ -434,7 +435,7 @@ export class ApifyService {
 
     while (buffer.length < targetCount && attempt < maxRetries) {
       attempt++;
-      
+
       // Crear variación de query
       const queryKeyword = this.getFiverrQueryVariation(filter.keyword, attempt);
       console.log(`\n[Intento ${attempt}/${maxRetries}] 🔍 Buscando "${queryKeyword}"...`);
@@ -687,7 +688,7 @@ export class ApifyService {
 
     while (buffer.length < targetCount && attempt < maxRetries) {
       attempt++;
-      
+
       // Crear variación de query
       const queryKeyword = this.getLinkedInQueryVariation(filter.keyword, attempt);
       console.log(`\n[Intento ${attempt}/${maxRetries}] 🔍 Buscando "${queryKeyword}"...`);
