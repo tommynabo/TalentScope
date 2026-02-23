@@ -1,6 +1,7 @@
 import { MarketplaceRaid, ScrapingFilter, EnrichedCandidate, OutreachCampaign, ScrapedCandidate } from '../types/marketplace';
 import { MarketplaceSearchService } from './marketplaceSearchService';
 import { AIEnrichmentService } from './aiEnrichmentService';
+import { dedupService } from './marketplaceDeduplicationService';
 
 export class MarketplaceRaidService {
   private static instance: MarketplaceRaidService;
@@ -156,15 +157,15 @@ export class MarketplaceRaidService {
   }
 
   /**
-   * FLUJO IMPENETRABLE DE BÚSQUEDA
+   * FLUJO IMPENETRABLE DE BÚSQUEDA v3
    * 
-   * Loop que continúa buscando hasta encontrar exactamente X candidatos únicos:
-   * 1. Busca con variación 1 → Obtiene N candidatos
-   * 2. Deduplica contra lo ya encontrado
-   * 3. Enriquece SOLO los nuevos
-   * 4. Verifica si tiene suficientes
-   * 5. Si no → Busca con variación 2 (diferente query)
-   * 6. Repite hasta tener X candidatos únicos
+   * ORDEN CORRECTO:
+   * 1. Busca batch de candidatos con query N
+   * 2. Deduplica INMEDIATAMENTE contra campaña existente (nombres, URLs, emails)
+   * 3. Enriquece SOLO los supervivientes (ahorra API calls)
+   * 4. Después de enriquecer, verifica si LinkedIn/email encontrado ya existen
+   * 5. Si aún faltan candidatos → busca con query diferente (no repite los mismos)
+   * 6. Frena exactamente cuando tiene los X solicitados
    */
   private async executeScrapingUnbreakableForPlatform(
     platform: string,
@@ -172,31 +173,40 @@ export class MarketplaceRaidService {
     targetCount: number,
     maxRetries: number = 10
   ): Promise<EnrichedCandidate[]> {
-    const uniqueCandidates: EnrichedCandidate[] = [];
-    const seenProfiles = new Set<string>(); // Dedup por profileUrl
+    const confirmedCandidates: EnrichedCandidate[] = [];
+    
+    // Build comprehensive dedup sets from campaign data
+    const existingNames = new Set<string>(
+      (filter.existingNames || []).map(n => n.toLowerCase().trim())
+    );
+    const existingUrls = new Set<string>(
+      (filter.existingProfileUrls || []).map(u => this.normalizeUrl(u))
+    );
+    const existingEmails = new Set<string>(
+      (filter.existingEmails || []).map(e => e.toLowerCase().trim())
+    );
+    
+    // Track all profiles seen across ALL attempts (no repeats)
+    const seenProfileKeys = new Set<string>();
+    
     let attempt = 0;
+    const remaining = () => targetCount - confirmedCandidates.length;
 
-    console.log(`\n🔍 ${platform}: Búsqueda impenetrable con buffer...`);
-    console.log(`   Target: ${targetCount} candidatos únicos en máximo ${maxRetries} intentos\n`);
+    console.log(`\n🔒 ${platform}: BÚSQUEDA IMPENETRABLE v3`);
+    console.log(`   🎯 Target: ${targetCount} candidatos NUEVOS`);
+    console.log(`   🚫 Excluidos: ${existingNames.size} nombres, ${existingUrls.size} URLs, ${existingEmails.size} emails\n`);
 
-    while (uniqueCandidates.length < targetCount && attempt < maxRetries) {
+    while (remaining() > 0 && attempt < maxRetries) {
       attempt++;
 
-      const modifiedFilter = { ...filter };
+      // Use SearchService's single-attempt method with the right query variation
+      const modifiedFilter = { ...filter, maxResults: remaining() };
 
-      // Generar variación de query según plataforma
-      if (platform === 'Upwork' && !modifiedFilter.keyword) {
-        modifiedFilter.keyword = this.getUpworkQueryVariation(filter.keyword || '', attempt);
-      } else if (platform === 'Fiverr' && !modifiedFilter.keyword) {
-        modifiedFilter.keyword = this.getFiverrQueryVariation(filter.keyword || '', attempt);
-      } else if (platform === 'LinkedIn' && !modifiedFilter.keyword) {
-        modifiedFilter.keyword = this.getLinkedInQueryVariation(filter.keyword || '', attempt);
-      }
-
-      console.log(`[Intento ${attempt}/${maxRetries}] 🔄 Buscando con query: "${modifiedFilter.keyword}"`);
+      console.log(`\n═══ [Intento ${attempt}/${maxRetries}] ═══════════════════════════════════`);
+      console.log(`   🎯 Faltan: ${remaining()} candidatos`);
 
       try {
-        // 1️⃣ BUSCAR
+        // ── PASO 1: BUSCAR ──────────────────────────────────────────────
         let rawResults: ScrapedCandidate[] = [];
         if (platform === 'Upwork') {
           rawResults = await this.searchService.scrapeUpwork(modifiedFilter);
@@ -206,105 +216,165 @@ export class MarketplaceRaidService {
           rawResults = await this.searchService.scrapeLinkedIn(modifiedFilter);
         }
 
-        console.log(`   📋 Resultados raw: ${rawResults.length}`);
+        console.log(`   📋 Resultados del SearchService: ${rawResults.length}`);
 
         if (rawResults.length === 0) {
           console.log(`   ⚠️ Sin resultados en este intento`);
           continue;
         }
 
-        // 2️⃣ DEDUPLICAR contra lo ya encontrado
-        const newCandidates = rawResults.filter(candidate => {
-          const key = candidate.profileUrl || candidate.platformUsername;
-          if (seenProfiles.has(key)) {
-            return false; // Ya lo encontramos antes
+        // ── PASO 2: DEDUP AGRESIVO ANTES DE ENRIQUECER ──────────────────
+        const trulyNew: ScrapedCandidate[] = [];
+        
+        for (const candidate of rawResults) {
+          const profileKey = candidate.profileUrl || candidate.platformUsername || candidate.name;
+          
+          // 2a. ¿Ya visto en esta sesión de búsqueda?
+          if (seenProfileKeys.has(profileKey.toLowerCase())) {
+            console.log(`   ⏭️ Skip (ya visto en sesión): ${candidate.name}`);
+            continue;
           }
-          seenProfiles.add(key);
-          return true;
-        });
 
-        console.log(`   ✅ Nuevos candidatos (no duplicados): ${newCandidates.length}`);
+          // 2b. ¿Nombre ya existe en la campaña?
+          const candidateNameNorm = candidate.name.toLowerCase().trim();
+          if (existingNames.has(candidateNameNorm)) {
+            console.log(`   ⏭️ Skip (nombre duplicado): ${candidate.name}`);
+            seenProfileKeys.add(profileKey.toLowerCase());
+            continue;
+          }
 
-        if (newCandidates.length === 0) {
-          console.log(`   ⚠️ Todos estos resultados ya fueron encontrados`);
+          // 2c. ¿URL ya existe en la campaña?
+          if (candidate.profileUrl) {
+            const normalizedUrl = this.normalizeUrl(candidate.profileUrl);
+            if (existingUrls.has(normalizedUrl)) {
+              console.log(`   ⏭️ Skip (URL duplicada): ${candidate.name} → ${normalizedUrl}`);
+              seenProfileKeys.add(profileKey.toLowerCase());
+              continue;
+            }
+          }
+
+          // 2d. ¿Email ya existe en la campaña?
+          if (candidate.email && existingEmails.has(candidate.email.toLowerCase())) {
+            console.log(`   ⏭️ Skip (email duplicado): ${candidate.name}`);
+            seenProfileKeys.add(profileKey.toLowerCase());
+            continue;
+          }
+
+          // 2e. Check against dedupService (fuzzy name + all dimensions)
+          if (dedupService.isDuplicate(candidate)) {
+            console.log(`   ⏭️ Skip (dedupService): ${candidate.name}`);
+            seenProfileKeys.add(profileKey.toLowerCase());
+            continue;
+          }
+
+          // ✅ Passed all dedup checks
+          seenProfileKeys.add(profileKey.toLowerCase());
+          trulyNew.push(candidate);
+        }
+
+        console.log(`   ✅ Supervivientes post-dedup: ${trulyNew.length} de ${rawResults.length}`);
+
+        if (trulyNew.length === 0) {
+          console.log(`   ⚠️ Todos los resultados son duplicados, intentando con otra query...`);
           continue;
         }
 
-        // 3️⃣ ENRIQUECER SOLO LOS NUEVOS
-        console.log(`   🤖 Enriqueciendo ${newCandidates.length} nuevos candidatos...`);
-        const enrichedBatch = await this.aiEnrichmentService.enrichBatch(newCandidates);
+        // ── PASO 3: TOMAR SOLO LOS QUE NECESITAMOS ─────────────────────
+        const toEnrich = trulyNew.slice(0, remaining());
+        console.log(`   🤖 Enriqueciendo ${toEnrich.length} candidatos nuevos...`);
 
-        console.log(`   ✅ Enriquecimiento completado: ${enrichedBatch.length} candidatos`);
+        // ── PASO 4: ENRIQUECER ──────────────────────────────────────────
+        const enrichedBatch = await this.aiEnrichmentService.enrichBatch(toEnrich);
 
-        // 4️⃣ AGREGAR AL RESULTADO FINAL
-        uniqueCandidates.push(...enrichedBatch);
+        console.log(`   ✅ Enriquecimiento completado: ${enrichedBatch.length}`);
 
-        console.log(`   📦 Buffer total: ${uniqueCandidates.length}/${targetCount} candidatos\n`);
+        // ── PASO 5: POST-ENRICHMENT DEDUP ───────────────────────────────
+        // Ahora que tenemos LinkedIn URLs y emails REALES, verificar de nuevo
+        const finalConfirmed: EnrichedCandidate[] = [];
+        
+        for (const enriched of enrichedBatch) {
+          let isDup = false;
+          
+          // ¿LinkedIn URL ya existe?
+          if (enriched.linkedInUrl) {
+            const normalizedLinkedIn = this.normalizeUrl(enriched.linkedInUrl);
+            if (existingUrls.has(normalizedLinkedIn)) {
+              console.log(`   ⏭️ Post-enrich skip (LinkedIn duplicado): ${enriched.name} → ${normalizedLinkedIn}`);
+              isDup = true;
+            }
+          }
 
-        // 5️⃣ VERIFICAR SI ALCANZAMOS EL OBJETIVO
-        if (uniqueCandidates.length >= targetCount) {
-          console.log(`   ✅ META ALCANZADA en intento ${attempt}`);
-          break;
+          // ¿Email encontrado ya existe?
+          if (!isDup && enriched.emails && enriched.emails.length > 0) {
+            for (const email of enriched.emails) {
+              if (existingEmails.has(email.toLowerCase())) {
+                console.log(`   ⏭️ Post-enrich skip (email duplicado): ${enriched.name} → ${email}`);
+                isDup = true;
+                break;
+              }
+            }
+          }
+
+          if (!isDup) {
+            finalConfirmed.push(enriched);
+            
+            // Registrar en los sets para futuras iteraciones
+            existingNames.add(enriched.name.toLowerCase().trim());
+            if (enriched.linkedInUrl) {
+              existingUrls.add(this.normalizeUrl(enriched.linkedInUrl));
+            }
+            if (enriched.emails) {
+              enriched.emails.forEach(e => existingEmails.add(e.toLowerCase()));
+            }
+            if (enriched.profileUrl) {
+              existingUrls.add(this.normalizeUrl(enriched.profileUrl));
+            }
+
+            // Register in dedupService for future fuzzy checks
+            dedupService.registerCandidate(enriched as any);
+          }
         }
+
+        console.log(`   ✅ Confirmados finales: ${finalConfirmed.length}`);
+
+        // ── PASO 6: AGREGAR AL RESULTADO ────────────────────────────────
+        confirmedCandidates.push(...finalConfirmed);
+
+        console.log(`   📦 PROGRESO: ${confirmedCandidates.length}/${targetCount} candidatos confirmados`);
+
+        if (remaining() <= 0) {
+          console.log(`\n   🎉 META ALCANZADA en intento ${attempt}!`);
+          break;
+        } else {
+          console.log(`   🔄 Faltan ${remaining()} → continuando búsqueda con query diferente...`);
+        }
+
       } catch (error: any) {
         console.error(`   ❌ Error en intento ${attempt}: ${error.message}`);
         continue;
       }
     }
 
-    console.log(`\n✅ Búsqueda ${platform} completada: ${uniqueCandidates.length} candidatos únicos encontrados\n`);
+    if (remaining() > 0) {
+      console.log(`\n⚠️ Búsqueda agotada: ${confirmedCandidates.length}/${targetCount} candidatos (se agotaron los ${maxRetries} intentos)`);
+    }
 
-    // Retornar solo la cantidad solicitada
-    return uniqueCandidates.slice(0, targetCount);
+    console.log(`\n✅ Búsqueda ${platform} completada: ${confirmedCandidates.length} candidatos NUEVOS y ENRIQUECIDOS\n`);
+    return confirmedCandidates.slice(0, targetCount);
   }
 
-  // Query variation generators
-  private getUpworkQueryVariation(baseKeyword: string, attempt: number): string {
-    const variations = [
-      baseKeyword,
-      `"${baseKeyword}" Top Rated`,
-      `${baseKeyword} certified`,
-      `${baseKeyword} "100% Job Success"`,
-      `${baseKeyword} "5 starts" OR "4.8 starts"`,
-      `${baseKeyword} experienced`,
-      `${baseKeyword} remote freelance`,
-      `${baseKeyword} specialist`,
-      `${baseKeyword} expert portfolio`,
-      `${baseKeyword} available now`,
-    ];
-    return variations[Math.min(attempt - 1, variations.length - 1)];
-  }
-
-  private getFiverrQueryVariation(baseKeyword: string, attempt: number): string {
-    const variations = [
-      baseKeyword,
-      `"${baseKeyword}" pro`,
-      `${baseKeyword} certified`,
-      `${baseKeyword} seller`,
-      `${baseKeyword} top rated`,
-      `${baseKeyword} english`,
-      `${baseKeyword} fast delivery`,
-      `${baseKeyword} rating 5`,
-      `${baseKeyword} portfolio`,
-      `${baseKeyword} reviews`,
-    ];
-    return variations[Math.min(attempt - 1, variations.length - 1)];
-  }
-
-  private getLinkedInQueryVariation(baseKeyword: string, attempt: number): string {
-    const variations = [
-      baseKeyword,
-      `"${baseKeyword}" current`,
-      `${baseKeyword} senior`,
-      `${baseKeyword} experience`,
-      `${baseKeyword} skill`,
-      `${baseKeyword} specialist`,
-      `${baseKeyword} expert`,
-      `${baseKeyword} developer`,
-      `${baseKeyword} engineer`,
-      `${baseKeyword} architect`,
-    ];
-    return variations[Math.min(attempt - 1, variations.length - 1)];
+  private normalizeUrl(url: string): string {
+    try {
+      const parsed = new URL(url);
+      let normalized = parsed.hostname || '';
+      if (normalized.startsWith('www.')) {
+        normalized = normalized.slice(4);
+      }
+      normalized += parsed.pathname;
+      return normalized.toLowerCase().replace(/\/$/, '');
+    } catch {
+      return url.toLowerCase().replace(/\/$/, '');
+    }
   }
 
   async executeEnrichment(raidId: string): Promise<MarketplaceRaid | null> {

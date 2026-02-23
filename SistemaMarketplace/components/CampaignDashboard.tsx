@@ -274,6 +274,12 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       }
 
       // Create scraping filter from campaign search terms
+      // Pass ALL existing identifiers: LinkedIn URLs, emails, AND names
+      // so dedup can catch duplicates BEFORE expensive enrichment
+      const allExistingUrls = [
+        ...campaign.candidates.map(c => c.linkedInUrl).filter(Boolean) as string[],
+        ...campaign.candidates.map(c => c.candidateId).filter(id => id.startsWith('http')),
+      ];
       const filter: ScrapingFilter = {
         keyword: campaign.searchTerms.keyword,
         minHourlyRate: campaign.searchTerms.minHourlyRate,
@@ -281,9 +287,10 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         certifications: campaign.searchTerms.certifications || [],
         platforms: [campaign.platform as FreelancePlatform],
         maxResults: leadCount,
-        // Pass existing candidates so scraper skips them
-        existingProfileUrls: campaign.candidates.map(c => c.linkedInUrl).filter(Boolean) as string[],
+        // Pass existing candidates so scraper skips them (ALL identifiers)
+        existingProfileUrls: allExistingUrls,
         existingEmails: campaign.candidates.map(c => c.email).filter(Boolean) as string[],
+        existingNames: campaign.candidates.map(c => c.name).filter(Boolean),
       };
 
       setLogs(prev => [...prev, `📊 FASE 1: Scraping en ${campaign.platform.toUpperCase()}...`]);

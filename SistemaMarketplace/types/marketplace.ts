@@ -26,6 +26,7 @@ export interface ScrapingFilter {
   // Existing candidates to skip during scraping
   existingProfileUrls?: string[];
   existingEmails?: string[];
+  existingNames?: string[];
 }
 
 export interface ScrapedCandidate {
