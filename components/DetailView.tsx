@@ -901,84 +901,63 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                       </div>
                     </div>
 
-                    <div className="col-span-1 md:col-span-2 mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* Edit Messages Button */}
-                      <div className="md:col-span-3 flex justify-end mb-2">
-                        <button
-                          onClick={() => {
-                            setEditingCandidate(selectedCandidate);
-                            setIsWaleadEditorOpen(true);
-                          }}
-                          className="px-4 py-2 bg-blue-600/20 border border-blue-500/50 hover:bg-blue-600/30 text-blue-400 rounded-lg text-xs font-medium transition-all flex items-center gap-2"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                          Editar Mensajes
-                        </button>
-                      </div>
-
-                      {/* ICEBREAKER Column */}
-                      <div className="p-4 rounded-xl bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/30">
-                        <div className="flex items-center gap-2 mb-2 text-blue-400 font-semibold text-sm">
-                          <Send className="h-4 w-4" />
-                          1️⃣ INVITACIÓN INICIAL
+                      <div className="col-span-1 md:col-span-2 mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Edit Messages Button */}
+                        <div className="md:col-span-2 flex justify-end mb-2">
+                          <button
+                            onClick={() => {
+                              setEditingCandidate(selectedCandidate);
+                              setIsWaleadEditorOpen(true);
+                            }}
+                            className="px-4 py-2 bg-blue-600/20 border border-blue-500/50 hover:bg-blue-600/30 text-blue-400 rounded-lg text-xs font-medium transition-all flex items-center gap-2"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                            Editar Mensajes
+                          </button>
                         </div>
-                        <p className="text-slate-200 text-sm leading-relaxed italic mb-3 min-h-[60px]">
-                          "{selectedCandidate.walead_messages?.icebreaker || analysis.icebreaker || `Hola ${selectedCandidate.full_name}, me encantaría conectar contigo.`}"
-                        </p>
-                        <button
-                          onClick={() => {
-                            const msg = selectedCandidate.walead_messages?.icebreaker || analysis.icebreaker || `Hola ${selectedCandidate.full_name}, me encantaría conectar contigo.`;
-                            navigator.clipboard.writeText(msg);
-                            setToast({ show: true, message: '✅ INVITACIÓN copiada!' });
-                          }}
-                          className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium transition-all"
-                        >
-                          📋 Copiar
-                        </button>
-                      </div>
 
-                      {/* FOLLOWUP Column */}
-                      <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/30">
-                        <div className="flex items-center gap-2 mb-2 text-emerald-400 font-semibold text-sm">
-                          <MessageSquare className="h-4 w-4" />
-                          2️⃣ POST-ACEPTACIÓN
+                        {/* INVITACIÓN INICIAL */}
+                        <div className="p-4 rounded-xl bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/30">
+                          <div className="flex items-center gap-2 mb-2 text-blue-400 font-semibold text-sm">
+                            <Send className="h-4 w-4" />
+                            1️⃣ INVITACIÓN INICIAL
+                          </div>
+                          <p className="text-slate-200 text-sm leading-relaxed italic mb-3 min-h-[60px]">
+                            "{selectedCandidate.walead_messages?.icebreaker || analysis.icebreaker || `Hola ${selectedCandidate.full_name}, me encantaría conectar contigo.`}"
+                          </p>
+                          <button
+                            onClick={() => {
+                              const msg = selectedCandidate.walead_messages?.icebreaker || analysis.icebreaker || `Hola ${selectedCandidate.full_name}, me encantaría conectar contigo.`;
+                              navigator.clipboard.writeText(msg);
+                              setToast({ show: true, message: '✅ INVITACIÓN copiada!' });
+                            }}
+                            className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium transition-all"
+                          >
+                            📋 Copiar
+                          </button>
                         </div>
-                        <p className="text-slate-200 text-sm leading-relaxed italic mb-3 min-h-[60px]">
-                          "{selectedCandidate.walead_messages?.followup_message || analysis.followup_message || `${selectedCandidate.full_name}, tras revisar tu perfil sabemos que eres el candidato ideal.`}"
-                        </p>
-                        <button
-                          onClick={() => {
-                            const msg = selectedCandidate.walead_messages?.followup_message || analysis.followup_message || `${selectedCandidate.full_name}, tras revisar tu perfil sabemos que eres el candidato ideal.`;
-                            navigator.clipboard.writeText(msg);
-                            setToast({ show: true, message: '✅ POST-ACEPTACIÓN copiado!' });
-                          }}
-                          className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition-all"
-                        >
-                          📋 Copiar
-                        </button>
-                      </div>
 
-                      {/* SECOND FOLLOWUP Column */}
-                      <div className="p-4 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30">
-                        <div className="flex items-center gap-2 mb-2 text-purple-400 font-semibold text-sm">
-                          <MessageSquare className="h-4 w-4" />
-                          3️⃣ SEGUIMIENTO
+                        {/* POST-ACEPTACIÓN */}
+                        <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/30">
+                          <div className="flex items-center gap-2 mb-2 text-emerald-400 font-semibold text-sm">
+                            <MessageSquare className="h-4 w-4" />
+                            2️⃣ POST-ACEPTACIÓN
+                          </div>
+                          <p className="text-slate-200 text-sm leading-relaxed italic mb-3 min-h-[60px]">
+                            "{selectedCandidate.walead_messages?.followup_message || analysis.followup_message || `${selectedCandidate.full_name}, tras revisar tu perfil sabemos que eres el candidato ideal.`}"
+                          </p>
+                          <button
+                            onClick={() => {
+                              const msg = selectedCandidate.walead_messages?.followup_message || analysis.followup_message || `${selectedCandidate.full_name}, tras revisar tu perfil sabemos que eres el candidato ideal.`;
+                              navigator.clipboard.writeText(msg);
+                              setToast({ show: true, message: '✅ POST-ACEPTACIÓN copiado!' });
+                            }}
+                            className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition-all"
+                          >
+                            📋 Copiar
+                          </button>
                         </div>
-                        <p className="text-slate-200 text-sm leading-relaxed italic mb-3 min-h-[60px]">
-                          "{selectedCandidate.walead_messages?.second_followup || analysis.second_followup || `${selectedCandidate.full_name}, te compartimos una oportunidad que creemos es perfect fit para ti.`}"
-                        </p>
-                        <button
-                          onClick={() => {
-                            const msg = selectedCandidate.walead_messages?.second_followup || analysis.second_followup || `${selectedCandidate.full_name}, te compartimos una oportunidad que creemos es perfect fit para ti.`;
-                            navigator.clipboard.writeText(msg);
-                            setToast({ show: true, message: '✅ SEGUIMIENTO copiado!' });
-                          }}
-                          className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-medium transition-all"
-                        >
-                          📋 Copiar
-                        </button>
                       </div>
-                    </div>
                   </div>
                 );
               })()}

@@ -158,10 +158,12 @@ export class ApifyService {
       const queryKeyword = this.getUpworkQueryVariation(filter.keyword, attempt);
       console.log(`\n[Intento ${attempt}/${maxRetries}] 🔍 Buscando "${queryKeyword}"...`);
 
-      // Crear filtro modificado con la nueva keyword
+      // Crear filtro modificado con la nueva keyword y forzar idioma español
       const modifiedFilter = {
         ...filter,
-        keyword: queryKeyword
+        keyword: queryKeyword,
+        language: 'es', // Forzar idioma español
+        lang: 'es',     // Alternativo para otros actores
       };
 
       try {
