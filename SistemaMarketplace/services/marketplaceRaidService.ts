@@ -199,11 +199,22 @@ export class MarketplaceRaidService {
     while (remaining() > 0 && attempt < maxRetries) {
       attempt++;
 
-      // Use SearchService's single-attempt method with the right query variation
-      const modifiedFilter = { ...filter, maxResults: remaining() };
+      // ⭐ Generate query variation for this attempt
+      let queryVariation = filter.keyword || '';
+      if (platform === 'Upwork') {
+        queryVariation = this.getUpworkQueryVariation(filter.keyword || '', attempt);
+      } else if (platform === 'Fiverr') {
+        queryVariation = this.getFiverrQueryVariation(filter.keyword || '', attempt);
+      } else if (platform === 'LinkedIn') {
+        queryVariation = this.getLinkedInQueryVariation(filter.keyword || '', attempt);
+      }
 
       console.log(`\n═══ [Intento ${attempt}/${maxRetries}] ═══════════════════════════════════`);
       console.log(`   🎯 Faltan: ${remaining()} candidatos`);
+      console.log(`   🔍 Query: "${queryVariation}"`);
+
+      // Use SearchService's single-attempt method with the query variation
+      const modifiedFilter = { ...filter, keyword: queryVariation, maxResults: remaining() * 2 };
 
       try {
         // ── PASO 1: BUSCAR ──────────────────────────────────────────────
@@ -375,6 +386,55 @@ export class MarketplaceRaidService {
     } catch {
       return url.toLowerCase().replace(/\/$/, '');
     }
+  }
+
+  // Query variation generators for the impenetrable loop
+  private getUpworkQueryVariation(baseKeyword: string, attempt: number): string {
+    const variations = [
+      baseKeyword,
+      `"${baseKeyword}" Top Rated`,
+      `${baseKeyword} certified`,
+      `${baseKeyword} "100% Job Success"`,
+      `${baseKeyword} "5 starts" OR "4.8 starts"`,
+      `${baseKeyword} experienced`,
+      `${baseKeyword} remote freelance`,
+      `${baseKeyword} specialist`,
+      `${baseKeyword} expert portfolio`,
+      `${baseKeyword} available now`,
+    ];
+    return variations[Math.min(attempt - 1, variations.length - 1)];
+  }
+
+  private getFiverrQueryVariation(baseKeyword: string, attempt: number): string {
+    const variations = [
+      baseKeyword,
+      `"${baseKeyword}" pro`,
+      `${baseKeyword} certified`,
+      `${baseKeyword} seller`,
+      `${baseKeyword} top rated`,
+      `${baseKeyword} english`,
+      `${baseKeyword} fast delivery`,
+      `${baseKeyword} rating 5`,
+      `${baseKeyword} portfolio`,
+      `${baseKeyword} reviews`,
+    ];
+    return variations[Math.min(attempt - 1, variations.length - 1)];
+  }
+
+  private getLinkedInQueryVariation(baseKeyword: string, attempt: number): string {
+    const variations = [
+      baseKeyword,
+      `"${baseKeyword}" current`,
+      `${baseKeyword} senior`,
+      `${baseKeyword} experience`,
+      `${baseKeyword} skill`,
+      `${baseKeyword} specialist`,
+      `${baseKeyword} expert`,
+      `${baseKeyword} developer`,
+      `${baseKeyword} engineer`,
+      `${baseKeyword} architect`,
+    ];
+    return variations[Math.min(attempt - 1, variations.length - 1)];
   }
 
   async executeEnrichment(raidId: string): Promise<MarketplaceRaid | null> {

@@ -176,85 +176,48 @@ export class MarketplaceSearchService {
    * Focus on: name, profile URL, skills, rate, success rate
    * Will skip existing candidates and keep searching until target is met
    */
-  async scrapeUpwork(filter: ScrapingFilter, maxAttempts: number = 10): Promise<ScrapedCandidate[]> {
+  async scrapeUpwork(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
     if (!this.apiKey) {
       console.error('❌ No Apify API key');
       return [];
     }
 
-    const buffer: ScrapedCandidate[] = [];
-    const seenProfiles = new Set<string>();
-    // Normalize existing URLs for comparison
+    if (!filter.keyword) {
+      console.warn('⚠️ No keyword provided for Upwork search');
+      return [];
+    }
+
+    // Just do ONE search with the provided keyword
+    // The loop and query variations are handled by RaidService, not here
+    const dorkQuery = `site:upwork.com/freelancers OR site:upwork.com/o/profiles "${filter.keyword.trim()}"`;
+    const results = await this.scrapeUpworkOnce(dorkQuery, filter.maxResults || 50);
+
+    // Simple dedup against existing URLs/emails
     const existingUrls = new Set<string>(
       (filter.existingProfileUrls || []).map(url => this.normalizeUrl(url))
     );
     const existingEmails = new Set<string>(filter.existingEmails || []);
-    let attempt = 0;
-    const targetCount = filter.maxResults || 50;
+    const existingNames = new Set<string>(
+      (filter.existingNames || []).map(n => n.toLowerCase().trim())
+    );
 
-    console.log(`🔍 Upwork: Starting buffer search... target=${targetCount}`);
-    if (existingUrls.size > 0) {
-      console.log(`   ⏭️ Skipping ${existingUrls.size} existing candidates`);
-    }
-
-    while (buffer.length < targetCount && attempt < maxAttempts) {
-      attempt++;
-
-      const query = this.getUpworkQueryVariation(filter.keyword, attempt);
-      console.log(`\n[Attempt ${attempt}/${maxAttempts}] Searching: "${query}"`);
-
-      try {
-        // Calculate how many more candidates we need
-        const remainingNeeded = targetCount - buffer.length;
-        const results = await this.scrapeUpworkOnce(query, remainingNeeded * 2);
-        console.log(`   ✅ ${results.length} candidates retrieved`);
-
-        // Filter out duplicates (within session and existing)
-        const newCandidates = results.filter(c => {
-          // Skip if seen in this session
-          if (c.profileUrl && seenProfiles.has(this.normalizeUrl(c.profileUrl))) {
-            return false;
-          }
-          // Skip if it's an existing candidate from campaign
-          const normalizedUrl = this.normalizeUrl(c.profileUrl);
-          if (normalizedUrl && existingUrls.has(normalizedUrl)) {
-            console.log(`   ⏭️ Skipping existing: ${c.name} (${normalizedUrl})`);
-            return false;
-          }
-          // Skip if email already exists
-          if (c.email && existingEmails.has(c.email.toLowerCase())) {
-            console.log(`   ⏭️ Skipping existing email: ${c.email}`);
-            return false;
-          }
-          // Mark as seen for future checks
-          if (c.profileUrl) {
-            seenProfiles.add(this.normalizeUrl(c.profileUrl));
-          }
-          return true;
-        });
-
-        // Add to buffer, but don't exceed target
-        for (const candidate of newCandidates) {
-          if (buffer.length < targetCount) {
-            buffer.push(candidate);
-          } else {
-            break;
-          }
-        }
-
-        console.log(`   📦 Buffer: ${buffer.length}/${targetCount}`);
-
-        // Break early if we hit exactly what we need
-        if (buffer.length === targetCount) {
-          break;
-        }
-      } catch (err) {
-        console.error(`   ❌ Attempt ${attempt} failed:`, err);
+    const filtered = results.filter(c => {
+      // Skip by name
+      if (existingNames.has(c.name.toLowerCase().trim())) {
+        return false;
       }
-    }
+      // Skip by URL
+      if (c.profileUrl && existingUrls.has(this.normalizeUrl(c.profileUrl))) {
+        return false;
+      }
+      // Skip by email
+      if (c.email && existingEmails.has(c.email.toLowerCase())) {
+        return false;
+      }
+      return true;
+    });
 
-    console.log(`\n✅ Upwork search complete: ${buffer.length} unique candidates`);
-    return buffer.slice(0, targetCount).sort((a, b) => (b.talentScore || 0) - (a.talentScore || 0));
+    return filtered.slice(0, filter.maxResults || 50);
   }
 
   private async scrapeUpworkOnce(query: string, remainingNeeded: number = 50): Promise<ScrapedCandidate[]> {
@@ -396,76 +359,47 @@ export class MarketplaceSearchService {
   /**
    * FIVERR: Similar simplified approach - skip existing candidates
    */
-  async scrapeFiverr(filter: ScrapingFilter, maxAttempts: number = 10): Promise<ScrapedCandidate[]> {
+  async scrapeFiverr(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
     if (!this.apiKey) {
       console.error('❌ No Apify API key');
       return [];
     }
 
-    const buffer: ScrapedCandidate[] = [];
-    const seenProfiles = new Set<string>();
-    // Normalize existing URLs for comparison
+    if (!filter.keyword) {
+      console.warn('⚠️ No keyword provided for Fiverr search');
+      return [];
+    }
+
+    // Just do ONE search with the provided keyword
+    // The loop and query variations are handled by RaidService, not here
+    const results = await this.scrapeFiverrOnce(filter.keyword);
+
+    // Simple dedup against existing URLs/emails
     const existingUrls = new Set<string>(
       (filter.existingProfileUrls || []).map(url => this.normalizeUrl(url))
     );
     const existingEmails = new Set<string>(filter.existingEmails || []);
-    let attempt = 0;
-    const targetCount = filter.maxResults || 40;
+    const existingNames = new Set<string>(
+      (filter.existingNames || []).map(n => n.toLowerCase().trim())
+    );
 
-    console.log(`🔍 Fiverr: Starting buffer search... target=${targetCount}`);
-    if (existingUrls.size > 0) {
-      console.log(`   ⏭️ Skipping ${existingUrls.size} existing candidates`);
-    }
-
-    while (buffer.length < targetCount && attempt < maxAttempts) {
-      attempt++;
-      const query = this.getFiverrQueryVariation(filter.keyword, attempt);
-      console.log(`\n[Attempt ${attempt}/${maxAttempts}] Searching: "${query}"`);
-
-      try {
-        const results = await this.scrapeFiverrOnce(query);
-        console.log(`   ✅ ${results.length} sellers retrieved`);
-
-        // Filter duplicates and existing candidates
-        const newCandidates = results.filter(c => {
-          if (c.profileUrl && seenProfiles.has(this.normalizeUrl(c.profileUrl))) {
-            return false;
-          }
-          const normalizedUrl = this.normalizeUrl(c.profileUrl);
-          if (normalizedUrl && existingUrls.has(normalizedUrl)) {
-            console.log(`   ⏭️ Skipping existing: ${c.name} (${normalizedUrl})`);
-            return false;
-          }
-          if (c.email && existingEmails.has(c.email.toLowerCase())) {
-            console.log(`   ⏭️ Skipping existing email: ${c.email}`);
-            return false;
-          }
-          if (c.profileUrl) {
-            seenProfiles.add(this.normalizeUrl(c.profileUrl));
-          }
-          return true;
-        });
-
-        for (const candidate of newCandidates) {
-          if (buffer.length < targetCount) {
-            buffer.push(candidate);
-          } else {
-            break;
-          }
-        }
-
-        console.log(`   📦 Buffer: ${buffer.length}/${targetCount}`);
-
-        if (buffer.length === targetCount) {
-          break;
-        }
-      } catch (err) {
-        console.error(`   ❌ Attempt ${attempt} failed:`, err);
+    const filtered = results.filter(c => {
+      // Skip by name
+      if (existingNames.has(c.name.toLowerCase().trim())) {
+        return false;
       }
-    }
+      // Skip by URL
+      if (c.profileUrl && existingUrls.has(this.normalizeUrl(c.profileUrl))) {
+        return false;
+      }
+      // Skip by email
+      if (c.email && existingEmails.has(c.email.toLowerCase())) {
+        return false;
+      }
+      return true;
+    });
 
-    console.log(`\n✅ Fiverr search complete: ${buffer.length} unique candidates`);
-    return buffer.slice(0, targetCount).sort((a, b) => (b.talentScore || 0) - (a.talentScore || 0));
+    return filtered.slice(0, filter.maxResults || 40);
   }
 
   private async scrapeFiverrOnce(query: string): Promise<ScrapedCandidate[]> {
@@ -561,76 +495,38 @@ export class MarketplaceSearchService {
   /**
    * LINKEDIN: Via dedicated actor or fallback to browser - skip existing candidates
    */
-  async scrapeLinkedIn(filter: ScrapingFilter, maxAttempts: number = 10): Promise<ScrapedCandidate[]> {
+  async scrapeLinkedIn(filter: ScrapingFilter): Promise<ScrapedCandidate[]> {
     if (!this.apiKey) {
       console.error('❌ No Apify API key');
       return [];
     }
 
-    const buffer: ScrapedCandidate[] = [];
-    const seenProfiles = new Set<string>();
-    // Normalize existing URLs for comparison
+    if (!filter.keyword) {
+      console.warn('⚠️ No keyword provided for LinkedIn search');
+      return [];
+    }
+
+    // Just do ONE search with the provided keyword
+    // The loop and query variations are handled by RaidService, not here
+    const results = await this.scrapeLinkedInOnce(filter.keyword);
+
+    // Simple dedup against existing URLs/emails
     const existingUrls = new Set<string>(
       (filter.existingProfileUrls || []).map(url => this.normalizeUrl(url))
     );
     const existingEmails = new Set<string>(filter.existingEmails || []);
-    let attempt = 0;
-    const targetCount = filter.maxResults || 50;
+    const existingNames = new Set<string>(
+      (filter.existingNames || []).map(n => n.toLowerCase().trim())
+    );
 
-    console.log(`🔍 LinkedIn: Starting search... target=${targetCount}`);
-    if (existingUrls.size > 0) {
-      console.log(`   ⏭️ Skipping ${existingUrls.size} existing candidates`);
-    }
+    const filtered = results.filter(c => {
+      if (existingNames.has(c.name.toLowerCase().trim())) return false;
+      if (c.profileUrl && existingUrls.has(this.normalizeUrl(c.profileUrl))) return false;
+      if (c.email && existingEmails.has(c.email.toLowerCase())) return false;
+      return true;
+    });
 
-    while (buffer.length < targetCount && attempt < maxAttempts) {
-      attempt++;
-      const query = this.getLinkedInQueryVariation(filter.keyword, attempt);
-      console.log(`\n[Attempt ${attempt}/${maxAttempts}] Searching: "${query}"`);
-
-      try {
-        const results = await this.scrapeLinkedInOnce(query);
-        console.log(`   ✅ ${results.length} professionals retrieved`);
-
-        // Filter duplicates and existing candidates
-        const newCandidates = results.filter(c => {
-          if (c.profileUrl && seenProfiles.has(this.normalizeUrl(c.profileUrl))) {
-            return false;
-          }
-          const normalizedUrl = this.normalizeUrl(c.profileUrl);
-          if (normalizedUrl && existingUrls.has(normalizedUrl)) {
-            console.log(`   ⏭️ Skipping existing: ${c.name} (${normalizedUrl})`);
-            return false;
-          }
-          if (c.email && existingEmails.has(c.email.toLowerCase())) {
-            console.log(`   ⏭️ Skipping existing email: ${c.email}`);
-            return false;
-          }
-          if (c.profileUrl) {
-            seenProfiles.add(this.normalizeUrl(c.profileUrl));
-          }
-          return true;
-        });
-
-        for (const candidate of newCandidates) {
-          if (buffer.length < targetCount) {
-            buffer.push(candidate);
-          } else {
-            break;
-          }
-        }
-
-        console.log(`   📦 Buffer: ${buffer.length}/${targetCount}`);
-
-        if (buffer.length === targetCount) {
-          break;
-        }
-      } catch (err) {
-        console.error(`   ❌ Attempt ${attempt} failed:`, err);
-      }
-    }
-
-    console.log(`\n✅ LinkedIn search complete: ${buffer.length} unique candidates`);
-    return buffer.slice(0, targetCount).sort((a, b) => (b.talentScore || 0) - (a.talentScore || 0));
+    return filtered.slice(0, filter.maxResults || 30);
   }
 
   private async scrapeLinkedInOnce(query: string): Promise<ScrapedCandidate[]> {
