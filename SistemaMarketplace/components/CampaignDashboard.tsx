@@ -286,6 +286,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         minJobSuccessRate: campaign.searchTerms.minJobSuccessRate,
         certifications: campaign.searchTerms.certifications || [],
         platforms: [campaign.platform as FreelancePlatform],
+        languages: campaign.searchTerms.languages || ['en'], // Use languages from campaign
         maxResults: leadCount,
         // Pass existing candidates so scraper skips them (ALL identifiers)
         existingProfileUrls: allExistingUrls,

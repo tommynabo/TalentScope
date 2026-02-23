@@ -190,7 +190,7 @@ export class MarketplaceSearchService {
     // Just do ONE search with the provided keyword
     // The loop and query variations are handled by RaidService, not here
     const dorkQuery = `site:upwork.com/freelancers OR site:upwork.com/o/profiles "${filter.keyword.trim()}"`;
-    const results = await this.scrapeUpworkOnce(dorkQuery, filter.maxResults || 50);
+    const results = await this.scrapeUpworkOnce(dorkQuery, filter.maxResults || 50, filter.languages?.[0]);
 
     // Simple dedup against existing URLs/emails
     const existingUrls = new Set<string>(
@@ -220,18 +220,28 @@ export class MarketplaceSearchService {
     return filtered.slice(0, filter.maxResults || 50);
   }
 
-  private async scrapeUpworkOnce(query: string, remainingNeeded: number = 50): Promise<ScrapedCandidate[]> {
+  private async scrapeUpworkOnce(query: string, remainingNeeded: number = 50, language: string = 'en'): Promise<ScrapedCandidate[]> {
     const dorkQuery = query;
 
     console.log(`🔗 Upwork Dork: ${dorkQuery}`);
+    console.log(`🌐 Búsqueda en idioma: ${language}`);
 
     const actorId = 'apify/google-search-scraper';
+
+    // Map language codes to Google language codes
+    const languageCodeMap: Record<string, string> = {
+      'en': 'en',
+      'es': 'es',
+      'fr': 'fr',
+      'de': 'de',
+      'pt': 'pt',
+    };
 
     const actorInput = {
       queries: dorkQuery,
       resultsPerPage: 100,
       maxPagesPerQuery: 1,
-      languageCode: "es", // Enforce Spanish language
+      languageCode: languageCodeMap[language] || 'en', // Use provided language or default to en
       mobileResults: false,
       includeUnfilteredResults: false,
       saveHtml: false,
@@ -372,7 +382,7 @@ export class MarketplaceSearchService {
 
     // Just do ONE search with the provided keyword
     // The loop and query variations are handled by RaidService, not here
-    const results = await this.scrapeFiverrOnce(filter.keyword);
+    const results = await this.scrapeFiverrOnce(filter.keyword, filter.languages?.[0]);
 
     // Simple dedup against existing URLs/emails
     const existingUrls = new Set<string>(
@@ -402,8 +412,20 @@ export class MarketplaceSearchService {
     return filtered.slice(0, filter.maxResults || 40);
   }
 
-  private async scrapeFiverrOnce(query: string): Promise<ScrapedCandidate[]> {
-    const searchUrl = `https://www.fiverr.com/search/gigs?query=${encodeURIComponent(query)}`;
+  private async scrapeFiverrOnce(query: string, language: string = 'en'): Promise<ScrapedCandidate[]> {
+    // Map language codes to Fiverr language codes
+    const languageCodeMap: Record<string, string> = {
+      'en': '',  // Default/English
+      'es': '?lang=es',
+      'fr': '?lang=fr',
+      'de': '?lang=de',
+      'pt': '?lang=pt',
+    };
+
+    const langParam = languageCodeMap[language] || '';
+    const searchUrl = `https://www.fiverr.com/search/gigs${langParam}?query=${encodeURIComponent(query)}`;
+
+    console.log(`🌐 Fiverr búsqueda en idioma: ${language} - URL: ${searchUrl}`);
 
     const actorInput = {
       startUrls: [{ url: searchUrl }],
@@ -508,7 +530,7 @@ export class MarketplaceSearchService {
 
     // Just do ONE search with the provided keyword
     // The loop and query variations are handled by RaidService, not here
-    const results = await this.scrapeLinkedInOnce(filter.keyword);
+    const results = await this.scrapeLinkedInOnce(filter.keyword, filter.languages?.[0]);
 
     // Simple dedup against existing URLs/emails
     const existingUrls = new Set<string>(
@@ -529,8 +551,20 @@ export class MarketplaceSearchService {
     return filtered.slice(0, filter.maxResults || 30);
   }
 
-  private async scrapeLinkedInOnce(query: string): Promise<ScrapedCandidate[]> {
-    const searchUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(query)}`;
+  private async scrapeLinkedInOnce(query: string, language: string = 'en'): Promise<ScrapedCandidate[]> {
+    // Map language codes to LinkedIn language parameters
+    const languageCountryMap: Record<string, string> = {
+      'en': '',  // Default/English
+      'es': '&origin=SWITCH_SEARCH_VERTICAL&skillId=&keywords=',  // Spanish results in LinkedIn
+      'fr': '&geoUrn=&keywords=',  // French
+      'de': '&keywords=',  // German
+      'pt': '&keywords=',  // Portuguese
+    };
+
+    const langParam = languageCountryMap[language] || '';
+    const searchUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(query)}${langParam}`;
+
+    console.log(`🌐 LinkedIn búsqueda en idioma: ${language} - URL: ${searchUrl}`);
 
     const actorInput = {
       startUrls: [{ url: searchUrl }],

@@ -22,6 +22,7 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ isOpen
     certifications: [] as string[],
     countries: [] as string[],
     languages: [] as string[],
+    language: 'en', // Single language for search queries
     upworkCategory: 'Web Development',
     fiverrlevel: 'top-rated-plus' as const,
   });
@@ -56,7 +57,7 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ isOpen
         minJobSuccessRate: formData.minJobSuccessRate,
         certifications: formData.certifications,
         countries: formData.countries,
-        languages: formData.languages,
+        languages: [formData.language], // Include selected language for search
         upworkCategory: platform === 'Upwork' ? formData.upworkCategory : undefined,
         fiverrlevel: platform === 'Fiverr' ? formData.fiverrlevel : undefined,
       },
@@ -84,6 +85,7 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ isOpen
       certifications: [],
       countries: [],
       languages: [],
+      language: 'en',
       upworkCategory: 'Web Development',
       fiverrlevel: 'top-rated-plus',
     });
@@ -125,7 +127,7 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ isOpen
               Plataforma *
             </label>
             <div className="flex gap-3">
-              {(['Upwork', 'Fiverr', 'LinkedIn'] as FreelancePlatform[]).map(p => (
+              {(['Upwork', 'Fiverr'] as FreelancePlatform[]).map(p => (
                 <button
                   key={p}
                   onClick={() => setPlatform(p)}
@@ -233,6 +235,24 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ isOpen
               onChange={(e) => setFormData({ ...formData, minJobSuccessRate: parseInt(e.target.value) })}
               className="w-full"
             />
+          </div>
+
+          {/* Language Selection */}
+          <div>
+            <label className="block text-sm font-semibold text-slate-300 mb-2">
+              Idioma de Búsqueda
+            </label>
+            <select
+              value={formData.language}
+              onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white"
+            >
+              <option value="en">English</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+              <option value="de">Deutsch</option>
+              <option value="pt">Português</option>
+            </select>
           </div>
 
           {/* Upwork Specific */}

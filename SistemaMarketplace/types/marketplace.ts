@@ -22,6 +22,7 @@ export interface ScrapingFilter {
   certifications?: string[];
   platforms?: FreelancePlatform[];
   skills?: string[];
+  languages?: string[]; // e.g. ['en', 'es', 'fr'] for search language preference
   maxResults?: number;
   // Existing candidates to skip during scraping
   existingProfileUrls?: string[];
