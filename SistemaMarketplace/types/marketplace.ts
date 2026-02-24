@@ -52,6 +52,8 @@ export interface ScrapedCandidate {
   totalJobs?: number;
   totalHours?: number;
   email?: string;
+  // Language detection
+  detectedLanguage?: 'es' | 'en' | 'unknown'; // Auto-detected language from profile
 }
 
 export interface EnrichedCandidate extends ScrapedCandidate {

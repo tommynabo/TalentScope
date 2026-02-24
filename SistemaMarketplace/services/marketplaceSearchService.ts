@@ -1,5 +1,6 @@
 import { ScrapingFilter, ScrapedCandidate, FreelancePlatform } from '../types/marketplace';
 import { MarketplaceScoringService } from './marketplaceScoringService';
+import { LanguageDetectionService } from './languageDetectionService';
 
 /**
  * MarketplaceSearchService v3 - REWRITE
@@ -286,9 +287,25 @@ export class MarketplaceSearchService {
 
     // Convert to ScrapedCandidate format
     const candidates = slicedResults
-      .map((item, idx) => this.parseUpworkItem(item, idx))
+      .map((item, idx) => this.parseUpworkItem(item, idx, language))
       .filter((c): c is ScrapedCandidate => c !== null)
-      .filter(c => c.name.trim().length > 0);
+      .filter(c => c.name.trim().length > 0)
+      // FILTER BY LANGUAGE: If Spanish is required, validate candidate speaks it
+      .filter(c => {
+        if (language === 'es') {
+          const speaksSpanish = LanguageDetectionService.speaksLanguage(
+            c.bio,
+            c.title,
+            c.country,
+            'es'
+          );
+          if (!speaksSpanish) {
+            console.log(`⏭️  Candidato filtrado (no habla español): ${c.name}`);
+          }
+          return speaksSpanish;
+        }
+        return true;
+      });
 
     // Calculate scores
     return candidates.map(c => ({
@@ -305,7 +322,7 @@ export class MarketplaceSearchService {
     return ``;
   }
 
-  private parseUpworkItem(item: RawActorResult, index: number): ScrapedCandidate | null {
+  private parseUpworkItem(item: RawActorResult, index: number, language: string = 'en'): ScrapedCandidate | null {
     if (!item || typeof item !== 'object') return null;
 
     const profileUrl = item.url || '';
@@ -359,6 +376,9 @@ export class MarketplaceSearchService {
       successRate = parseInt(successMatch[1]);
     }
 
+    // Detect language from profile data
+    const detectedLanguage = LanguageDetectionService.detectLanguage(bio, title, 'Unknown');
+
     return {
       id: `upwork-google-${index}-${Date.now()}`,
       name,
@@ -379,6 +399,7 @@ export class MarketplaceSearchService {
       totalEarnings: 0,
       totalJobs: 0,
       totalHours: 0,
+      detectedLanguage,
     };
   }
 
@@ -457,9 +478,25 @@ export class MarketplaceSearchService {
     const items = this.flattenPageFunctionResults(rawItems);
 
     const candidates = items
-      .map((item, idx) => this.parseFiverrItem(item, idx))
+      .map((item, idx) => this.parseFiverrItem(item, idx, language))
       .filter((c): c is ScrapedCandidate => c !== null)
-      .filter(c => c.name.trim().length > 0);
+      .filter(c => c.name.trim().length > 0)
+      // FILTER BY LANGUAGE: If Spanish is required, validate candidate speaks it
+      .filter(c => {
+        if (language === 'es') {
+          const speaksSpanish = LanguageDetectionService.speaksLanguage(
+            c.bio,
+            c.title,
+            c.country,
+            'es'
+          );
+          if (!speaksSpanish) {
+            console.log(`⏭️  Candidato filtrado (no habla español): ${c.name}`);
+          }
+          return speaksSpanish;
+        }
+        return true;
+      });
 
     // Calculate scores
     return candidates.map(c => ({
@@ -501,7 +538,7 @@ export class MarketplaceSearchService {
     `;
   }
 
-  private parseFiverrItem(item: RawActorResult, index: number): ScrapedCandidate | null {
+  private parseFiverrItem(item: RawActorResult, index: number, language: string = 'en'): ScrapedCandidate | null {
     if (!item || typeof item !== 'object') return null;
 
     const name = (item.name || item.seller || item.username || '').trim();
@@ -510,23 +547,31 @@ export class MarketplaceSearchService {
     const profileUrl = item.profileUrl || item.url || item.link || '';
     if (!profileUrl || !profileUrl.includes('fiverr')) return null;
 
+    const bio = item.description || '';
+    const title = item.title || item.service || 'Seller';
+    const country = item.country || 'Unknown';
+
+    // Detect language from profile data
+    const detectedLanguage = LanguageDetectionService.detectLanguage(bio, title, country);
+
     return {
       id: `fiverr-${index}-${Date.now()}`,
       name,
       platform: 'Fiverr' as FreelancePlatform,
       platformUsername: profileUrl.split('/').filter(Boolean).pop() || `user-${index}`,
       profileUrl,
-      title: item.title || item.service || 'Seller',
-      country: item.country || 'Unknown',
+      title,
+      country,
       hourlyRate: this.parseRate(item.rate),
       jobSuccessRate: this.parseSuccessRate(item.rating),
       certifications: item.badges || [],
-      bio: item.description || '',
+      bio,
       scrapedAt: new Date().toISOString(),
       talentScore: 0,
       skills: Array.isArray(item.skills) ? item.skills : [],
       badges: item.badges || [],
       yearsExperience: 0,
+      detectedLanguage,
     };
   }
 
@@ -595,9 +640,25 @@ export class MarketplaceSearchService {
     const items = this.flattenPageFunctionResults(rawItems);
 
     const candidates = items
-      .map((item, idx) => this.parseLinkedInItem(item, idx))
+      .map((item, idx) => this.parseLinkedInItem(item, idx, language))
       .filter((c): c is ScrapedCandidate => c !== null)
-      .filter(c => c.name.trim().length > 0);
+      .filter(c => c.name.trim().length > 0)
+      // FILTER BY LANGUAGE: If Spanish is required, validate candidate speaks it
+      .filter(c => {
+        if (language === 'es') {
+          const speaksSpanish = LanguageDetectionService.speaksLanguage(
+            c.bio,
+            c.title,
+            c.country,
+            'es'
+          );
+          if (!speaksSpanish) {
+            console.log(`⏭️  Candidato filtrado (no habla español): ${c.name}`);
+          }
+          return speaksSpanish;
+        }
+        return true;
+      });
 
     // Calculate scores
     return candidates.map(c => ({
@@ -639,7 +700,7 @@ export class MarketplaceSearchService {
     `;
   }
 
-  private parseLinkedInItem(item: RawActorResult, index: number): ScrapedCandidate | null {
+  private parseLinkedInItem(item: RawActorResult, index: number, language: string = 'en'): ScrapedCandidate | null {
     if (!item || typeof item !== 'object') return null;
 
     const name = (item.name || item.user || item.fullName || '').trim();
@@ -648,23 +709,31 @@ export class MarketplaceSearchService {
     const profileUrl = item.profileUrl || item.url || item.link || '';
     if (!profileUrl || !profileUrl.includes('linkedin.com')) return null;
 
+    const bio = item.bio || item.headline || '';
+    const title = item.title || item.jobTitle || item.headline || 'Professional';
+    const country = item.country || item.location || 'Unknown';
+
+    // Detect language from profile data
+    const detectedLanguage = LanguageDetectionService.detectLanguage(bio, title, country);
+
     return {
       id: `linkedin-${index}-${Date.now()}`,
       name,
       platform: 'LinkedIn' as FreelancePlatform,
       platformUsername: profileUrl.split('/').filter(Boolean).pop() || `user-${index}`,
       profileUrl,
-      title: item.title || item.jobTitle || item.headline || 'Professional',
-      country: item.country || item.location || 'Unknown',
+      title,
+      country,
       hourlyRate: 0,
       jobSuccessRate: 0,
       certifications: [],
-      bio: item.bio || item.headline || '',
+      bio,
       scrapedAt: new Date().toISOString(),
       talentScore: 0,
       skills: Array.isArray(item.skills) ? item.skills : [],
       badges: [],
       yearsExperience: 0,
+      detectedLanguage,
     };
   }
 

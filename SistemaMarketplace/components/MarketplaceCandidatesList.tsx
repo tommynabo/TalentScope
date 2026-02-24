@@ -65,9 +65,10 @@ export const MarketplaceCandidatesList: React.FC<MarketplaceCandidatesListProps>
 
   const sortedCandidates = useMemo(() => {
     return [...candidates].sort((a, b) => {
-      const dateA = new Date(a.scrapedAt).getTime();
-      const dateB = new Date(b.scrapedAt).getTime();
-      if (dateB !== dateA) return dateB - dateA; // Most recent first
+      // Sort by Talent Score first (highest first), then by Job Success Rate
+      const scoreA = a.talentScore || 0;
+      const scoreB = b.talentScore || 0;
+      if (scoreB !== scoreA) return scoreB - scoreA;
       return (b.jobSuccessRate || 0) - (a.jobSuccessRate || 0);
     });
   }, [candidates]);
@@ -172,7 +173,8 @@ export const MarketplaceCandidatesList: React.FC<MarketplaceCandidatesListProps>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-slate-300">Plataforma</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-slate-300">Título</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-slate-300">Tarifa/h</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-slate-300">Success %</th>
+                <th className="px-6 py-3 text-center text-sm font-semibold text-slate-300">Success %</th>
+                <th className="px-6 py-3 text-center text-sm font-semibold text-slate-300">Talent Score</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-slate-300">Emails</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-slate-300">LinkedIn</th>
               </tr>
@@ -188,9 +190,18 @@ export const MarketplaceCandidatesList: React.FC<MarketplaceCandidatesListProps>
                   <td className="px-6 py-4 text-sm text-slate-300">{candidate.platform}</td>
                   <td className="px-6 py-4 text-sm text-slate-400">{candidate.title}</td>
                   <td className="px-6 py-4 text-sm text-slate-300 font-medium">${candidate.hourlyRate.toFixed(2)}</td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 text-center">
                     <span className="text-sm font-medium text-emerald-400">
                       {candidate.jobSuccessRate.toFixed(0)}%
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className={`text-sm font-bold px-3 py-1 rounded-md inline-block ${
+                      candidate.talentScore >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
+                      candidate.talentScore >= 70 ? 'bg-yellow-500/20 text-yellow-400' :
+                      'bg-red-500/20 text-red-400'
+                    }`}>
+                      {candidate.talentScore.toFixed(0)}/100
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-400">
