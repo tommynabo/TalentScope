@@ -11,35 +11,96 @@ export class LanguageDetectionService {
     // Direct Spanish language mentions
     'español',
     'spanish',
-    'harablo español',
     'hablo español',
     'spanish speaker',
     'spanish native',
     'native spanish',
     'castellano',
+    'castillan',
+    'speaks spanish',
+    'fluent spanish',
+    'advanced spanish',
+    'proficient spanish',
     
     // Common Spanish tech/freelance phrases
     'proyecto en español',
+    'proyectos en español',
     'trabajos en español',
+    'trabajo en español',
     'cliente español',
+    'clientes españoles',
+    'empresa española',
+    'empresas españolas',
+    'negocios españoles',
+    'spanish speaking clients',
+    'spanish clients',
+    'hispanic market',
+    'lattino american',
+    
+    // Spanish-speaking countries (common in freelancer profiles)
     'españa',
+    'spain',
+    'madrid',
+    'barcelona',
+    'valencia',
+    'mexico',
     'méxico',
-    'méxico',
+    'méxico city',
+    'mexico city',
     'argentina',
+    'buenos aires',
     'colombia',
+    'bogota',
+    'bogotá',
     'chile',
+    'santiago',
+    'peru',
     'perú',
+    'lima',
     'venezuela',
+    'caracas',
+    'ecuador',
+    'quito',
+    'guatemala',
+    'honduras',
+    'el salvador',
+    'nicaragua',
+    'panama',
+    'panamá',
+    'costa rica',
+    'dominican',
+    'república dominicana',
+    'puerto rico',
+    'uruguay',
+    'montevi deo',
+    'montevideo',
+    'paraguay',
+    'asuncion',
+    'asunción',
+    'cuba',
+    'havana',
+    'bolovia',
+    'la paz',
+    
+    // Regional/cultural indicators
     'latino',
     'latinoamericano',
+    'latin american',
+    'hispanic',
+    'hispano',
     'hispanohablante',
-    
-    // Client/work indicators
+    'spanish-speaking',
+    'spanish speaking',
     'south america',
     'south american',
+    'central america',
     'latin america',
-    'spanish speaking',
-    'spanish-speaking',
+    'caribbean',
+    
+    // Work preference indicators
+    'available for spanish projects',
+    'spanish project experience',
+    'hispanic community',
   ];
 
   /**
@@ -58,39 +119,46 @@ export class LanguageDetectionService {
 
     // Count Spanish keyword matches
     let spanishMatches = 0;
+    let spanishCountryMatches = 0;
+    
     for (const keyword of this.SPANISH_KEYWORDS) {
       if (profileText.includes(keyword)) {
         spanishMatches++;
+        // Country keywords get weighted a bit less
+        if (['españa', 'spain', 'mexico', 'méxico', 'argentina', 'colombia', 'chile', 'peru', 'perú'].includes(keyword)) {
+          spanishCountryMatches++;
+        }
       }
     }
 
-    // If we found Spanish keywords, mark as Spanish speaker
+    // If we found explicit Spanish language keywords (not just country), mark as Spanish speaker
+    // Requires at least 1 match, but country alone can contribute
     if (spanishMatches >= 1) {
       return 'es';
     }
 
-    // Check for Spanish-speaking countries in profile
+    // Also check if location appears to be Spanish-speaking
     const spanishCountries = [
-      'spain',
-      'mexico',
+      'spain', 'españa',
+      'mexico', 'méxico',
       'argentina',
       'colombia',
       'chile',
-      'peru',
+      'peru', 'perú',
       'venezuela',
       'ecuador',
       'guatemala',
-      'cuba',
-      'bolivia',
       'honduras',
       'el salvador',
       'nicaragua',
-      'panama',
+      'panama', 'panamá',
       'costa rica',
-      'dominican',
+      'dominican', 'república dominicana',
+      'puerto rico',
       'uruguay',
       'paraguay',
-      'puerto rico',
+      'cuba',
+      'bolivia', 'bolovia',
     ];
 
     if (spanishCountries.some(c => profileText.includes(c))) {
@@ -119,7 +187,7 @@ export class LanguageDetectionService {
       return true;
     }
 
-    if (requiredLanguage === 'es') {
+    if (requiredLanguage === 'es' || requiredLanguage === 'español') {
       const detected = this.detectLanguage(bio, title, country);
       return detected === 'es';
     }

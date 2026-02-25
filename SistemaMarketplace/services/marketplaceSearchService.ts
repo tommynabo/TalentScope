@@ -290,9 +290,9 @@ export class MarketplaceSearchService {
       .map((item, idx) => this.parseUpworkItem(item, idx, language))
       .filter((c): c is ScrapedCandidate => c !== null)
       .filter(c => c.name.trim().length > 0)
-      // FILTER BY LANGUAGE: If Spanish is required, validate candidate speaks it
+      // FILTER BY LANGUAGE: Validate candidate speaks required language
       .filter(c => {
-        if (language === 'es') {
+        if (language === 'es' || language === 'español') {
           const speaksSpanish = LanguageDetectionService.speaksLanguage(
             c.bio,
             c.title,
@@ -316,10 +316,6 @@ export class MarketplaceSearchService {
         maxResults: 50,
       }).score,
     }));
-  }
-
-  private getUpworkPageFunction(): string {
-    return ``;
   }
 
   private parseUpworkItem(item: RawActorResult, index: number, language: string = 'en'): ScrapedCandidate | null {
@@ -450,40 +446,75 @@ export class MarketplaceSearchService {
   }
 
   private async scrapeFiverrOnce(query: string, language: string = 'en'): Promise<ScrapedCandidate[]> {
-    // Map language codes to Fiverr language codes
+    // Use Google Search Scraper for Fiverr (much faster than web-scraper)
+    const dorkQuery = `site:fiverr.com/gigs "${query.trim()}"`;
+
+    console.log(`🔗 Fiverr Dork: ${dorkQuery}`);
+    console.log(`🌐 Búsqueda en idioma: ${language}`);
+
+    const actorId = 'apify/google-search-scraper';
+
+    // Map language codes to Google language codes
     const languageCodeMap: Record<string, string> = {
-      'en': '',  // Default/English
-      'es': '?lang=es',
-      'fr': '?lang=fr',
-      'de': '?lang=de',
-      'pt': '?lang=pt',
+      'en': 'en',
+      'es': 'es',
+      'fr': 'fr',
+      'de': 'de',
+      'pt': 'pt',
     };
-
-    const langParam = languageCodeMap[language] || '';
-    const searchUrl = `https://www.fiverr.com/search/gigs${langParam}?query=${encodeURIComponent(query)}`;
-
-    console.log(`🌐 Fiverr búsqueda en idioma: ${language} - URL: ${searchUrl}`);
 
     const actorInput = {
-      startUrls: [{ url: searchUrl }],
-      maxResultsPerStartUrl: 50,
-      maxResults: 50,
-      pageFunction: this.getFiverrPageFunction(),
-      proxyConfiguration: { useApifyProxy: true },
+      queries: dorkQuery,
+      resultsPerPage: 100,
+      maxPagesPerQuery: 1,
+      languageCode: languageCodeMap[language] || 'en',
+      mobileResults: false,
+      includeUnfilteredResults: false,
+      saveHtml: false,
+      saveHtmlToKeyValueStore: false
     };
 
-    const rawItems = await this.getActorDataset('apify/web-scraper', actorInput, 300);
-    if (!rawItems.length) return [];
+    // Execute and get raw items from dataset
+    const rawItems = await this.getActorDataset(
+      actorId,
+      actorInput,
+      60 // Shorter timeout since Google searches are fast
+    );
 
-    const items = this.flattenPageFunctionResults(rawItems);
+    if (!rawItems.length) {
+      console.warn('⚠️ Fiverr (Google): No results returned from actor');
+      return [];
+    }
 
-    const candidates = items
+    // Google Search Scraper returns results inside organicResults array
+    let organicResults: any[] = [];
+    for (const item of rawItems) {
+      if (item.organicResults && Array.isArray(item.organicResults)) {
+        organicResults = organicResults.concat(item.organicResults);
+      }
+    }
+
+    if (organicResults.length === 0) {
+      console.warn('⚠️ Fiverr (Google): No organicResults found.');
+      return [];
+    }
+
+    // Filter valid Fiverr gig pages
+    const validResults = organicResults.filter((r: any) => {
+      if (!r.url) return false;
+      return r.url.includes('fiverr.com/gigs');
+    });
+
+    console.log(`✅ Fiverr (Google): ${validResults.length} raw valid results`);
+
+    // Convert to ScrapedCandidate format
+    const candidates = validResults
       .map((item, idx) => this.parseFiverrItem(item, idx, language))
       .filter((c): c is ScrapedCandidate => c !== null)
       .filter(c => c.name.trim().length > 0)
-      // FILTER BY LANGUAGE: If Spanish is required, validate candidate speaks it
+      // FILTER BY LANGUAGE: Validate candidate speaks required language
       .filter(c => {
-        if (language === 'es') {
+        if (language === 'es' || language === 'español') {
           const speaksSpanish = LanguageDetectionService.speaksLanguage(
             c.bio,
             c.title,
@@ -509,68 +540,73 @@ export class MarketplaceSearchService {
     }));
   }
 
-  private getFiverrPageFunction(): string {
-    return `
-    async function pageFunction(context) {
-      const { page } = context;
-      const results = [];
-      
-      try {
-        const sellers = await page.$$('[data-qa*=seller], [class*=seller], a[href*="/user/"]');
-        
-        for (const seller of sellers.slice(0, 100)) {
-          try {
-            const name = await seller.evaluate(el => (el.textContent || '').trim().substring(0, 50));
-            const href = await seller.evaluate(el => el.getAttribute('href') || el.closest('a')?.getAttribute('href') || '');
-            
-            if (name && name.length > 2 && href && href.includes('fiverr')) {
-              results.push({
-                name,
-                profileUrl: href,
-              });
-            }
-          } catch (e) {}
-        }
-      } catch (e) {}
-      
-      return results.slice(0, 50);
-    }
-    `;
-  }
-
   private parseFiverrItem(item: RawActorResult, index: number, language: string = 'en'): ScrapedCandidate | null {
     if (!item || typeof item !== 'object') return null;
 
-    const name = (item.name || item.seller || item.username || '').trim();
-    if (!name || name.length < 2) return null;
+    const profileUrl = item.url || '';
+    if (!profileUrl || !profileUrl.includes('fiverr.com/gigs')) return null;
 
-    const profileUrl = item.profileUrl || item.url || item.link || '';
-    if (!profileUrl || !profileUrl.includes('fiverr')) return null;
+    // Extract seller name and gig title from URL and title
+    // Fiverr URLs typically: https://www.fiverr.com/gigs/flutter-development?...
+    // Title from Google: "Flutter Development by [Seller Name] | Fiverr"
+    let title = item.title || 'Fiverr Seller';
+    let name = 'Fiverr Seller';
+
+    // Try to extract name from Google result title
+    // Typical format: "Gig Title by Seller Name | Fiverr"
+    if (title.includes('by ')) {
+      const byPart = title.split('by ').pop() || '';
+      const namePart = byPart.split(' |')[0].trim();
+      if (namePart && namePart.length > 2) {
+        name = namePart;
+      }
+    }
+
+    // Also try to extract from URL if possible
+    try {
+      const parsed = new URL(profileUrl);
+      const path = parsed.pathname.toLowerCase();
+      // Extract gig name from URL: /gigs/flutter-development
+      if (path.includes('/gigs/')) {
+        const gigName = path.split('/gigs/')[1]?.split('?')[0] || '';
+        if (gigName && !title.includes('-')) {
+          title = gigName.replace(/-/g, ' ');
+        }
+      }
+    } catch {
+      // URL parsing failed, continue with what we have
+    }
+
+    if (!name || name.length < 2 || name.toLowerCase().includes('fiverr')) {
+      return null;
+    }
 
     const bio = item.description || '';
-    const title = item.title || item.service || 'Seller';
-    const country = item.country || 'Unknown';
+    const country = 'Unknown';
 
     // Detect language from profile data
     const detectedLanguage = LanguageDetectionService.detectLanguage(bio, title, country);
 
     return {
-      id: `fiverr-${index}-${Date.now()}`,
+      id: `fiverr-google-${index}-${Date.now()}`,
       name,
       platform: 'Fiverr' as FreelancePlatform,
-      platformUsername: profileUrl.split('/').filter(Boolean).pop() || `user-${index}`,
+      platformUsername: profileUrl.split('/gigs/')[1]?.split('?')[0]?.split('~')?.pop() || `user-${index}`,
       profileUrl,
       title,
       country,
-      hourlyRate: this.parseRate(item.rate),
-      jobSuccessRate: this.parseSuccessRate(item.rating),
-      certifications: item.badges || [],
+      hourlyRate: 0, // Can't extract from Google results
+      jobSuccessRate: 0, // Can't extract from Google results
+      certifications: [],
       bio,
       scrapedAt: new Date().toISOString(),
-      talentScore: 0,
-      skills: Array.isArray(item.skills) ? item.skills : [],
-      badges: item.badges || [],
+      talentScore: 0, // Calculated later
+      skills: [],
+      badges: [],
       yearsExperience: 0,
+      totalEarnings: 0,
+      totalJobs: 0,
+      totalHours: 0,
       detectedLanguage,
     };
   }

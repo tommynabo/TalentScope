@@ -202,9 +202,9 @@ export class MarketplaceRaidService {
       // ⭐ Generate query variation for this attempt
       let queryVariation = filter.keyword || '';
       if (platform === 'Upwork') {
-        queryVariation = this.getUpworkQueryVariation(filter.keyword || '', attempt);
+        queryVariation = this.getUpworkQueryVariation(filter.keyword || '', attempt, filter.languages?.[0]);
       } else if (platform === 'Fiverr') {
-        queryVariation = this.getFiverrQueryVariation(filter.keyword || '', attempt);
+        queryVariation = this.getFiverrQueryVariation(filter.keyword || '', attempt, filter.languages?.[0]);
       } else if (platform === 'LinkedIn') {
         queryVariation = this.getLinkedInQueryVariation(filter.keyword || '', attempt);
       }
@@ -389,13 +389,33 @@ export class MarketplaceRaidService {
   }
 
   // Query variation generators for the impenetrable loop
-  private getUpworkQueryVariation(baseKeyword: string, attempt: number): string {
+  private getUpworkQueryVariation(baseKeyword: string, attempt: number, language?: string): string {
+    const isSpanish = language === 'es' || language === 'español';
+    
+    // Spanish-focused variations - include language keywords
+    if (isSpanish) {
+      const spanishVariations = [
+        `${baseKeyword} "Spanish" OR "Español"`,
+        `${baseKeyword} "Spanish speaker" OR "habla español"`,
+        `${baseKeyword} "Top Rated" "Spanish"`,
+        `${baseKeyword} "100% Job Success" "Español"`,
+        `${baseKeyword} expert "Spanish language"`,
+        `${baseKeyword} remote "habla español"`,
+        `${baseKeyword} specialist "Spanish"`,
+        `${baseKeyword} portfolio "Español"`,
+        `${baseKeyword} "available" "Spanish speaker"`,
+        `${baseKeyword} "native spanish" OR "spanish native"`,
+      ];
+      return spanishVariations[Math.min(attempt - 1, spanishVariations.length - 1)];
+    }
+
+    // English/default variations
     const variations = [
       baseKeyword,
       `"${baseKeyword}" Top Rated`,
       `${baseKeyword} certified`,
       `${baseKeyword} "100% Job Success"`,
-      `${baseKeyword} "5 starts" OR "4.8 starts"`,
+      `${baseKeyword} "5 stars" OR "4.8 stars"`,
       `${baseKeyword} experienced`,
       `${baseKeyword} remote freelance`,
       `${baseKeyword} specialist`,
@@ -405,7 +425,27 @@ export class MarketplaceRaidService {
     return variations[Math.min(attempt - 1, variations.length - 1)];
   }
 
-  private getFiverrQueryVariation(baseKeyword: string, attempt: number): string {
+  private getFiverrQueryVariation(baseKeyword: string, attempt: number, language?: string): string {
+    const isSpanish = language === 'es' || language === 'español';
+    
+    // Spanish-focused variations
+    if (isSpanish) {
+      const spanishVariations = [
+        `${baseKeyword} "Spanish" OR "Español"`,
+        `${baseKeyword} "Spanish speaker" OR "habla español"`,
+        `${baseKeyword} pro "Spanish"`,
+        `${baseKeyword} certified "Español"`,
+        `${baseKeyword} "Spanish language"`,
+        `${baseKeyword} "top rated" "Spanish"`,
+        `${baseKeyword} "fast delivery" "Español"`,
+        `${baseKeyword} "rating 5" "Spanish"`,
+        `${baseKeyword} portfolio "habla español"`,
+        `${baseKeyword} "native spanish" OR "spanish native"`,
+      ];
+      return spanishVariations[Math.min(attempt - 1, spanishVariations.length - 1)];
+    }
+
+    // English/default variations
     const variations = [
       baseKeyword,
       `"${baseKeyword}" pro`,
