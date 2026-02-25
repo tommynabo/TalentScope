@@ -109,10 +109,18 @@ export class GitHubContactService {
 
             const profile = preFetchedProfile || (await this.octokit.rest.users.getByUsername({ username })).data;
 
+            // ⚡ Fetch profile README once, share across both searches
+            let profileReadme: string | null = null;
+            try {
+                profileReadme = await this.getProfileReadme(username);
+            } catch {
+                // Profile README not found — that's ok
+            }
+
             // ⚡ Run LinkedIn + email search in PARALLEL
             const [linkedin, email] = await Promise.all([
-                this.findLinkedInProfile(username, profile, topRepos),
-                this.findEmail(username, topRepos)
+                this.findLinkedInProfile(username, profile, topRepos, profileReadme),
+                this.findEmail(username, topRepos, profile, profileReadme)
             ]);
 
             return {
@@ -128,11 +136,13 @@ export class GitHubContactService {
 
     /**
      * Busca LinkedIn en múltiples fuentes
+     * Ahora incluye búsqueda en profile README como fuente prioritaria
      */
     private async findLinkedInProfile(
         username: string,
         profile: any,
-        topRepos?: any[]
+        topRepos?: any[],
+        profileReadme?: string | null
     ): Promise<string | null> {
         // Check cache
         if (this.linkedinCache.has(username)) {
@@ -141,7 +151,16 @@ export class GitHubContactService {
 
         let linkedinUrl: string | null = null;
 
-        // 1. Buscar en bio
+        // 1. 🆕 Buscar en profile README (username/username repo) - MOST COMMON PLACE
+        if (profileReadme) {
+            linkedinUrl = this.extractLinkedIn(profileReadme);
+            if (linkedinUrl) {
+                this.linkedinCache.set(username, linkedinUrl);
+                return linkedinUrl;
+            }
+        }
+
+        // 2. Buscar en bio
         if (profile.bio) {
             linkedinUrl = this.extractLinkedIn(profile.bio);
             if (linkedinUrl) {
@@ -150,7 +169,7 @@ export class GitHubContactService {
             }
         }
 
-        // 2. Buscar en nombre completo si parece URL
+        // 3. Buscar en nombre completo si parece URL
         if (profile.name && profile.name.includes('linkedin')) {
             linkedinUrl = this.extractLinkedIn(profile.name);
             if (linkedinUrl) {
@@ -159,19 +178,26 @@ export class GitHubContactService {
             }
         }
 
-        // 3. Buscar en blog/website
-        if (profile.blog && profile.blog.includes('linkedin')) {
-            linkedinUrl = this.extractLinkedIn(profile.blog);
-            if (linkedinUrl) {
-                this.linkedinCache.set(username, linkedinUrl);
-                return linkedinUrl;
+        // 4. Buscar en blog/website
+        if (profile.blog) {
+            if (profile.blog.includes('linkedin')) {
+                linkedinUrl = this.extractLinkedIn(profile.blog);
+                if (linkedinUrl) {
+                    this.linkedinCache.set(username, linkedinUrl);
+                    return linkedinUrl;
+                }
+            }
+            // Check if blog is a linktree or similar aggregator
+            if (profile.blog.includes('linktr.ee') || profile.blog.includes('bio.link') || profile.blog.includes('bento.me')) {
+                // These often contain LinkedIn links but we can't follow them without extra calls
+                // Still worth noting for future enhancement
             }
         }
 
-        // 4. Buscar en repositorios (README, descripciones, etc)
+        // 5. Buscar en repositorios (README, descripciones, etc)
         if (topRepos && topRepos.length > 0) {
-            // ⚡ Reduced from 5 to 2 repos for README scanning
-            for (const repo of topRepos.slice(0, 2)) {
+            // Scan up to 3 repos for LinkedIn in READMEs
+            for (const repo of topRepos.slice(0, 3)) {
                 // Buscar en descripción del repo
                 if (repo.description) {
                     linkedinUrl = this.extractLinkedIn(repo.description);
@@ -203,8 +229,14 @@ export class GitHubContactService {
 
     /**
      * Busca email en múltiples fuentes con búsqueda profunda
+     * Ahora lee profile.email, profile README, y más repos
      */
-    private async findEmail(username: string, topRepos?: any[]): Promise<string | null> {
+    private async findEmail(
+        username: string,
+        topRepos?: any[],
+        profile?: any,
+        profileReadme?: string | null
+    ): Promise<string | null> {
         // Check cache
         if (this.emailCache.has(username)) {
             return this.emailCache.get(username) || null;
@@ -212,10 +244,29 @@ export class GitHubContactService {
 
         let email: string | null = null;
 
-        // 1. Buscar en commits de los primeros 3 repositorios
+        // 0. 🆕 PRIMERO: Leer el campo email público del perfil GitHub (lo más fácil)
+        if (profile?.email && this.isValidEmail(profile.email)) {
+            this.emailCache.set(username, profile.email);
+            return profile.email;
+        }
+
+        // 1. 🆕 Buscar email en el profile README (username/username repo)
+        if (profileReadme) {
+            const emailMatch = profileReadme.match(/([a-zA-Z0-9._+-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi);
+            if (emailMatch) {
+                for (const candidate of emailMatch) {
+                    if (this.isValidEmail(candidate)) {
+                        email = candidate;
+                        this.emailCache.set(username, email);
+                        return email;
+                    }
+                }
+            }
+        }
+
+        // 2. Buscar en commits de los primeros 5 repositorios (increased from 3)
         if (topRepos && topRepos.length > 0) {
-            // ⚡ Reduced from 10 to 3 repos for email search
-            for (const repo of topRepos.slice(0, 3)) {
+            for (const repo of topRepos.slice(0, 5)) {
                 email = await this.extractEmailFromCommits(username, repo.name);
                 if (email) {
                     this.emailCache.set(username, email);
@@ -224,14 +275,14 @@ export class GitHubContactService {
             }
         }
 
-        // 2. Buscar en eventos públicos del usuario
+        // 3. Buscar en eventos públicos del usuario
         email = await this.extractEmailFromPublicEvents(username);
         if (email) {
             this.emailCache.set(username, email);
             return email;
         }
 
-        // 3. Buscar en Gists
+        // 4. Buscar en Gists
         email = await this.extractEmailFromGists(username);
         if (email) {
             this.emailCache.set(username, email);
@@ -244,24 +295,26 @@ export class GitHubContactService {
 
     /**
      * Extrae LinkedIn de texto con múltiples patrones
+     * Mejorado para capturar más formatos de URLs
      */
     private extractLinkedIn(text: string): string | null {
         if (!text) return null;
 
-        // Patrones para detectar URLs de LinkedIn
+        // Patrones para detectar URLs de LinkedIn (ordered by specificity)
         const patterns = [
-            /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/([a-zA-Z0-9\-]+)/i,
-            /(?:https?:\/\/)?linkedin\.com\/in\/([a-zA-Z0-9\-]+)/i,
-            /linkedin\.com\/in\/([a-zA-Z0-9\-]+)/i,
-            /in\/([a-zA-Z0-9\-]{2,})/i, // Fallback: /in/username
+            /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/([a-zA-Z0-9\-_%]+)\/?(?:\?[^\s)"\]>]*)?/i,
+            /(?:https?:\/\/)?linkedin\.com\/in\/([a-zA-Z0-9\-_%]+)\/?/i,
+            /linkedin\.com\/in\/([a-zA-Z0-9\-_%]+)/i,
         ];
 
         for (const pattern of patterns) {
             const match = text.match(pattern);
             if (match) {
-                const linkedinUsername = match[1];
+                let linkedinUsername = match[1];
+                // Remove trailing slash or query params from the captured username
+                linkedinUsername = linkedinUsername.replace(/\/+$/, '').replace(/\?.*$/, '');
                 // Validate it's not too short and doesn't look like company URL
-                if (linkedinUsername.length >= 2 && !linkedinUsername.includes('company')) {
+                if (linkedinUsername.length >= 2 && !linkedinUsername.includes('company') && !linkedinUsername.includes('school')) {
                     return `https://linkedin.com/in/${linkedinUsername}`;
                 }
             }
@@ -377,6 +430,27 @@ export class GitHubContactService {
     }
 
     /**
+     * 🆕 Obtiene el README del perfil del usuario (repo username/username)
+     * Este es el README que aparece en el perfil principal del usuario en GitHub
+     */
+    private async getProfileReadme(username: string): Promise<string | null> {
+        try {
+            if (!this.octokit) {
+                this.octokit = new Octokit();
+            }
+
+            const readme = await this.octokit.rest.repos.getReadme({
+                owner: username,
+                repo: username
+            });
+
+            return Buffer.from(readme.data.content, 'base64').toString();
+        } catch (error) {
+            return null; // Profile README not found — many users don't have one
+        }
+    }
+
+    /**
      * Obtiene contenido del README de un repositorio
      */
     private async getReadmeContent(owner: string, repo: string): Promise<string | null> {
@@ -399,6 +473,7 @@ export class GitHubContactService {
 
     /**
      * Valida si un string es un email real (no corporativo/fake)
+     * Expandido con más dominios personales válidos
      */
     private isValidEmail(email: string): boolean {
         if (!email) return false;
@@ -416,10 +491,15 @@ export class GitHubContactService {
             'dummy',
             'no-reply',
             'donotreply',
+            'invalid',
+            'none',
             '@github.com', // GitHub noreply emails
             '@gitlab.com',
             '@bitbucket.org',
-            '@users.noreply.github.com'
+            '@users.noreply.github.com',
+            'dependabot',
+            'greenkeeper',
+            'renovate'
         ];
 
         for (const exclusion of exclusions) {
@@ -435,7 +515,19 @@ export class GitHubContactService {
             '@hotmail.com',
             '@outlook.com',
             '@protonmail.com',
-            '@icloud.com'
+            '@icloud.com',
+            '@zoho.com',
+            '@yandex.com',
+            '@tutanota.com',
+            '@hey.com',
+            '@fastmail.com',
+            '@pm.me',
+            '@live.com',
+            '@aol.com',
+            '@mail.com',
+            '@proton.me',
+            '@gmx.com',
+            '@me.com'
         ];
 
         // Si tiene dominio corporativo común, validar más estrictamente
@@ -448,7 +540,11 @@ export class GitHubContactService {
                 /info@/,
                 /hello@/,
                 /team@/,
-                /contact@/
+                /contact@/,
+                /billing@/,
+                /sales@/,
+                /help@/,
+                /office@/
             ];
 
             for (const pattern of corporatePatterns) {

@@ -287,13 +287,33 @@ export class GitHubService {
                 }
             }
 
-            // 5.2 🗣️ FAST: Check Spanish language requirement (if criteria requires it)
+            // 5.2 🗣️ Check Spanish language requirement (if criteria requires it)
             if (criteria.require_spanish_speaker) {
+                // Collect repo descriptions for Spanish analysis
+                const repoDescriptions = repos
+                    .filter(r => r.description)
+                    .map(r => r.description as string)
+                    .slice(0, 10);
+
+                // Try to fetch profile README (username/username repo)
+                let profileReadmeText: string | undefined;
+                try {
+                    const readmeResponse = await this.octokit!.rest.repos.getReadme({
+                        owner: username,
+                        repo: username
+                    });
+                    profileReadmeText = Buffer.from(readmeResponse.data.content, 'base64').toString();
+                } catch {
+                    // Profile README not found — that's ok, many users don't have one
+                }
+
                 const spanishAnalysis = analyzeSpanishLanguageProficiency(
                     user.bio,
                     user.location,
                     user.name,
-                    user.company
+                    user.company,
+                    repoDescriptions,
+                    profileReadmeText
                 );
 
                 if (spanishAnalysis.confidence < (criteria.min_spanish_language_confidence || 30)) {
@@ -302,7 +322,7 @@ export class GitHubService {
                 }
 
                 if (spanishAnalysis.confidence >= 50) {
-                    onLog(`  🗣️ Spanish speaker confirmed (confidence: ${spanishAnalysis.confidence}%) - ${spanishAnalysis.location || 'Location detected'}`);
+                    onLog(`  🗣️ Spanish speaker confirmed (confidence: ${spanishAnalysis.confidence}%) - ${spanishAnalysis.reasons[0] || 'Multiple signals'}`);
                 } else if (spanishAnalysis.confidence >= 30) {
                     onLog(`  🗣️ Likely Spanish speaker (confidence: ${spanishAnalysis.confidence}%)`);
                 }
@@ -551,6 +571,7 @@ export class GitHubService {
      * Build GitHub search query from criteria
      * NOTE: GitHub API doesn't support multiple language filters with AND logic
      * Instead, we search by primary language only for better results
+     * Now injects location filters for Spanish-speaking countries when require_spanish_speaker is true
      */
     private buildSearchQuery(criteria: GitHubFilterCriteria): string {
         const parts: string[] = [];
@@ -566,6 +587,23 @@ export class GitHubService {
         // ⚡ PRE-FILTER: followers minimum eliminates low-quality profiles at API level
         if (criteria.min_followers > 0) {
             parts.push(`followers:>=${criteria.min_followers}`);
+        }
+
+        // 🇪🇸 PRE-FILTER: When searching for Spanish speakers, inject location filters
+        // This dramatically reduces the number of non-Spanish profiles we need to analyze
+        // GitHub API supports location: filter in user search queries
+        if (criteria.require_spanish_speaker) {
+            const spanishLocations = [
+                'Spain', 'Mexico', 'Argentina', 'Colombia', 'Chile',
+                'Peru', 'Venezuela', 'Ecuador', 'Bolivia', 'Uruguay',
+                'Paraguay', 'Guatemala', 'Costa Rica', 'Panama',
+                'Dominican Republic', 'Honduras', 'El Salvador',
+                'Nicaragua', 'Cuba', 'Puerto Rico'
+            ];
+            // GitHub API uses OR logic for multiple location: filters
+            const locationParts = spanishLocations.map(loc => `location:"${loc}"`);
+            // Wrap in parentheses to group the OR conditions
+            parts.push(`(${locationParts.join(' ')})`);
         }
 
         const query = parts.length > 0 ? parts.join(' ') : 'language:typescript type:user';
