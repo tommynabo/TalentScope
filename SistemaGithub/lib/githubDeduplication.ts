@@ -4,13 +4,13 @@ import { GitHubCandidatePersistence } from '../../SistemaGithub/lib/githubCandid
 
 /**
  * Servicio de deduplicación para búsquedas de GitHub
- * Busca contra candidatos en la CAMPAÑA ESPECÍFICA (NOT global)
+ * 🌍 Busca contra candidatos en TODAS LAS CAMPAÑAS (deduplicación global)
  * Evita candidatos duplicados por username, email o LinkedIn
  */
 export class GitHubDeduplicationService {
     /**
-     * Fetch existing candidates from SPECIFIC CAMPAIGN
-     * Este es el cambio clave: por campaña en lugar de global
+     * 🌍 Fetch existing candidates from ALL CAMPAIGNS (global deduplication)
+     * Un candidato encontrado en cualquier campaña no volverá a aparecer
      */
     async fetchExistingGitHubCandidates(
         campaignId: string,
@@ -25,9 +25,8 @@ export class GitHubDeduplicationService {
         const existingLinkedin = new Set<string>();
 
         try {
-            // Buscar candidatos existentes EN LA CAMPAÑA ESPECÍFICA
-            const dedupeData = await GitHubCandidatePersistence.getDeduplicationData(
-                campaignId,
+            // 🌍 Buscar candidatos existentes en TODAS las campañas (global)
+            const dedupeData = await GitHubCandidatePersistence.getGlobalDeduplicationData(
                 userId
             );
 
@@ -37,7 +36,7 @@ export class GitHubDeduplicationService {
                 existingLinkedin: dedupeData.linkedins
             };
         } catch (e) {
-            console.error("[GITHUB_DEDUP] Failed to fetch existing candidates", e);
+            console.error("[GITHUB_DEDUP] Failed to fetch global existing candidates", e);
             return { existingUsernames, existingEmails, existingLinkedin };
         }
     }

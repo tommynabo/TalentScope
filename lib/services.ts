@@ -57,14 +57,17 @@ export const CandidateService = {
     }
 };
 
-// --- Campaign Service (LinkedIn Only) ---
+// --- Campaign Service (Multi-platform) ---
 export const CampaignService = {
-    async getAll(userId?: string) {
+    async getAll(userId?: string, platform?: string) {
         let query = supabase
             .from('campaigns')
             .select('*')
-            .eq('platform', 'LinkedIn')
             .order('created_at', { ascending: false });
+
+        if (platform) {
+            query = query.eq('platform', platform);
+        }
 
         if (userId) {
             query = query.eq('user_id', userId);
@@ -79,7 +82,6 @@ export const CampaignService = {
         const { data, error } = await supabase
             .from('campaigns')
             .select('*')
-            .eq('platform', 'LinkedIn')
             .eq('id', id)
             .single();
 
@@ -113,7 +115,7 @@ export const CampaignService = {
             .insert([{
                 ...campaignData,
                 user_id: user.id,
-                platform: 'LinkedIn', // Enforce LinkedIn platform
+                platform: campaignData.platform || 'LinkedIn',
                 settings: {
                     ...(campaignData.settings || {}),
                     stats: { sent: 0, addedToday: 0, responseRate: 0, leads: 0 }

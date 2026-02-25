@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Github, X, Plus, Search, Trash2, ArrowLeft } from 'lucide-react';
-import { Campaign } from '../../types/database';
+import { Campaign, GitHubFilterCriteria } from '../../types/database';
 import { CampaignService } from '../../lib/services';
 import { GitHubCodeScan } from './GitHubCodeScan';
+import { GitHubCreateCampaignModal } from './GitHubCreateCampaignModal';
 import Toast from '../../components/Toast';
 
 interface GitHubScanManagerProps {
@@ -14,7 +15,6 @@ export const GitHubScanManager: React.FC<GitHubScanManagerProps> = ({ onClose })
   const [loading, setLoading] = useState(true);
   const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newCampaignTitle, setNewCampaignTitle] = useState('');
   const [toast, setToast] = useState({ show: false, message: '' });
 
   useEffect(() => {
@@ -24,10 +24,9 @@ export const GitHubScanManager: React.FC<GitHubScanManagerProps> = ({ onClose })
   const loadCampaigns = async () => {
     try {
       setLoading(true);
-      const data = await CampaignService.getAll();
-      // Filter only GitHub campaigns
-      const githubCampaigns = data.filter(c => c.platform === 'GitHub');
-      setCampaigns(githubCampaigns);
+      // Use platform filter at DB level
+      const data = await CampaignService.getAll(undefined, 'GitHub');
+      setCampaigns(data);
     } catch (error) {
       console.error('Error loading campaigns:', error);
       setToast({ show: true, message: 'Error cargando campañas' });
@@ -49,19 +48,20 @@ export const GitHubScanManager: React.FC<GitHubScanManagerProps> = ({ onClose })
     }
   };
 
-  const handleCreate = async () => {
-    if (!newCampaignTitle.trim()) return;
+  const handleCreate = async (name: string, criteria: GitHubFilterCriteria) => {
     try {
       await CampaignService.create({
-        title: newCampaignTitle,
-        description: '',
+        title: name,
+        description: `Lenguajes: ${criteria.languages.join(', ')}`,
         platform: 'GitHub',
         status: 'Draft',
-        target_role: 'General'
+        target_role: criteria.languages[0] || 'General',
+        settings: {
+          github_criteria: criteria
+        }
       });
       setToast({ show: true, message: 'Campaña creada!' });
       setShowCreateModal(false);
-      setNewCampaignTitle('');
       loadCampaigns();
     } catch (error) {
       console.error('Error creating campaign:', error);
@@ -78,8 +78,9 @@ export const GitHubScanManager: React.FC<GitHubScanManagerProps> = ({ onClose })
         >
           <ArrowLeft className="h-4 w-4" /> Volver a Campañas
         </button>
-        <GitHubCodeScan 
+        <GitHubCodeScan
           campaignId={activeCampaign.id}
+          initialCriteria={activeCampaign.settings?.github_criteria}
         />
       </div>
     );
@@ -120,11 +121,10 @@ export const GitHubScanManager: React.FC<GitHubScanManagerProps> = ({ onClose })
                 <div className="p-3 bg-orange-950/30 rounded-xl text-orange-400 border border-orange-900/50">
                   <Github className="h-6 w-6" />
                 </div>
-                <div className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                  campaign.status === 'Running' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' :
+                <div className={`px-3 py-1 rounded-full text-xs font-medium border ${campaign.status === 'Running' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' :
                   campaign.status === 'Completed' ? 'bg-slate-800 text-slate-400 border-slate-700' :
-                  'bg-yellow-950/30 text-yellow-400 border-yellow-900/50'
-                }`}>
+                    'bg-yellow-950/30 text-yellow-400 border-yellow-900/50'
+                  }`}>
                   {campaign.status.toUpperCase()}
                 </div>
               </div>
@@ -152,29 +152,12 @@ export const GitHubScanManager: React.FC<GitHubScanManagerProps> = ({ onClose })
         </div>
       )}
 
-      {/* Create Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-xl p-6 animate-in zoom-in-95">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-white">Nueva Campaña GitHub</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-500 hover:text-white"><X className="h-6 w-6" /></button>
-            </div>
-            <input
-              type="text"
-              value={newCampaignTitle}
-              onChange={(e) => setNewCampaignTitle(e.target.value)}
-              placeholder="Nombre campaña (ej: Senior React Devs)"
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white mb-6 focus:border-orange-500 outline-none"
-              autoFocus
-            />
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-slate-400 hover:text-white">Cancelar</button>
-              <button onClick={handleCreate} className="px-6 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold">Crear</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Create Campaign Modal */}
+      <GitHubCreateCampaignModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreate={handleCreate}
+      />
 
       <Toast isVisible={toast.show} message={toast.message} onClose={() => setToast({ ...toast, show: false })} />
     </div>

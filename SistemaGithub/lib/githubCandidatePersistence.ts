@@ -178,6 +178,101 @@ export const GitHubCandidatePersistence = {
         return { usernames, emails, linkedins };
     },
 
+    // ═══════════════════════════════════════════════════════
+    // 🌍 GLOBAL DEDUPLICATION — across ALL campaigns
+    // ═══════════════════════════════════════════════════════
+
+    /**
+     * Obtener TODOS los usernames existentes en TODAS las campañas
+     */
+    async getGlobalExistingUsernames(userId: string): Promise<Set<string>> {
+        try {
+            const { data, error } = await supabase
+                .from('github_search_results')
+                .select('github_username')
+                .eq('user_id', userId);
+
+            if (error) {
+                console.error('Error fetching global usernames:', error);
+                return new Set();
+            }
+
+            return new Set(
+                data?.map(record => record.github_username.toLowerCase()) || []
+            );
+        } catch (err) {
+            console.error('Error in getGlobalExistingUsernames:', err);
+            return new Set();
+        }
+    },
+
+    /**
+     * Obtener TODOS los emails existentes en TODAS las campañas
+     */
+    async getGlobalExistingEmails(userId: string): Promise<Set<string>> {
+        try {
+            const { data, error } = await supabase
+                .from('github_search_results')
+                .select('email')
+                .eq('user_id', userId)
+                .not('email', 'is', null);
+
+            if (error) {
+                console.error('Error fetching global emails:', error);
+                return new Set();
+            }
+
+            return new Set(
+                data
+                    ?.map(record => record.email?.toLowerCase())
+                    .filter((e): e is string => e !== null && e !== undefined) || []
+            );
+        } catch (err) {
+            console.error('Error in getGlobalExistingEmails:', err);
+            return new Set();
+        }
+    },
+
+    /**
+     * Obtener TODOS los LinkedIn URLs existentes en TODAS las campañas
+     */
+    async getGlobalExistingLinkedIn(userId: string): Promise<Set<string>> {
+        try {
+            const { data, error } = await supabase
+                .from('github_search_results')
+                .select('linkedin_url')
+                .eq('user_id', userId)
+                .not('linkedin_url', 'is', null);
+
+            if (error) {
+                console.error('Error fetching global LinkedIn URLs:', error);
+                return new Set();
+            }
+
+            return new Set(
+                data
+                    ?.map(record => record.linkedin_url?.toLowerCase())
+                    .filter((u): u is string => u !== null && u !== undefined) || []
+            );
+        } catch (err) {
+            console.error('Error in getGlobalExistingLinkedIn:', err);
+            return new Set();
+        }
+    },
+
+    /**
+     * 🌍 Cargar datos de deduplicación GLOBAL (todas las campañas)
+     */
+    async getGlobalDeduplicationData(userId: string) {
+        const [usernames, emails, linkedins] = await Promise.all([
+            this.getGlobalExistingUsernames(userId),
+            this.getGlobalExistingEmails(userId),
+            this.getGlobalExistingLinkedIn(userId)
+        ]);
+
+        return { usernames, emails, linkedins };
+    },
+
     /**
      * Eliminar candidato específico
      */

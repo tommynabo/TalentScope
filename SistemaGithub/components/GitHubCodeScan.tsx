@@ -15,11 +15,12 @@ import { supabase } from '../../lib/supabase';
 
 interface GitHubCodeScanProps {
     campaignId?: string;
+    initialCriteria?: GitHubFilterCriteria;
 }
 
 type ViewMode = 'cards' | 'pipeline' | 'kanban';
 
-export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) => {
+export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, initialCriteria }) => {
     const [candidates, setCandidates] = useState<GitHubMetrics[]>([]);
     const [loading, setLoading] = useState(false);
     const [logs, setLogs] = useState<string[]>([]);
@@ -33,9 +34,13 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId }) =>
     const executorRef = useRef<UnbreakableExecutor | null>(null);
     const isSearchingRef = useRef(false); // Mirror of loading state that survives React batching
 
-    // Load Product Engineers preset and restore candidates from Supabase
+    // Load criteria from campaign settings or fallback to preset
     useEffect(() => {
-        setCriteria(PRESET_PRODUCT_ENGINEERS);
+        if (initialCriteria) {
+            setCriteria(initialCriteria);
+        } else {
+            setCriteria(PRESET_PRODUCT_ENGINEERS);
+        }
 
         // Load previous logs from localStorage (persists across tab changes)
         loadPersistentLogs();
