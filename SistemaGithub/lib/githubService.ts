@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { githubContactService } from '../../SistemaGithub/lib/githubContactService';
 import { githubDeduplicationService } from '../../SistemaGithub/lib/githubDeduplication';
 import { GitHubCandidatePersistence } from '../../SistemaGithub/lib/githubCandidatePersistence';
-import { analyzeSpanishLanguageProficiency } from '../../SistemaGithub/lib/githubSpanishLanguageFilter';
+import { analyzeSpanishLanguageProficiency, filterBySpanishLanguage } from '../../SistemaGithub/lib/githubSpanishLanguageFilter';
 
 export type GitHubLogCallback = (message: string) => void;
 
@@ -201,6 +201,18 @@ export class GitHubService {
                 }
             }
 
+            // POST-SEARCH SAFETY NET: If Spanish speaker required, run final batch filter
+            if (criteria.require_spanish_speaker && candidates.length > 0) {
+                const beforeCount = candidates.length;
+                const filtered = filterBySpanishLanguage(candidates, true, criteria.min_spanish_language_confidence || 40);
+                const removedCount = beforeCount - filtered.length;
+                if (removedCount > 0) {
+                    onLog(`\n🛡️ Safety net: removed ${removedCount} non-Spanish candidates from final batch`);
+                    candidates.length = 0;
+                    candidates.push(...filtered);
+                }
+            }
+
             // SAVE TO SUPABASE if campaign context available
             if (campaignId && userId && candidates.length > 0) {
                 onLog(`\n💾 Saving ${candidates.length} candidates to Supabase...`);
@@ -316,14 +328,22 @@ export class GitHubService {
                     profileReadmeText
                 );
 
-                if (spanishAnalysis.confidence < (criteria.min_spanish_language_confidence || 30)) {
-                    onLog(`  ⏭️ Spanish language confidence ${spanishAnalysis.confidence}% below minimum ${criteria.min_spanish_language_confidence || 30}%`);
+                // STRICT GATE: Require a strong signal (location, bio, README, repo descriptions)
+                // Name-only matches ("David", "Daniel") are NOT enough
+                if (!spanishAnalysis.hasStrongSignal) {
+                    onLog(`  ❌ REJECTED — No strong Spanish signal. Reasons: ${spanishAnalysis.reasons.length > 0 ? spanishAnalysis.reasons.join('; ') : 'none detected'}`);
+                    return null;
+                }
+
+                // Secondary check: minimum confidence threshold
+                if (spanishAnalysis.confidence < (criteria.min_spanish_language_confidence || 40)) {
+                    onLog(`  ❌ Spanish confidence ${spanishAnalysis.confidence}% below minimum ${criteria.min_spanish_language_confidence || 40}%`);
                     return null;
                 }
 
                 if (spanishAnalysis.confidence >= 50) {
                     onLog(`  🗣️ Spanish speaker confirmed (confidence: ${spanishAnalysis.confidence}%) - ${spanishAnalysis.reasons[0] || 'Multiple signals'}`);
-                } else if (spanishAnalysis.confidence >= 30) {
+                } else if (spanishAnalysis.confidence >= 40) {
                     onLog(`  🗣️ Likely Spanish speaker (confidence: ${spanishAnalysis.confidence}%)`);
                 }
             }

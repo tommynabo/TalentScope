@@ -39,7 +39,7 @@ export const GitHubCreateCampaignModal: React.FC<GitHubCreateCampaignModalProps>
         locations: [],
         available_for_hire: false,
         require_spanish_speaker: true,
-        min_spanish_language_confidence: 30,
+        min_spanish_language_confidence: 40,
         score_threshold: 45,
     });
 

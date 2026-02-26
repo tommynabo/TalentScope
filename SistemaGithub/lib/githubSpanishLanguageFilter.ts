@@ -131,6 +131,7 @@ const SPANISH_VOCABULARY = [
 
 export interface SpanishLanguageAnalysis {
   isSpanishSpeaker: boolean;
+  hasStrongSignal: boolean; // true if location, bio indicators, README, or repo descriptions match
   confidence: number; // 0-100
   reasons: string[];
   location: string | null;
@@ -152,6 +153,7 @@ export function analyzeSpanishLanguageProficiency(
   const reasons: string[] = [];
   let totalScore = 0;
   const bioIndicators: string[] = [];
+  let hasStrongSignal = false; // requires location, bio indicators, README, or repo descriptions
 
   // Prepare text for analysis (lowercase, remove diacritics)
   const normalizeText = (text: string) => {
@@ -174,6 +176,7 @@ export function analyzeSpanishLanguageProficiency(
 
     if (matchedLocation) {
       totalScore += 50;
+      hasStrongSignal = true; // Location is a STRONG signal
       reasons.push(`📍 Location "${location}" matches Spanish-speaking region`);
     }
   }
@@ -186,6 +189,7 @@ export function analyzeSpanishLanguageProficiency(
 
     if (matchedIndicators.length > 0) {
       totalScore += Math.min(40, 12 * matchedIndicators.length);
+      hasStrongSignal = true; // Explicit Spanish bio indicators are a STRONG signal
       bioIndicators.push(...matchedIndicators);
       reasons.push(`🗣️ Bio contains Spanish language indicators: ${matchedIndicators.join(', ')}`);
     }
@@ -194,6 +198,7 @@ export function analyzeSpanishLanguageProficiency(
     const foundSpanishWords = SPANISH_VOCABULARY.filter(word => bioLower.includes(normalizeText(word)));
     if (foundSpanishWords.length > 0) {
       totalScore += Math.min(25, 5 * foundSpanishWords.length);
+      if (foundSpanishWords.length >= 3) hasStrongSignal = true; // 3+ Spanish vocab words = strong
       reasons.push(`📝 Bio contains Spanish words: ${foundSpanishWords.slice(0, 5).join(', ')}${foundSpanishWords.length > 5 ? '...' : ''}`);
     }
   }
@@ -243,6 +248,7 @@ export function analyzeSpanishLanguageProficiency(
     }
     if (spanishRepoCount > 0) {
       totalScore += Math.min(20, 8 * spanishRepoCount);
+      if (spanishRepoCount >= 2) hasStrongSignal = true; // 2+ Spanish repo descriptions = strong
       reasons.push(`📦 ${spanishRepoCount} repo description(s) written in Spanish`);
     }
   }
@@ -256,6 +262,7 @@ export function analyzeSpanishLanguageProficiency(
     if (spanishWordsInReadme.length >= 3 || spanishIndicatorsInReadme.length >= 1) {
       const readmeScore = Math.min(25, 4 * spanishWordsInReadme.length + 10 * spanishIndicatorsInReadme.length);
       totalScore += readmeScore;
+      hasStrongSignal = true; // README in Spanish = strong signal
       reasons.push(`📄 Profile README contains Spanish content (${spanishWordsInReadme.length} words, ${spanishIndicatorsInReadme.length} indicators)`);
     }
   }
@@ -263,12 +270,13 @@ export function analyzeSpanishLanguageProficiency(
   // Ensure score doesn't exceed 100
   const confidence = Math.min(100, totalScore);
 
-  // Threshold: 30+ points = considered Spanish speaker
-  // 60+ points = high confidence
-  const isSpanishSpeaker = confidence >= 30;
+  // STRICT: Requires BOTH a strong signal AND confidence >= 40
+  // Name-only matches (e.g. "David", "Daniel") are NOT strong signals
+  const isSpanishSpeaker = hasStrongSignal && confidence >= 40;
 
   return {
     isSpanishSpeaker,
+    hasStrongSignal,
     confidence,
     reasons,
     location: location || null,
