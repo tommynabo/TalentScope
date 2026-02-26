@@ -21,6 +21,9 @@ export const GitHubCreateCampaignModal: React.FC<GitHubCreateCampaignModalProps>
     const [customLanguage, setCustomLanguage] = useState('');
 
     const [criteria, setCriteria] = useState<GitHubFilterCriteria>({
+        target_role: '',
+        keywords: [],
+        search_language: 'en',
         min_stars: 5,
         max_stars: 50000,
         min_forks: 0,
@@ -40,6 +43,9 @@ export const GitHubCreateCampaignModal: React.FC<GitHubCreateCampaignModalProps>
         score_threshold: 45,
     });
 
+    const [currentKeyword, setCurrentKeyword] = useState('');
+    const [currentLocation, setCurrentLocation] = useState('');
+
     const toggleLanguage = (lang: string) => {
         const updated = selectedLanguages.includes(lang)
             ? selectedLanguages.filter(l => l !== lang)
@@ -57,9 +63,35 @@ export const GitHubCreateCampaignModal: React.FC<GitHubCreateCampaignModalProps>
         }
     };
 
+    const handleAddKeyword = () => {
+        if (currentKeyword.trim() && !criteria.keywords?.includes(currentKeyword.trim())) {
+            setCriteria({ ...criteria, keywords: [...(criteria.keywords || []), currentKeyword.trim()] });
+            setCurrentKeyword('');
+        }
+    };
+
+    const handleRemoveKeyword = (keyword: string) => {
+        setCriteria({ ...criteria, keywords: (criteria.keywords || []).filter(k => k !== keyword) });
+    };
+
+    const handleAddLocation = () => {
+        if (currentLocation.trim() && !criteria.locations?.includes(currentLocation.trim())) {
+            setCriteria({ ...criteria, locations: [...(criteria.locations || []), currentLocation.trim()] });
+            setCurrentLocation('');
+        }
+    };
+
+    const handleRemoveLocation = (location: string) => {
+        setCriteria({ ...criteria, locations: (criteria.locations || []).filter(l => l !== location) });
+    };
+
     const handleCreate = () => {
         if (!campaignName.trim()) {
             alert('Introduce un nombre para la campaña');
+            return;
+        }
+        if (!criteria.target_role?.trim()) {
+            alert('Introduce un Cargo / Target Role');
             return;
         }
         if (selectedLanguages.length === 0) {
@@ -84,19 +116,123 @@ export const GitHubCreateCampaignModal: React.FC<GitHubCreateCampaignModalProps>
                 </div>
 
                 <div className="p-6 space-y-6">
-                    {/* Campaign Name */}
+                    {/* Campaign Name & Role */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-300 mb-2">
+                                Nombre de Campaña *
+                            </label>
+                            <input
+                                type="text"
+                                value={campaignName}
+                                onChange={(e) => setCampaignName(e.target.value)}
+                                placeholder="ej: Senior Flutter Devs LATAM"
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:border-orange-500 outline-none"
+                                autoFocus
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-300 mb-2">
+                                Cargo / Target Role *
+                            </label>
+                            <input
+                                type="text"
+                                value={criteria.target_role || ''}
+                                onChange={(e) => setCriteria({ ...criteria, target_role: e.target.value })}
+                                placeholder="ej: Frontend Developer"
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:border-orange-500 outline-none"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Keywords/Skills */}
                     <div>
                         <label className="block text-sm font-semibold text-slate-300 mb-2">
-                            Nombre de Campaña *
+                            Keywords / Tech Stack (Añade múltiples)
                         </label>
-                        <input
-                            type="text"
-                            value={campaignName}
-                            onChange={(e) => setCampaignName(e.target.value)}
-                            placeholder="ej: Senior Flutter Devs LATAM"
-                            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:border-orange-500 outline-none"
-                            autoFocus
-                        />
+                        <div className="flex gap-2 mb-3">
+                            <input
+                                type="text"
+                                value={currentKeyword}
+                                onChange={(e) => setCurrentKeyword(e.target.value)}
+                                onKeyPress={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddKeyword();
+                                    }
+                                }}
+                                placeholder="ej: React, Next.js, GraphQL..."
+                                className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:border-orange-500 outline-none"
+                            />
+                            <button
+                                onClick={handleAddKeyword}
+                                className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors flex items-center gap-2"
+                            >
+                                <Plus className="h-4 w-4" />
+                                Añadir
+                            </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {(criteria.keywords || []).map(keyword => (
+                                <div
+                                    key={keyword}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-orange-500/20 border border-orange-500/30 rounded-lg"
+                                >
+                                    <span className="text-orange-300 text-sm">{keyword}</span>
+                                    <button
+                                        onClick={() => handleRemoveKeyword(keyword)}
+                                        className="text-orange-400 hover:text-orange-300"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Locations */}
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
+                            Ubicación (Países/Ciudades)
+                        </label>
+                        <div className="flex gap-2 mb-3">
+                            <input
+                                type="text"
+                                value={currentLocation}
+                                onChange={(e) => setCurrentLocation(e.target.value)}
+                                onKeyPress={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddLocation();
+                                    }
+                                }}
+                                placeholder="ej: Spain, Mexico, Remote..."
+                                className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:border-orange-500 outline-none"
+                            />
+                            <button
+                                onClick={handleAddLocation}
+                                className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors flex items-center gap-2"
+                            >
+                                <Plus className="h-4 w-4" />
+                                Añadir
+                            </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {(criteria.locations || []).map(location => (
+                                <div
+                                    key={location}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 border border-blue-500/30 rounded-lg"
+                                >
+                                    <span className="text-blue-300 text-sm">{location}</span>
+                                    <button
+                                        onClick={() => handleRemoveLocation(location)}
+                                        className="text-blue-400 hover:text-blue-300"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
                     </div>
 
                     {/* Languages */}
@@ -111,8 +247,8 @@ export const GitHubCreateCampaignModal: React.FC<GitHubCreateCampaignModalProps>
                                     key={lang}
                                     onClick={() => toggleLanguage(lang)}
                                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedLanguages.includes(lang)
-                                            ? 'bg-orange-600 text-white'
-                                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'
+                                        ? 'bg-orange-600 text-white'
+                                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'
                                         }`}
                                 >
                                     {lang}

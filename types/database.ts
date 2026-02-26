@@ -139,6 +139,10 @@ export interface ScoreBreakdown {
 
 // GitHub Scraper Criteria
 export interface GitHubFilterCriteria {
+    target_role?: string;
+    keywords?: string[];
+    search_language?: string;
+
     // Repository Metrics
     min_stars: number;
     max_stars: number;
@@ -166,7 +170,7 @@ export interface GitHubFilterCriteria {
     // Language Requirements - Spanish filter
     require_spanish_speaker?: boolean; // Require Spanish language proficiency
     min_spanish_language_confidence?: number; // 0-100 confidence threshold
-    
+
     score_threshold?: number; // 0-100
 }
 

@@ -576,6 +576,22 @@ export class GitHubService {
     private buildSearchQuery(criteria: GitHubFilterCriteria): string {
         const parts: string[] = [];
 
+        // Text search (Keywords / Role)
+        const textTerms: string[] = [];
+        if (criteria.target_role) {
+            const safeRole = criteria.target_role.replace(/[^\w\s-]/gi, '').trim();
+            if (safeRole) textTerms.push(`"${safeRole}"`);
+        }
+        if (criteria.keywords && criteria.keywords.length > 0) {
+            criteria.keywords.forEach(kw => {
+                const safeKw = kw.replace(/[^\w\s-]/gi, '').trim();
+                if (safeKw) textTerms.push(`"${safeKw}"`);
+            });
+        }
+        if (textTerms.length > 0) {
+            parts.push(textTerms.join(' ')); // Separate with space for AND logic
+        }
+
         // Languages - Use ONLY the first language to avoid AND logic
         if (criteria.languages.length > 0) {
             parts.push(`language:${criteria.languages[0].toLowerCase()}`);
@@ -589,9 +605,7 @@ export class GitHubService {
             parts.push(`followers:>=${criteria.min_followers}`);
         }
 
-        // 🇪🇸 PRE-FILTER: When searching for Spanish speakers, inject location filters
-        // This dramatically reduces the number of non-Spanish profiles we need to analyze
-        // GitHub API supports location: filter in user search queries
+        // Locations handling
         if (criteria.require_spanish_speaker) {
             const spanishLocations = [
                 'Spain', 'Mexico', 'Argentina', 'Colombia', 'Chile',
@@ -600,10 +614,15 @@ export class GitHubService {
                 'Dominican Republic', 'Honduras', 'El Salvador',
                 'Nicaragua', 'Cuba', 'Puerto Rico'
             ];
-            // GitHub API uses OR logic for multiple location: filters
-            const locationParts = spanishLocations.map(loc => `location:"${loc}"`);
-            // Wrap in parentheses to group the OR conditions
-            parts.push(`(${locationParts.join(' ')})`);
+            // Merge with user-provided locations to avoid duplicates
+            const allLocs = Array.from(new Set([...spanishLocations, ...(criteria.locations || [])]));
+            const locationParts = allLocs.map(loc => `location:"${loc}"`);
+            // GitHub API uses space for implicit AND, but since a user has only 1 location, we SHOULD use OR or keep existing logic.
+            // Existing logic separated with space, but we'll use OR 
+            parts.push(`(${locationParts.join(' OR ')})`);
+        } else if (criteria.locations && criteria.locations.length > 0) {
+            const locationParts = criteria.locations.map(loc => `location:"${loc}"`);
+            parts.push(`(${locationParts.join(' OR ')})`);
         }
 
         const query = parts.length > 0 ? parts.join(' ') : 'language:typescript type:user';

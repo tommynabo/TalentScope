@@ -3,6 +3,8 @@ import { Github, X, Plus, Search, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { GitHubCampaignService, GitHubCampaign } from '../../lib/githubCampaignService';
 import Toast from '../../components/Toast';
+import { GitHubCreateCampaignModal } from './GitHubCreateCampaignModal';
+import { GitHubFilterCriteria } from '../../types/database';
 
 export interface SearchCampaign {
   id: string;
@@ -24,7 +26,6 @@ export const GitHubCampaignList: React.FC<GitHubCampaignListProps> = ({ onSelect
   const [campaigns, setCampaigns] = useState<GitHubCampaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newCampaignTitle, setNewCampaignTitle] = useState('');
   const [toast, setToast] = useState({ show: false, message: '' });
 
   useEffect(() => {
@@ -57,18 +58,18 @@ export const GitHubCampaignList: React.FC<GitHubCampaignListProps> = ({ onSelect
     }
   };
 
-  const handleCreate = async () => {
-    if (!newCampaignTitle.trim()) return;
+  const handleCreate = async (name: string, criteria: GitHubFilterCriteria) => {
+    if (!name.trim()) return;
     try {
       const newCampaign = await GitHubCampaignService.create({
-        title: newCampaignTitle,
+        title: name,
         description: '',
         status: 'Draft',
-        target_role: 'General'
+        target_role: criteria.target_role || 'General',
+        criteria: criteria as Record<string, any>
       });
       setToast({ show: true, message: 'Campaña GitHub creada!' });
       setShowCreateModal(false);
-      setNewCampaignTitle('');
       loadCampaigns();
       // Navigate to new campaign
       navigate(`/tablero/github/${newCampaign.id}`);
@@ -122,11 +123,10 @@ export const GitHubCampaignList: React.FC<GitHubCampaignListProps> = ({ onSelect
                 <div className="p-3 bg-orange-950/30 rounded-xl text-orange-400 border border-orange-900/50">
                   <Github className="h-6 w-6" />
                 </div>
-                <div className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                  campaign.status === 'Running' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' :
-                  campaign.status === 'Completed' ? 'bg-slate-800 text-slate-400 border-slate-700' :
-                  'bg-yellow-950/30 text-yellow-400 border-yellow-900/50'
-                }`}>
+                <div className={`px-3 py-1 rounded-full text-xs font-medium border ${campaign.status === 'Running' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' :
+                    campaign.status === 'Completed' ? 'bg-slate-800 text-slate-400 border-slate-700' :
+                      'bg-yellow-950/30 text-yellow-400 border-yellow-900/50'
+                  }`}>
                   {campaign.status.toUpperCase()}
                 </div>
               </div>
@@ -154,42 +154,11 @@ export const GitHubCampaignList: React.FC<GitHubCampaignListProps> = ({ onSelect
         </div>
       )}
 
-      {/* Create Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-xl p-6 animate-in zoom-in-95">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-white">Nueva Campaña GitHub</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-500 hover:text-white"><X className="h-6 w-6" /></button>
-            </div>
-            <input
-              type="text"
-              value={newCampaignTitle}
-              onChange={(e) => setNewCampaignTitle(e.target.value)}
-              placeholder="Nombre campaña (ej: Senior React Devs)"
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white mb-6 focus:border-orange-500 outline-none"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleCreate();
-              }}
-            />
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-slate-400 hover:text-white"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleCreate}
-                className="px-6 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-bold"
-              >
-                Crear
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <GitHubCreateCampaignModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreate={handleCreate}
+      />
 
       <Toast isVisible={toast.show} message={toast.message} onClose={() => setToast({ ...toast, show: false })} />
     </div>
