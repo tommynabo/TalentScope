@@ -328,23 +328,17 @@ export class GitHubService {
                     profileReadmeText
                 );
 
-                // STRICT GATE: Require a strong signal (location, bio, README, repo descriptions)
-                // Name-only matches ("David", "Daniel") are NOT enough
-                if (!spanishAnalysis.hasStrongSignal) {
-                    onLog(`  ❌ REJECTED — No strong Spanish signal. Reasons: ${spanishAnalysis.reasons.length > 0 ? spanishAnalysis.reasons.join('; ') : 'none detected'}`);
-                    return null;
-                }
-
-                // Secondary check: minimum confidence threshold
-                if (spanishAnalysis.confidence < (criteria.min_spanish_language_confidence || 40)) {
-                    onLog(`  ❌ Spanish confidence ${spanishAnalysis.confidence}% below minimum ${criteria.min_spanish_language_confidence || 40}%`);
+                // STRICT GATE: Profile MUST contain actual Spanish text
+                // Location or name alone is NOT enough — bio, README, or repo descriptions must be in Spanish
+                if (!spanishAnalysis.hasSpanishText) {
+                    onLog(`  ❌ REJECTED — No Spanish text in profile. ${spanishAnalysis.reasons.length > 0 ? 'Secondary signals: ' + spanishAnalysis.reasons.join('; ') : 'No signals at all.'}`);
                     return null;
                 }
 
                 if (spanishAnalysis.confidence >= 50) {
-                    onLog(`  🗣️ Spanish speaker confirmed (confidence: ${spanishAnalysis.confidence}%) - ${spanishAnalysis.reasons[0] || 'Multiple signals'}`);
-                } else if (spanishAnalysis.confidence >= 40) {
-                    onLog(`  🗣️ Likely Spanish speaker (confidence: ${spanishAnalysis.confidence}%)`);
+                    onLog(`  🗣️ ✅ Spanish speaker (confidence: ${spanishAnalysis.confidence}%) - ${spanishAnalysis.reasons[0] || 'Multiple signals'}`);
+                } else {
+                    onLog(`  🗣️ ✅ Spanish text detected (confidence: ${spanishAnalysis.confidence}%) - ${spanishAnalysis.reasons[0] || 'Text match'}`);
                 }
             }
 

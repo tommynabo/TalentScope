@@ -131,7 +131,8 @@ const SPANISH_VOCABULARY = [
 
 export interface SpanishLanguageAnalysis {
   isSpanishSpeaker: boolean;
-  hasStrongSignal: boolean; // true if location, bio indicators, README, or repo descriptions match
+  hasStrongSignal: boolean;
+  hasSpanishText: boolean; // TRUE only if actual Spanish text found in bio/README/repos
   confidence: number; // 0-100
   reasons: string[];
   location: string | null;
@@ -140,7 +141,8 @@ export interface SpanishLanguageAnalysis {
 
 /**
  * Analiza si un desarrollador de GitHub es hispanohablante
- * Ahora acepta señales adicionales: descripciones de repos y texto de README del perfil
+ * REGLA PRINCIPAL: El perfil DEBE contener texto en español (bio, README, o repos)
+ * La ubicación y el nombre son señales secundarias, NO suficientes por sí solas
  */
 export function analyzeSpanishLanguageProficiency(
   bio: string | undefined,
@@ -153,14 +155,14 @@ export function analyzeSpanishLanguageProficiency(
   const reasons: string[] = [];
   let totalScore = 0;
   const bioIndicators: string[] = [];
-  let hasStrongSignal = false; // requires location, bio indicators, README, or repo descriptions
+  let hasStrongSignal = false;
+  let hasSpanishText = false; // THE KEY GATE: actual Spanish text found?
 
-  // Prepare text for analysis (lowercase, remove diacritics)
   const normalizeText = (text: string) => {
     return text
       .toLowerCase()
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, ''); // Remove accents for better matching
+      .replace(/[\u0300-\u036f]/g, '');
   };
 
   const bioLower = normalizeText(bio || '');
@@ -168,20 +170,11 @@ export function analyzeSpanishLanguageProficiency(
   const nameLower = normalizeText(profile_name || '');
   const companyLower = normalizeText(company || '');
 
-  // 1. Check location (strongest signal - 50 points max)
-  if (location) {
-    const matchedLocation = SPANISH_LOCATIONS.find(loc =>
-      locationLower.includes(normalizeText(loc))
-    );
+  // ═══════════════════════════════════════════════════════════════
+  // TEXT-BASED CHECKS (these are the ONLY ones that set hasSpanishText)
+  // ═══════════════════════════════════════════════════════════════
 
-    if (matchedLocation) {
-      totalScore += 50;
-      hasStrongSignal = true; // Location is a STRONG signal
-      reasons.push(`📍 Location "${location}" matches Spanish-speaking region`);
-    }
-  }
-
-  // 2. Check bio for Spanish indicators (40 points max)
+  // CHECK 1: Bio contains Spanish bio indicators ("desarrollador", "hispanohablante", etc.)
   if (bio) {
     const matchedIndicators = SPANISH_BIO_INDICATORS.filter(indicator =>
       bioLower.includes(normalizeText(indicator))
@@ -189,56 +182,31 @@ export function analyzeSpanishLanguageProficiency(
 
     if (matchedIndicators.length > 0) {
       totalScore += Math.min(40, 12 * matchedIndicators.length);
-      hasStrongSignal = true; // Explicit Spanish bio indicators are a STRONG signal
+      hasSpanishText = true;
+      hasStrongSignal = true;
       bioIndicators.push(...matchedIndicators);
-      reasons.push(`🗣️ Bio contains Spanish language indicators: ${matchedIndicators.join(', ')}`);
+      reasons.push(`🗣️ Bio contains Spanish indicators: ${matchedIndicators.join(', ')}`);
     }
 
-    // Check for Spanish vocabulary in bio
+    // Bio contains Spanish vocabulary words
     const foundSpanishWords = SPANISH_VOCABULARY.filter(word => bioLower.includes(normalizeText(word)));
-    if (foundSpanishWords.length > 0) {
-      totalScore += Math.min(25, 5 * foundSpanishWords.length);
-      if (foundSpanishWords.length >= 3) hasStrongSignal = true; // 3+ Spanish vocab words = strong
-      reasons.push(`📝 Bio contains Spanish words: ${foundSpanishWords.slice(0, 5).join(', ')}${foundSpanishWords.length > 5 ? '...' : ''}`);
+    if (foundSpanishWords.length >= 2) {
+      totalScore += Math.min(30, 5 * foundSpanishWords.length);
+      hasSpanishText = true;
+      hasStrongSignal = true;
+      reasons.push(`📝 Bio has Spanish words: ${foundSpanishWords.slice(0, 5).join(', ')}${foundSpanishWords.length > 5 ? '...' : ''}`);
+    }
+
+    // Bio contains ñ, ¿, ¡ (uniquely Spanish characters)
+    if (/[ñ¿¡]/.test(bio.toLowerCase())) {
+      totalScore += 20;
+      hasSpanishText = true;
+      hasStrongSignal = true;
+      reasons.push(`✏️ Bio contains Spanish-unique characters (ñ, ¿, ¡)`);
     }
   }
 
-  // 3. Check company/organization name
-  if (company) {
-    const spanishCompanyKeywords = ['latino', 'hispano', 'españa', 'mexico', 'argentina', 'colombia',
-      'chile', 'peru', 'venezuela', 'ecuador', 'uruguay', 'bolivia', 'latam'];
-    const hasSpanishCompany = spanishCompanyKeywords.some(kw =>
-      companyLower.includes(normalizeText(kw))
-    );
-
-    if (hasSpanishCompany) {
-      totalScore += 15;
-      reasons.push(`🏢 Company name suggests Spanish-speaking organization`);
-    }
-  }
-
-  // 4. Bonus: Spanish name patterns (gentle, contextual)
-  if (profile_name) {
-    const spanishNameParts = ['jose', 'juan', 'carlos', 'luis', 'ana', 'maria', 'diego', 'fernando',
-      'garcia', 'martinez', 'rodriguez', 'lopez', 'sanchez', 'torres', 'rivera', 'gonzalez',
-      'hernandez', 'ramirez', 'flores', 'morales', 'ortiz', 'gutierrez', 'reyes', 'cruz',
-      'alvarez', 'mendoza', 'castillo', 'jimenez', 'ruiz', 'diaz', 'romero', 'herrera',
-      'medina', 'aguilar', 'vargas', 'perez', 'santiago', 'alejandro', 'andres', 'pablo',
-      'pedro', 'miguel', 'angel', 'manuel', 'javier', 'rafael', 'david', 'oscar',
-      'sergio', 'ricardo', 'alfonso', 'eduardo', 'guillermo', 'adriana', 'lucia', 'carmen',
-      'isabel', 'rosa', 'elena', 'gabriela', 'valentina', 'camila', 'mariana', 'sofia'];
-    const nameWords = nameLower.split(/\s+/);
-    const spanishNameMatches = nameWords.filter(word =>
-      word.length >= 3 && spanishNameParts.some(part => normalizeText(part) === word)
-    );
-
-    if (spanishNameMatches.length > 0) {
-      totalScore += Math.min(15, 8 * spanishNameMatches.length);
-      reasons.push(`👤 Name pattern suggests Spanish heritage: ${spanishNameMatches.join(', ')}`);
-    }
-  }
-
-  // 5. NEW: Check repo descriptions for Spanish language (20 points max)
+  // CHECK 2: Repo descriptions in Spanish
   if (repoDescriptions && repoDescriptions.length > 0) {
     let spanishRepoCount = 0;
     for (const desc of repoDescriptions) {
@@ -247,36 +215,98 @@ export function analyzeSpanishLanguageProficiency(
       }
     }
     if (spanishRepoCount > 0) {
-      totalScore += Math.min(20, 8 * spanishRepoCount);
-      if (spanishRepoCount >= 2) hasStrongSignal = true; // 2+ Spanish repo descriptions = strong
-      reasons.push(`📦 ${spanishRepoCount} repo description(s) written in Spanish`);
+      totalScore += Math.min(25, 10 * spanishRepoCount);
+      hasSpanishText = true;
+      hasStrongSignal = true;
+      reasons.push(`📦 ${spanishRepoCount} repo(s) with Spanish description`);
     }
   }
 
-  // 6. NEW: Check profile README for Spanish content (25 points max)
+  // CHECK 3: Profile README in Spanish
   if (profileReadmeText) {
     const readmeLower = normalizeText(profileReadmeText);
     const spanishWordsInReadme = SPANISH_VOCABULARY.filter(word => readmeLower.includes(normalizeText(word)));
     const spanishIndicatorsInReadme = SPANISH_BIO_INDICATORS.filter(ind => readmeLower.includes(normalizeText(ind)));
 
-    if (spanishWordsInReadme.length >= 3 || spanishIndicatorsInReadme.length >= 1) {
-      const readmeScore = Math.min(25, 4 * spanishWordsInReadme.length + 10 * spanishIndicatorsInReadme.length);
+    if (spanishWordsInReadme.length >= 2 || spanishIndicatorsInReadme.length >= 1) {
+      const readmeScore = Math.min(30, 4 * spanishWordsInReadme.length + 10 * spanishIndicatorsInReadme.length);
       totalScore += readmeScore;
-      hasStrongSignal = true; // README in Spanish = strong signal
-      reasons.push(`📄 Profile README contains Spanish content (${spanishWordsInReadme.length} words, ${spanishIndicatorsInReadme.length} indicators)`);
+      hasSpanishText = true;
+      hasStrongSignal = true;
+      reasons.push(`📄 README has Spanish content (${spanishWordsInReadme.length} words, ${spanishIndicatorsInReadme.length} indicators)`);
+    }
+
+    // README contains ñ, ¿, ¡
+    if (profileReadmeText && /[ñ¿¡]/.test(profileReadmeText.toLowerCase())) {
+      if (!hasSpanishText) { // only add if not already detected
+        totalScore += 15;
+        hasSpanishText = true;
+        hasStrongSignal = true;
+        reasons.push(`✏️ README contains Spanish-unique characters`);
+      }
     }
   }
 
-  // Ensure score doesn't exceed 100
+  // ═══════════════════════════════════════════════════════════════
+  // SECONDARY SIGNALS (boost score but do NOT set hasSpanishText)
+  // ═══════════════════════════════════════════════════════════════
+
+  // Location in Spanish-speaking country (boosts confidence but NOT enough alone)
+  if (location) {
+    const matchedLocation = SPANISH_LOCATIONS.find(loc =>
+      locationLower.includes(normalizeText(loc))
+    );
+    if (matchedLocation) {
+      totalScore += 20; // Reduced from 50 — location alone is NOT proof of Spanish
+      reasons.push(`📍 Location: "${location}"`);
+    }
+  }
+
+  // Spanish name patterns (gentle boost only)
+  if (profile_name) {
+    const spanishNameParts = ['jose', 'juan', 'carlos', 'luis', 'ana', 'maria', 'diego', 'fernando',
+      'garcia', 'martinez', 'rodriguez', 'lopez', 'sanchez', 'torres', 'rivera', 'gonzalez',
+      'hernandez', 'ramirez', 'flores', 'morales', 'ortiz', 'gutierrez', 'reyes', 'cruz',
+      'alvarez', 'mendoza', 'castillo', 'jimenez', 'ruiz', 'diaz', 'romero', 'herrera',
+      'medina', 'aguilar', 'vargas', 'perez', 'santiago', 'alejandro', 'andres', 'pablo',
+      'pedro', 'miguel', 'angel', 'manuel', 'javier', 'rafael',
+      'sergio', 'ricardo', 'alfonso', 'eduardo', 'guillermo', 'adriana', 'lucia', 'carmen',
+      'isabel', 'rosa', 'elena', 'gabriela', 'valentina', 'camila', 'mariana', 'sofia'];
+    const nameWords = nameLower.split(/\s+/);
+    const spanishNameMatches = nameWords.filter(word =>
+      word.length >= 3 && spanishNameParts.some(part => normalizeText(part) === word)
+    );
+    if (spanishNameMatches.length > 0) {
+      totalScore += Math.min(10, 5 * spanishNameMatches.length);
+      reasons.push(`👤 Name: ${spanishNameMatches.join(', ')}`);
+    }
+  }
+
+  // Company hint
+  if (company) {
+    const spanishCompanyKeywords = ['latino', 'hispano', 'españa', 'mexico', 'argentina', 'colombia',
+      'chile', 'peru', 'venezuela', 'ecuador', 'uruguay', 'bolivia', 'latam'];
+    const hasSpanishCompany = spanishCompanyKeywords.some(kw =>
+      companyLower.includes(normalizeText(kw))
+    );
+    if (hasSpanishCompany) {
+      totalScore += 10;
+      reasons.push(`🏢 Company suggests Spanish org`);
+    }
+  }
+
   const confidence = Math.min(100, totalScore);
 
-  // STRICT: Requires BOTH a strong signal AND confidence >= 40
-  // Name-only matches (e.g. "David", "Daniel") are NOT strong signals
-  const isSpanishSpeaker = hasStrongSignal && confidence >= 40;
+  // ═══════════════════════════════════════════════════════════════
+  // FINAL VERDICT: hasSpanishText is MANDATORY
+  // Location + name alone = NOT ENOUGH
+  // ═══════════════════════════════════════════════════════════════
+  const isSpanishSpeaker = hasSpanishText;
 
   return {
     isSpanishSpeaker,
     hasStrongSignal,
+    hasSpanishText,
     confidence,
     reasons,
     location: location || null,
