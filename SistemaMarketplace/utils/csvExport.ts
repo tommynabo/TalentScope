@@ -5,55 +5,93 @@ import { MarketplaceRaid, EnrichedCandidate, OutreachCampaign } from '../types/m
  * Generates downloadable CSV files with candidate data
  */
 export class MarketplaceCSVExport {
-  
+
   /**
-   * Export enriched candidates to CSV
+   * SMART SPLIT EXPORT: Auto-downloads 2 CSVs
+   * - LINKEDIN_marketplace_...csv → candidates WITH LinkedIn URL
+   * - EMAIL_marketplace_...csv → candidates WITH email but NO LinkedIn
+   * Returns summary string for toast/UI
+   */
+  static exportCandidatesSplit(
+    raid: MarketplaceRaid,
+    candidates: EnrichedCandidate[] = []
+  ): string {
+    const data = candidates.length > 0 ? candidates : raid.enrichedCandidates;
+
+    if (data.length === 0) {
+      alert('❌ No hay candidatos para exportar');
+      return '';
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const raidTag = raid.raidName.replace(/[^a-zA-Z0-9]/g, '_');
+
+    // Split candidates by contact type
+    const linkedinCandidates = data.filter(c => c.linkedInUrl && c.linkedInUrl.trim().length > 0);
+    const emailOnlyCandidates = data.filter(c =>
+      c.emails && c.emails.length > 0 && c.emails[0].trim().length > 0 &&
+      (!c.linkedInUrl || c.linkedInUrl.trim().length === 0)
+    );
+
+    const buildCSV = (items: EnrichedCandidate[]): string => {
+      const headers = [
+        'Nombre', 'Plataforma', 'Username', 'Título', 'País',
+        'Tarifa_Hora', 'Success_Rate', 'LinkedIn', 'Emails',
+        'Identidad_Score', 'Fecha_Scraping'
+      ];
+      const rows = items.map(c => [
+        `"${c.name}"`,
+        `"${c.platform}"`,
+        `"${c.platformUsername}"`,
+        `"${c.title}"`,
+        `"${c.country}"`,
+        c.hourlyRate.toFixed(2),
+        `${c.jobSuccessRate.toFixed(0)}%`,
+        `"${c.linkedInUrl || ''}"`,
+        `"${c.emails.join('; ')}"`,
+        c.identityConfidenceScore.toFixed(2),
+        `"${c.scrapedAt.split('T')[0]}"`
+      ]);
+      return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    };
+
+    // Download LinkedIn CSV
+    if (linkedinCandidates.length > 0) {
+      this.downloadCSV(
+        buildCSV(linkedinCandidates),
+        `LINKEDIN_marketplace_${raidTag}_${today}.csv`
+      );
+    }
+
+    // Download Email CSV (small delay to avoid browser blocking)
+    if (emailOnlyCandidates.length > 0) {
+      setTimeout(() => {
+        this.downloadCSV(
+          buildCSV(emailOnlyCandidates),
+          `EMAIL_marketplace_${raidTag}_${today}.csv`
+        );
+      }, 500);
+    }
+
+    // Build summary
+    const parts: string[] = [];
+    if (emailOnlyCandidates.length > 0) parts.push(`${emailOnlyCandidates.length} Email`);
+    if (linkedinCandidates.length > 0) parts.push(`${linkedinCandidates.length} LinkedIn`);
+    const noContact = data.length - linkedinCandidates.length - emailOnlyCandidates.length;
+    if (noContact > 0) parts.push(`${noContact} sin contacto`);
+
+    return `✅ Exportados ${data.length} candidatos → ${parts.join(' + ')}`;
+  }
+
+  /**
+   * Legacy single-file export (kept for backward compatibility)
    */
   static exportCandidates(
     raid: MarketplaceRaid,
     candidates: EnrichedCandidate[] = []
   ): void {
-    const data = candidates.length > 0 ? candidates : raid.enrichedCandidates;
-
-    if (data.length === 0) {
-      alert('❌ No hay candidatos para exportar');
-      return;
-    }
-
-    const headers = [
-      'Nombre',
-      'Plataforma',
-      'Username',
-      'Título',
-      'País',
-      'Tarifa Hora',
-      'Success Rate',
-      'LinkedIn',
-      'Emails',
-      'Identidad Score',
-      'Fecha Scraping'
-    ];
-
-    const rows = data.map(c => [
-      `"${c.name}"`,
-      `"${c.platform}"`,
-      `"${c.platformUsername}"`,
-      `"${c.title}"`,
-      `"${c.country}"`,
-      c.hourlyRate.toFixed(2),
-      `${c.jobSuccessRate.toFixed(0)}%`,
-      `"${c.linkedInUrl || ''}"`,
-      `"${c.emails.join('; ')}"`,
-      c.identityConfidenceScore.toFixed(2),
-      `"${c.scrapedAt.split('T')[0]}"`
-    ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.join(','))
-    ].join('\n');
-
-    this.downloadCSV(csvContent, `marketplace_candidates_${raid.raidName}_${new Date().toISOString().split('T')[0]}.csv`);
+    // Delegate to the new split export
+    this.exportCandidatesSplit(raid, candidates);
   }
 
   /**
@@ -111,9 +149,9 @@ export class MarketplaceCSVExport {
 
     const rows = candidates.map(c => {
       const recommendation = c.identityConfidenceScore > 0.8 ? 'Alto Potencial' :
-                            c.identityConfidenceScore > 0.6 ? 'Mediano Potencial' :
-                            'Bajo Potencial';
-      
+        c.identityConfidenceScore > 0.6 ? 'Mediano Potencial' :
+          'Bajo Potencial';
+
       return [
         `"${c.name}"`,
         `"${c.emails[0] || ''}"`,
@@ -135,38 +173,58 @@ export class MarketplaceCSVExport {
   }
 
   /**
-   * Export contact list ready for manual outreach
+   * Export contact list — SMART SPLIT by LinkedIn vs Email
    */
   static exportContactList(
     campaign: OutreachCampaign,
     candidates: EnrichedCandidate[]
   ): void {
-    const headers = [
-      'Nombre',
-      'Email Principal',
-      'Emails Alternativas',
-      'LinkedIn URL',
-      'Plataforma Origen',
-      'Tarifa Hora',
-      'Notas'
-    ];
+    if (candidates.length === 0) {
+      alert('❌ No hay candidatos para exportar');
+      return;
+    }
 
-    const rows = candidates.map(c => [
-      `"${c.name}"`,
-      `"${c.emails[0] || 'N/A'}"`,
-      `"${c.emails.slice(1).join('; ')}"`,
-      `"${c.linkedInUrl || ''}"`,
-      `"${c.platform}"`,
-      c.hourlyRate.toFixed(2),
-      `"Agregado a: ${campaign.name}"`
-    ]);
+    const today = new Date().toISOString().split('T')[0];
+    const campaignTag = campaign.name.replace(/[^a-zA-Z0-9]/g, '_');
 
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.join(','))
-    ].join('\n');
+    const linkedinCandidates = candidates.filter(c => c.linkedInUrl && c.linkedInUrl.trim().length > 0);
+    const emailOnlyCandidates = candidates.filter(c =>
+      c.emails && c.emails.length > 0 && c.emails[0].trim().length > 0 &&
+      (!c.linkedInUrl || c.linkedInUrl.trim().length === 0)
+    );
 
-    this.downloadCSV(csvContent, `contact_list_${campaign.name}_${new Date().toISOString().split('T')[0]}.csv`);
+    const headers = ['Nombre', 'Email_Principal', 'Emails_Alternativas', 'LinkedIn_URL', 'Plataforma', 'Tarifa_Hora', 'Notas'];
+
+    const buildCSV = (items: EnrichedCandidate[]): string => {
+      const rows = items.map(c => [
+        `"${c.name}"`,
+        `"${c.emails[0] || 'N/A'}"`,
+        `"${c.emails.slice(1).join('; ')}"`,
+        `"${c.linkedInUrl || ''}"`,
+        `"${c.platform}"`,
+        c.hourlyRate.toFixed(2),
+        `"Campaña: ${campaign.name}"`
+      ]);
+      return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    };
+
+    if (linkedinCandidates.length > 0) {
+      this.downloadCSV(buildCSV(linkedinCandidates), `LINKEDIN_contactos_${campaignTag}_${today}.csv`);
+    }
+
+    if (emailOnlyCandidates.length > 0) {
+      setTimeout(() => {
+        this.downloadCSV(buildCSV(emailOnlyCandidates), `EMAIL_contactos_${campaignTag}_${today}.csv`);
+      }, 500);
+    }
+
+    const parts: string[] = [];
+    if (emailOnlyCandidates.length > 0) parts.push(`${emailOnlyCandidates.length} Email`);
+    if (linkedinCandidates.length > 0) parts.push(`${linkedinCandidates.length} LinkedIn`);
+    const noContact = candidates.length - linkedinCandidates.length - emailOnlyCandidates.length;
+    if (noContact > 0) parts.push(`${noContact} sin contacto`);
+
+    alert(`✅ Exportados ${candidates.length} contactos → ${parts.join(' + ')}`);
   }
 
   /**
@@ -175,7 +233,7 @@ export class MarketplaceCSVExport {
   private static downloadCSV(content: string, filename: string): void {
     const blob = new Blob(['\ufeff' + content], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    
+
     if (link.download !== undefined) {
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);

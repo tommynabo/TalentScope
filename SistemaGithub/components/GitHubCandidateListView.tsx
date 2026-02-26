@@ -121,46 +121,75 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
             return;
         }
 
-        const headers = ['GITHUB', 'NOMBRE', 'EMAIL', 'LINKEDIN', 'SCORE', 'SEGUIDORES', 'REPOS', 'LENGUAJE', 'ÚLTIMO_COMMIT', 'FECHA'];
-        
-        const csvContent = [
-            headers.join(','),
-            ...filtered.map(c => {
-                const lastCommit = c.last_commit_date ? c.last_commit_date.split('T')[0] : 'N/A';
-                const added = c.added_at ? c.added_at.split('T')[0] : new Date().toISOString().split('T')[0];
-                
-                return [
-                    `"${c.github_username}"`,
-                    `"${c.github_username}"`,
-                    `"${c.mentioned_email || ''}"`,
-                    `"${c.linkedin_url || ''}"`,
-                    `"${Math.round(c.github_score)}"`,
-                    `"${c.followers}"`,
-                    `"${c.public_repos}"`,
-                    `"${c.most_used_language || ''}"`,
-                    `"${lastCommit}"`,
-                    `"${added}"`
-                ].join(',');
-            })
-        ].join('\n');
+        // ═══ SMART SPLIT: LinkedIn vs Email ═══
+        const linkedinCandidates = filtered.filter(c => c.linkedin_url && c.linkedin_url.trim().length > 0);
+        const emailCandidates = filtered.filter(c =>
+            c.mentioned_email && c.mentioned_email.trim().length > 0 &&
+            (!c.linkedin_url || c.linkedin_url.trim().length === 0)
+        );
 
-        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        if (link.download !== undefined) {
-            const url = URL.createObjectURL(blob);
-            link.setAttribute('href', url);
-            link.setAttribute('download', `github_candidates_${campaignId}_${start}_${end}.csv`);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            setToast({ 
-                show: true, 
-                message: `✅ CSV exportado con ${filtered.length} desarrolladores`
-            });
-            setShowExportOptions(false);
+        const dateTag = `${start}_${end}`;
+
+        // Helper to build and download a CSV
+        const downloadCSV = (data: CandidateWithMeta[], filename: string) => {
+            const headers = ['GITHUB', 'NOMBRE', 'EMAIL', 'LINKEDIN', 'SCORE', 'SEGUIDORES', 'REPOS', 'LENGUAJE', 'ÚLTIMO_COMMIT', 'FECHA'];
+            const csvContent = [
+                headers.join(','),
+                ...data.map(c => {
+                    const lastCommit = c.last_commit_date ? c.last_commit_date.split('T')[0] : 'N/A';
+                    const added = c.added_at ? c.added_at.split('T')[0] : new Date().toISOString().split('T')[0];
+                    return [
+                        `"${c.github_username}"`,
+                        `"${c.github_username}"`,
+                        `"${c.mentioned_email || ''}"`,
+                        `"${c.linkedin_url || ''}"`,
+                        `"${Math.round(c.github_score)}"`,
+                        `"${c.followers}"`,
+                        `"${c.public_repos}"`,
+                        `"${c.most_used_language || ''}"`,
+                        `"${lastCommit}"`,
+                        `"${added}"`
+                    ].join(',');
+                })
+            ].join('\n');
+
+            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        };
+
+        // Download LinkedIn CSV (if any)
+        if (linkedinCandidates.length > 0) {
+            downloadCSV(linkedinCandidates, `LINKEDIN_github_${campaignId}_${dateTag}.csv`);
         }
+
+        // Download Email CSV (if any)
+        if (emailCandidates.length > 0) {
+            setTimeout(() => {
+                downloadCSV(emailCandidates, `EMAIL_github_${campaignId}_${dateTag}.csv`);
+            }, 500); // Small delay so browser doesn't block second download
+        }
+
+        // Toast with breakdown
+        const parts: string[] = [];
+        if (emailCandidates.length > 0) parts.push(`${emailCandidates.length} Email`);
+        if (linkedinCandidates.length > 0) parts.push(`${linkedinCandidates.length} LinkedIn`);
+        const noContact = filtered.length - linkedinCandidates.length - emailCandidates.length;
+        if (noContact > 0) parts.push(`${noContact} sin contacto`);
+
+        setToast({
+            show: true,
+            message: `✅ Exportados ${filtered.length} devs → ${parts.join(' + ')}`
+        });
+        setShowExportOptions(false);
     };
 
     return (
@@ -195,27 +224,27 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
                 <div className={`flex items-center gap-2 transition-all overflow-hidden ${showExportOptions ? 'w-auto opacity-100' : 'w-auto'}`}>
                     {showExportOptions ? (
                         <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 rounded-lg p-1 animate-in slide-in-from-right-4 fade-in duration-200">
-                            <input 
-                                type="date" 
+                            <input
+                                type="date"
                                 value={dateRange.start}
                                 onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
                                 className="bg-transparent text-xs text-white border-0 p-1 focus:ring-0 w-24"
                             />
                             <span className="text-slate-500 text-xs">-</span>
-                            <input 
-                                type="date" 
+                            <input
+                                type="date"
                                 value={dateRange.end}
                                 onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
                                 className="bg-transparent text-xs text-white border-0 p-1 focus:ring-0 w-24"
                             />
-                            <button 
+                            <button
                                 onClick={handleExport}
                                 className="p-1 hover:bg-orange-500/20 rounded text-orange-400"
                                 title="Descargar CSV"
                             >
                                 <Download className="h-3.5 w-3.5" />
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setShowExportOptions(false)}
                                 className="p-1 hover:bg-slate-700 rounded text-slate-400"
                             >
