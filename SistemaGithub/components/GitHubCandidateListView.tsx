@@ -130,25 +130,52 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
 
         const dateTag = `${start}_${end}`;
 
-        // Helper to build and download a CSV
+        // Helper: escape CSV value
+        const esc = (val: string) => `"${(val || '').replace(/"/g, '""')}"`;
+
+        // Helper to build and download a CSV (LinkedIn-style complete data)
         const downloadCSV = (data: CandidateWithMeta[], filename: string) => {
-            const headers = ['GITHUB', 'NOMBRE', 'EMAIL', 'LINKEDIN', 'SCORE', 'SEGUIDORES', 'REPOS', 'LENGUAJE', 'ÚLTIMO_COMMIT', 'FECHA'];
+            const headers = [
+                'FIRST_NAME', 'LAST_NAME', 'ROL', 'EMAIL', 'LINKEDIN', 'GITHUB',
+                'SCORE', 'ICEBREAKER', 'PITCH', 'FOLLOWUP',
+                'ANALISIS', 'LENGUAJE', 'SEGUIDORES', 'REPOS', 'ÚLTIMO_COMMIT', 'FECHA'
+            ];
             const csvContent = [
                 headers.join(','),
                 ...data.map(c => {
+                    // Split name into first/last
+                    const nameParts = (c.name || c.github_username || '').split(' ');
+                    const firstName = nameParts[0] || '';
+                    const lastName = nameParts.slice(1).join(' ') || '';
+
+                    // Detect role from language
+                    const lang = c.most_used_language || '';
+                    const lowerLang = lang.toLowerCase();
+                    let rol = `${lang} Developer`;
+                    if (['react', 'typescript', 'javascript', 'vue'].some(t => lowerLang.includes(t))) rol = 'Frontend Engineer';
+                    else if (['python', 'django', 'flask'].some(t => lowerLang.includes(t))) rol = 'Backend Engineer';
+                    else if (['dart', 'flutter', 'kotlin', 'swift'].some(t => lowerLang.includes(t))) rol = 'Mobile Engineer';
+                    else if (['rust', 'go', 'c++', 'c'].some(t => lowerLang === t)) rol = 'Systems Engineer';
+
+                    // Outreach messages
+                    const icebreaker = c.outreach_icebreaker || '';
+                    const pitch = c.outreach_pitch || '';
+                    const followup = c.outreach_followup || '';
+
+                    // Analysis summary
+                    const analysis = c.ai_summary?.join(' | ') || c.analysis_business || '';
+
                     const lastCommit = c.last_commit_date ? c.last_commit_date.split('T')[0] : 'N/A';
                     const added = c.added_at ? c.added_at.split('T')[0] : new Date().toISOString().split('T')[0];
+
                     return [
-                        `"${c.github_username}"`,
-                        `"${c.github_username}"`,
-                        `"${c.mentioned_email || ''}"`,
-                        `"${c.linkedin_url || ''}"`,
+                        esc(firstName), esc(lastName), esc(rol),
+                        esc(c.mentioned_email || ''), esc(c.linkedin_url || ''),
+                        esc(`https://github.com/${c.github_username}`),
                         `"${Math.round(c.github_score)}"`,
-                        `"${c.followers}"`,
-                        `"${c.public_repos}"`,
-                        `"${c.most_used_language || ''}"`,
-                        `"${lastCommit}"`,
-                        `"${added}"`
+                        esc(icebreaker), esc(pitch), esc(followup), esc(analysis),
+                        esc(lang), `"${c.followers}"`, `"${c.public_repos}"`,
+                        esc(lastCommit), esc(added)
                     ].join(',');
                 })
             ].join('\n');

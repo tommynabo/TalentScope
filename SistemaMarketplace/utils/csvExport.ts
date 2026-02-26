@@ -33,25 +33,41 @@ export class MarketplaceCSVExport {
       (!c.linkedInUrl || c.linkedInUrl.trim().length === 0)
     );
 
+    // Helper: escape CSV value (handles quotes and commas)
+    const esc = (val: string) => `"${(val || '').replace(/"/g, '""')}"`;
+
     const buildCSV = (items: EnrichedCandidate[]): string => {
       const headers = [
-        'Nombre', 'Plataforma', 'Username', 'Título', 'País',
-        'Tarifa_Hora', 'Success_Rate', 'LinkedIn', 'Emails',
-        'Identidad_Score', 'Fecha_Scraping'
+        'FIRST_NAME', 'LAST_NAME', 'ROL', 'PLATAFORMA', 'PAIS',
+        'EMAIL', 'LINKEDIN', 'PERFIL_ORIGINAL',
+        'TARIFA_HORA', 'SUCCESS_RATE', 'TALENT_SCORE',
+        'ICEBREAKER', 'FOLLOWUP',
+        'ANALISIS', 'FECHA'
       ];
-      const rows = items.map(c => [
-        `"${c.name}"`,
-        `"${c.platform}"`,
-        `"${c.platformUsername}"`,
-        `"${c.title}"`,
-        `"${c.country}"`,
-        c.hourlyRate.toFixed(2),
-        `${c.jobSuccessRate.toFixed(0)}%`,
-        `"${c.linkedInUrl || ''}"`,
-        `"${c.emails.join('; ')}"`,
-        c.identityConfidenceScore.toFixed(2),
-        `"${c.scrapedAt.split('T')[0]}"`
-      ]);
+      const rows = items.map(c => {
+        // Split name into first/last
+        const nameParts = (c.name || '').split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+
+        // Outreach messages
+        const icebreaker = c.walead_messages?.icebreaker || '';
+        const followup = c.walead_messages?.followup_message || '';
+
+        // Analysis summary
+        const analysis = [c.businessMoment, c.salesAngle, c.bottleneck]
+          .filter(Boolean).join(' | ') || '';
+
+        return [
+          esc(firstName), esc(lastName), esc(c.title), esc(c.platform),
+          esc(c.country),
+          esc(c.emails?.[0] || ''), esc(c.linkedInUrl || ''), esc(c.profileUrl),
+          c.hourlyRate.toFixed(2), `${c.jobSuccessRate.toFixed(0)}%`,
+          `${c.talentScore || 0}`,
+          esc(icebreaker), esc(followup), esc(analysis),
+          esc(c.scrapedAt.split('T')[0])
+        ];
+      });
       return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     };
 
@@ -193,18 +209,32 @@ export class MarketplaceCSVExport {
       (!c.linkedInUrl || c.linkedInUrl.trim().length === 0)
     );
 
-    const headers = ['Nombre', 'Email_Principal', 'Emails_Alternativas', 'LinkedIn_URL', 'Plataforma', 'Tarifa_Hora', 'Notas'];
+    const headers = [
+      'FIRST_NAME', 'LAST_NAME', 'ROL', 'PLATAFORMA',
+      'EMAIL', 'LINKEDIN', 'TARIFA_HORA',
+      'ICEBREAKER', 'FOLLOWUP', 'ANALISIS', 'CAMPAÑA'
+    ];
+
+    // Helper: escape CSV
+    const esc = (val: string) => `"${(val || '').replace(/"/g, '""')}"`;
 
     const buildCSV = (items: EnrichedCandidate[]): string => {
-      const rows = items.map(c => [
-        `"${c.name}"`,
-        `"${c.emails[0] || 'N/A'}"`,
-        `"${c.emails.slice(1).join('; ')}"`,
-        `"${c.linkedInUrl || ''}"`,
-        `"${c.platform}"`,
-        c.hourlyRate.toFixed(2),
-        `"Campaña: ${campaign.name}"`
-      ]);
+      const rows = items.map(c => {
+        const nameParts = (c.name || '').split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+        const icebreaker = c.walead_messages?.icebreaker || '';
+        const followup = c.walead_messages?.followup_message || '';
+        const analysis = [c.businessMoment, c.salesAngle].filter(Boolean).join(' | ') || '';
+
+        return [
+          esc(firstName), esc(lastName), esc(c.title), esc(c.platform),
+          esc(c.emails?.[0] || 'N/A'), esc(c.linkedInUrl || ''),
+          c.hourlyRate.toFixed(2),
+          esc(icebreaker), esc(followup), esc(analysis),
+          esc(campaign.name)
+        ];
+      });
       return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     };
 
