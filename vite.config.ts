@@ -24,6 +24,19 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       }
+    },
+    build: {
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom'],
+            charts: ['recharts'],
+            supabase: ['@supabase/supabase-js'],
+            openai: ['openai'],
+          }
+        }
+      }
     }
   };
 });
