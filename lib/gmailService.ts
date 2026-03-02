@@ -71,26 +71,44 @@ export const GmailService = {
         return data || [];
     },
 
-    async mockConnectAccount(email: string): Promise<GmailAccount> {
-        // In a real scenario, this would trigger an OAuth flow and exchange the authorization code.
-        // Here we'll mock the backend insertion of an email account for demonstration.
-        const user = (await supabase.auth.getUser()).data.user;
-        if (!user) throw new Error('Not authenticated');
-
-        const { data, error } = await supabase
-            .from('gmail_accounts')
-            .insert({
-                user_id: user.id,
-                email: email,
-                access_token: 'mock_access_token',
-                refresh_token: 'mock_refresh_token',
-                status: 'active'
-            })
-            .select()
-            .single();
-
+    async connectGoogleAccount(): Promise<void> {
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                scopes: 'https://www.googleapis.com/auth/gmail.send',
+                queryParams: {
+                    access_type: 'offline',
+                    prompt: 'consent',
+                },
+                redirectTo: `${window.location.origin}/gmail`
+            }
+        });
         if (error) throw error;
-        return data;
+    },
+
+    async captureSessionAccount(): Promise<void> {
+        const { data: { session } } = await supabase.auth.getSession();
+
+        // If we have a provider token, it means we just logged in via OAuth
+        if (session && session.provider_token) {
+            const user = session.user;
+
+            // Upsert the main account connected
+            const { error } = await supabase
+                .from('gmail_accounts')
+                .upsert({
+                    user_id: user.id,
+                    email: user.email!, // Use the authenticated user's email
+                    access_token: session.provider_token,
+                    // If refresh token is missing, keep the old one or set a default.
+                    refresh_token: session.provider_refresh_token || '',
+                    status: 'active'
+                }, { onConflict: 'user_id,email' });
+
+            if (error) {
+                console.error('Error saving gmail account:', error);
+            }
+        }
     },
 
     async disconnectAccount(accountId: string): Promise<void> {

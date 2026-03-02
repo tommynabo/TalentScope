@@ -7,7 +7,10 @@ const GmailAccounts: React.FC = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetchAccounts();
+        // First, check if we just returned from OAuth and capture the tokens
+        GmailService.captureSessionAccount().then(() => {
+            fetchAccounts();
+        });
     }, []);
 
     const fetchAccounts = async () => {
@@ -24,14 +27,12 @@ const GmailAccounts: React.FC = () => {
 
     const handleConnectAccount = async () => {
         try {
-            const mockEmail = prompt('Simulando Google OAuth. Introduce el email a conectar:', 'test@gmail.com');
-            if (!mockEmail) return;
-
-            await GmailService.mockConnectAccount(mockEmail);
-            await fetchAccounts();
+            setLoading(true);
+            await GmailService.connectGoogleAccount();
         } catch (error) {
             console.error(error);
-            alert('Error connecting account');
+            alert('Error al iniciar la conexión con Google');
+            setLoading(false);
         }
     };
 
