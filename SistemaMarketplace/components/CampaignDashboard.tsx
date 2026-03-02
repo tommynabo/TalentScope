@@ -13,6 +13,8 @@ import { dedupService } from '../services/marketplaceDeduplicationService';
 import { ScrapingFilter, FreelancePlatform } from '../types/marketplace';
 
 import Toast from '../../components/Toast';
+import UserSelectionModal from '../../components/UserSelectionModal';
+import { OutreachUser, generateOutreachMessages, extractSpecialty } from '../../lib/messageGenerator';
 
 // ─── Sort types ─────────────────────────────────────────────────────────
 type SortField = 'addedAt' | 'jobSuccessRate' | 'name' | 'hourlyRate' | 'talentScore';
@@ -82,6 +84,8 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
   };
   const [toast, setToast] = useState({ show: false, message: '' });
   const [showExportOptions, setShowExportOptions] = useState(false);
+  const [showUserSelection, setShowUserSelection] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<OutreachUser>('mauro');
   const [showAddModal, setShowAddModal] = useState(false);
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
     start: new Date().toISOString().split('T')[0],
@@ -510,40 +514,121 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       return;
     }
 
-    // Build CSV with marketplace-specific fields
-    const headers = ['NOMBRE', 'PLATAFORMA', 'EMAIL', 'TARIFA_HORA', 'SUCCESS_RATE', 'LINKEDIN', 'ESTADO', 'FECHA'];
+    // Show user selection modal
+    setShowUserSelection(true);
+  };
+
+  const handleExportWithUser = (userOverride: OutreachUser) => {
+    const activeUser = userOverride;
+    const { start, end } = dateRange;
+    if (!start || !end) return;
+
+    const startDate = new Date(start);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(end);
+    endDate.setHours(23, 59, 59, 999);
+
+    const filtered = campaign.candidates.filter(c => {
+      const cDate = new Date(c.addedAt);
+      return cDate >= startDate && cDate <= endDate;
+    });
+
+    if (filtered.length === 0) {
+      setToast({ show: true, message: '⚠️ No hay candidatos para exportar en este rango' });
+      return;
+    }
+
+    // Helper: escape CSV value
+    const esc = (val: string) => `"${(val || '').replace(/"/g, '""')}"`;  
+
+    // Split by contact type (LinkedIn vs Email)
+    const linkedinCandidates = filtered.filter(c => c.linkedInUrl && c.linkedInUrl.trim().length > 0);
+    const emailOnlyCandidates = filtered.filter(c =>
+      c.email && c.email.trim().length > 0 &&
+      (!c.linkedInUrl || c.linkedInUrl.trim().length === 0)
+    );
+
+    const headers = ['FIRST_NAME', 'LAST_NAME', 'ROL', 'PLATAFORMA', 'EMAIL', 'LINKEDIN', 'TARIFA_HORA', 'SUCCESS_RATE', 'TALENT_SCORE', 'INVITACION_INICIAL', 'POST_ACEPTACION', 'ANALISIS', 'STATUS', 'FECHA'];
+
     const laneLabels: Record<string, string> = {
       todo: 'Por Contactar', contacted: 'Contactado', replied: 'Respondió', rejected: 'Rechazó', hired: 'Contratado'
     };
 
-    const csvContent = [
-      headers.join(','),
-      ...filtered.map(c => [
-        `"${c.name}"`,
-        `"${c.platform}"`,
-        `"${c.email || ''}"`,
-        `"$${c.hourlyRate.toFixed(0)}"`,
-        `"${c.jobSuccessRate.toFixed(0)}%"`,
-        `"${c.linkedInUrl || ''}"`,
-        `"${laneLabels[c.kanbanLane] || c.kanbanLane}"`,
-        `"${c.addedAt ? c.addedAt.split('T')[0] : ''}"`
-      ].join(','))
-    ].join('\n');
+    const buildCSV = (items: EnrichedCandidateInCampaign[]) => {
+      const rows = items.map(c => {
+        const nameParts = (c.name || '').split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
 
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    if (link.download !== undefined) {
+        const specialty = extractSpecialty(c.platform);
+        const personalized = generateOutreachMessages(
+          c.name || '',
+          specialty,
+          activeUser,
+          {
+            icebreaker: c.walead_messages?.icebreaker,
+            followup_message: c.walead_messages?.followup_message
+          }
+        );
+
+        const analysis = [c.businessMoment, c.salesAngle, c.bottleneck].filter(Boolean).join(' | ') || '';
+
+        return [
+          esc(firstName), esc(lastName), esc(c.platform), esc(c.platform),
+          esc(c.email || ''), esc(c.linkedInUrl || ''),
+          `"$${c.hourlyRate.toFixed(0)}"`, `"${c.jobSuccessRate.toFixed(0)}%"`,
+          `"${c.talentScore || 0}"`,
+          esc(personalized.icebreaker), esc(personalized.followup_message),
+          esc(analysis),
+          esc(laneLabels[c.kanbanLane] || c.kanbanLane),
+          esc(c.addedAt ? c.addedAt.split('T')[0] : '')
+        ].join(',');
+      });
+      return [headers.join(','), ...rows].join('\n');
+    };
+
+    const dateTag = `${start}_${end}`;
+
+    // Download LinkedIn CSV
+    if (linkedinCandidates.length > 0) {
+      const csvContent = buildCSV(linkedinCandidates);
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
-      link.setAttribute('download', `marketplace_export_${campaign.id}_${start}_${end}.csv`);
+      link.setAttribute('download', `LINKEDIN_marketplace_${campaign.id}_${dateTag}.csv`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      setToast({ show: true, message: `✅ CSV exportado con ${filtered.length} candidatos` });
-      setShowExportOptions(false);
     }
+
+    // Download Email CSV
+    if (emailOnlyCandidates.length > 0) {
+      setTimeout(() => {
+        const csvContent = buildCSV(emailOnlyCandidates);
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `EMAIL_marketplace_${campaign.id}_${dateTag}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }, 500);
+    }
+
+    // Toast with breakdown
+    const parts: string[] = [];
+    if (linkedinCandidates.length > 0) parts.push(`${linkedinCandidates.length} LinkedIn`);
+    if (emailOnlyCandidates.length > 0) parts.push(`${emailOnlyCandidates.length} Email`);
+    const noContact = filtered.length - linkedinCandidates.length - emailOnlyCandidates.length;
+    if (noContact > 0) parts.push(`${noContact} sin contacto`);
+
+    setToast({ show: true, message: `✅ Exportados ${filtered.length} candidatos → ${parts.join(' + ')} (mensajes de ${activeUser === 'mauro' ? 'Mauro' : 'Nyo'})` });
+    setShowExportOptions(false);
+    setShowUserSelection(false);
   };
 
   // ─── Lane helpers ─────────────────────────────────────────────────────
@@ -1106,6 +1191,17 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       )}
 
       <Toast isVisible={toast.show} message={toast.message} onClose={() => setToast({ ...toast, show: false })} />
+
+      {/* User Selection Modal */}
+      <UserSelectionModal
+        isOpen={showUserSelection}
+        onSelect={(user) => {
+          setSelectedUser(user);
+          setShowUserSelection(false);
+          handleExportWithUser(user);
+        }}
+        onClose={() => setShowUserSelection(false)}
+      />
 
       {/* Add Manual Candidate Modal */}
       <ManualEnrichmentModal

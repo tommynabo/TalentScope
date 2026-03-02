@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus, Link2, List, Columns3, Grid3x3, X, Download } from 'lucide-react';
+import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus, Link2, List, Columns3, Grid3x3, X, Download, Calendar } from 'lucide-react';
 import { GitHubMetrics, GitHubFilterCriteria } from '../../types/database';
 import { githubService, GitHubLogCallback } from '../../lib/githubService';
 import { GitHubFilterConfig } from './GitHubFilterConfig';
@@ -12,6 +12,9 @@ import { GitHubSearchService } from '../../lib/githubSearchService';
 import { GitHubCandidatePersistence } from '../../lib/githubCandidatePersistence';
 import { UnbreakableExecutor } from '../../lib/UnbreakableExecution';
 import { supabase } from '../../lib/supabase';
+import Toast from '../../components/Toast';
+import UserSelectionModal from '../../components/UserSelectionModal';
+import { OutreachUser, generateOutreachMessages, extractSpecialty } from '../../lib/messageGenerator';
 
 interface GitHubCodeScanProps {
     campaignId?: string;
@@ -33,6 +36,14 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, init
     const [isStoppable, setIsStoppable] = useState(false); // Track if search can be stopped
     const executorRef = useRef<UnbreakableExecutor | null>(null);
     const isSearchingRef = useRef(false); // Mirror of loading state that survives React batching
+    const [showExportOptions, setShowExportOptions] = useState(false);
+    const [showUserSelection, setShowUserSelection] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<OutreachUser>('mauro');
+    const [toast, setToast] = useState({ show: false, message: '' });
+    const [exportDateRange, setExportDateRange] = useState<{ start: string; end: string }>({
+        start: new Date().toISOString().split('T')[0],
+        end: new Date().toISOString().split('T')[0]
+    });
 
     // Load criteria from campaign settings or fallback to preset
     useEffect(() => {
@@ -367,6 +378,121 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, init
         return num.toString();
     };
 
+    const handleGitHubExport = (activeUser: OutreachUser) => {
+        const { start, end } = exportDateRange;
+        if (!start || !end) return;
+
+        const startDate = new Date(start);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(end);
+        endDate.setHours(23, 59, 59, 999);
+
+        const filtered = candidates.filter(c => {
+            const dateStr = (c as any).added_at || c.created_at || new Date().toISOString();
+            const cDate = new Date(dateStr);
+            return cDate >= startDate && cDate <= endDate;
+        });
+
+        if (filtered.length === 0) {
+            setToast({ show: true, message: '⚠️ No hay desarrolladores para exportar en este rango' });
+            return;
+        }
+
+        // Smart Split: LinkedIn vs Email
+        const linkedinCandidates = filtered.filter(c => c.linkedin_url && c.linkedin_url.trim().length > 0);
+        const emailCandidates = filtered.filter(c =>
+            c.mentioned_email && c.mentioned_email.trim().length > 0 &&
+            (!c.linkedin_url || c.linkedin_url.trim().length === 0)
+        );
+
+        const esc = (val: string) => `"${(val || '').replace(/"/g, '""')}"`;
+
+        const downloadCSV = (data: GitHubMetrics[], filename: string) => {
+            const headers = [
+                'FIRST_NAME', 'LAST_NAME', 'ROL', 'EMAIL', 'LINKEDIN', 'GITHUB',
+                'SCORE', 'INVITACION_INICIAL', 'POST_ACEPTACION', 'ANALISIS',
+                'LENGUAJE', 'SEGUIDORES', 'REPOS', 'ÚLTIMO_COMMIT', 'FECHA'
+            ];
+            const csvContent = [
+                headers.join(','),
+                ...data.map(c => {
+                    const nameParts = (c.name || c.github_username || '').split(' ');
+                    const firstName = nameParts[0] || '';
+                    const lastName = nameParts.slice(1).join(' ') || '';
+
+                    const lang = c.most_used_language || '';
+                    const lowerLang = lang.toLowerCase();
+                    let rol = `${lang} Developer`;
+                    if (['react', 'typescript', 'javascript', 'vue'].some(t => lowerLang.includes(t))) rol = 'Frontend Engineer';
+                    else if (['python', 'django', 'flask'].some(t => lowerLang.includes(t))) rol = 'Backend Engineer';
+                    else if (['dart', 'flutter', 'kotlin', 'swift'].some(t => lowerLang.includes(t))) rol = 'Mobile Engineer';
+                    else if (['rust', 'go', 'c++', 'c'].some(t => lowerLang === t)) rol = 'Systems Engineer';
+
+                    const specialty = extractSpecialty(rol, [], { most_used_language: lang });
+                    const personalized = generateOutreachMessages(
+                        c.name || c.github_username || '',
+                        specialty,
+                        activeUser,
+                        {
+                            icebreaker: c.outreach_icebreaker,
+                            followup_message: c.outreach_followup,
+                            second_followup: c.outreach_pitch
+                        }
+                    );
+
+                    const analysis = c.ai_summary?.join(' | ') || c.analysis_business || '';
+                    const lastCommit = c.last_commit_date ? c.last_commit_date.split('T')[0] : 'N/A';
+                    const added = (c as any).added_at ? (c as any).added_at.split('T')[0] : new Date().toISOString().split('T')[0];
+
+                    return [
+                        esc(firstName), esc(lastName), esc(rol),
+                        esc(c.mentioned_email || ''), esc(c.linkedin_url || ''),
+                        esc(`https://github.com/${c.github_username}`),
+                        `"${Math.round(c.github_score)}"`,
+                        esc(personalized.icebreaker), esc(personalized.followup_message),
+                        esc(analysis), esc(lang),
+                        `"${c.followers}"`, `"${c.public_repos}"`,
+                        esc(lastCommit), esc(added)
+                    ].join(',');
+                })
+            ].join('\n');
+
+            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        const dateTag = `${start}_${end}`;
+
+        if (linkedinCandidates.length > 0) {
+            downloadCSV(linkedinCandidates, `LINKEDIN_github_${campaignId}_${dateTag}.csv`);
+        }
+
+        if (emailCandidates.length > 0) {
+            setTimeout(() => {
+                downloadCSV(emailCandidates, `EMAIL_github_${campaignId}_${dateTag}.csv`);
+            }, 500);
+        }
+
+        const parts: string[] = [];
+        if (linkedinCandidates.length > 0) parts.push(`${linkedinCandidates.length} LinkedIn`);
+        if (emailCandidates.length > 0) parts.push(`${emailCandidates.length} Email`);
+        const noContact = filtered.length - linkedinCandidates.length - emailCandidates.length;
+        if (noContact > 0) parts.push(`${noContact} sin contacto`);
+
+        setToast({
+            show: true,
+            message: `✅ Exportados ${filtered.length} devs → ${parts.join(' + ')} (mensajes de ${activeUser === 'mauro' ? 'Mauro' : 'Nyo'})`
+        });
+        setShowExportOptions(false);
+    };
+
     return (
         <div className="space-y-6">
             {/* Header - Simplified */}
@@ -515,22 +641,53 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, init
                                 </button>
                             </div>
 
-                            {/* View Full Pipeline Button */}
+                            {/* Export CSV Button */}
                             {candidates.length > 0 && (
-                                <button
-                                    onClick={() => {
-                                        // Save current candidates to sessionStorage
-                                        sessionStorage.setItem(`github_candidates_${campaignId}`, JSON.stringify(candidates));
-                                        // Navigate or show full view here
-                                        window.location.hash = `#/github-pipeline/${campaignId}`;
-                                    }}
-                                    className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-semibold transition text-sm flex items-center gap-2"
-                                    title="Ver pipeline completo con exportación CSV"
-                                >
-                                    <Download className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Pipeline Completo</span>
-                                    <span className="sm:hidden">Pipeline</span>
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    {showExportOptions ? (
+                                        <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 rounded-lg p-1 animate-in slide-in-from-right-4 fade-in duration-200">
+                                            <input
+                                                type="date"
+                                                value={exportDateRange.start}
+                                                onChange={(e) => setExportDateRange(prev => ({ ...prev, start: e.target.value }))}
+                                                className="bg-transparent text-xs text-white border-0 p-1 focus:ring-0 w-24"
+                                            />
+                                            <span className="text-slate-500 text-xs">-</span>
+                                            <input
+                                                type="date"
+                                                value={exportDateRange.end}
+                                                onChange={(e) => setExportDateRange(prev => ({ ...prev, end: e.target.value }))}
+                                                className="bg-transparent text-xs text-white border-0 p-1 focus:ring-0 w-24"
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    if (!exportDateRange.start || !exportDateRange.end) return;
+                                                    setShowUserSelection(true);
+                                                }}
+                                                className="p-1 hover:bg-orange-500/20 rounded text-orange-400"
+                                                title="Descargar CSV"
+                                            >
+                                                <Download className="h-3.5 w-3.5" />
+                                            </button>
+                                            <button
+                                                onClick={() => setShowExportOptions(false)}
+                                                className="p-1 hover:bg-slate-700 rounded text-slate-400"
+                                            >
+                                                <X className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => setShowExportOptions(true)}
+                                            className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-semibold transition text-sm flex items-center gap-2"
+                                            title="Exportar CSV con selección de usuario"
+                                        >
+                                            <Download className="h-4 w-4" />
+                                            <span className="hidden sm:inline">Exportar CSV</span>
+                                            <span className="sm:hidden">CSV</span>
+                                        </button>
+                                    )}
+                                </div>
                             )}
                         </div>
                     </div>
@@ -589,6 +746,18 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, init
                     <p className="text-slate-500 text-sm mt-2">Establece filtros para encontrar desarrolladores que se adapten a tus necesidades</p>
                 </div>
             )}
+
+            <Toast isVisible={toast.show} message={toast.message} onClose={() => setToast({ ...toast, show: false })} />
+
+            <UserSelectionModal
+                isOpen={showUserSelection}
+                onSelect={(user) => {
+                    setSelectedUser(user);
+                    setShowUserSelection(false);
+                    handleGitHubExport(user);
+                }}
+                onClose={() => setShowUserSelection(false)}
+            />
         </div>
     );
 };
