@@ -297,10 +297,11 @@ export class MarketplaceSearchService {
             c.bio,
             c.title,
             c.country,
-            'es'
+            'es',
+            c.name
           );
           if (!speaksSpanish) {
-            console.log(`⏭️  Candidato filtrado (no habla español): ${c.name}`);
+            console.log(`⏭️  Candidato filtrado (no hispanohablante): ${c.name}`);
           }
           return speaksSpanish;
         }
@@ -373,7 +374,7 @@ export class MarketplaceSearchService {
     }
 
     // Detect language from profile data
-    const detectedLanguage = LanguageDetectionService.detectLanguage(bio, title, 'Unknown');
+    const detectedLanguage = LanguageDetectionService.detectLanguage(bio, title, 'Unknown', name);
 
     return {
       id: `upwork-google-${index}-${Date.now()}`,
@@ -519,10 +520,11 @@ export class MarketplaceSearchService {
             c.bio,
             c.title,
             c.country,
-            'es'
+            'es',
+            c.name
           );
           if (!speaksSpanish) {
-            console.log(`⏭️  Candidato filtrado (no habla español): ${c.name}`);
+            console.log(`⏭️  Candidato filtrado (no hispanohablante): ${c.name}`);
           }
           return speaksSpanish;
         }
@@ -585,7 +587,7 @@ export class MarketplaceSearchService {
     const country = 'Unknown';
 
     // Detect language from profile data
-    const detectedLanguage = LanguageDetectionService.detectLanguage(bio, title, country);
+    const detectedLanguage = LanguageDetectionService.detectLanguage(bio, title, country, name);
 
     return {
       id: `fiverr-google-${index}-${Date.now()}`,
@@ -686,10 +688,11 @@ export class MarketplaceSearchService {
             c.bio,
             c.title,
             c.country,
-            'es'
+            'es',
+            c.name
           );
           if (!speaksSpanish) {
-            console.log(`⏭️  Candidato filtrado (no habla español): ${c.name}`);
+            console.log(`⏭️  Candidato filtrado (no hispanohablante): ${c.name}`);
           }
           return speaksSpanish;
         }
@@ -750,7 +753,7 @@ export class MarketplaceSearchService {
     const country = item.country || item.location || 'Unknown';
 
     // Detect language from profile data
-    const detectedLanguage = LanguageDetectionService.detectLanguage(bio, title, country);
+    const detectedLanguage = LanguageDetectionService.detectLanguage(bio, title, country, name);
 
     return {
       id: `linkedin-${index}-${Date.now()}`,

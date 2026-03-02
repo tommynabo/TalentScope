@@ -22,7 +22,7 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ isOpen
     certifications: [] as string[],
     countries: [] as string[],
     languages: [] as string[],
-    language: 'en', // Single language for search queries
+    language: 'es', // Default: Español (hispanohablantes)
     upworkCategory: 'Web Development',
     fiverrlevel: 'top-rated-plus' as const,
   });
@@ -85,7 +85,7 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ isOpen
       certifications: [],
       countries: [],
       languages: [],
-      language: 'en',
+      language: 'es',
       upworkCategory: 'Web Development',
       fiverrlevel: 'top-rated-plus',
     });

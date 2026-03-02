@@ -328,18 +328,14 @@ export class GitHubService {
                     profileReadmeText
                 );
 
-                // STRICT GATE: Profile MUST contain actual Spanish text
-                // Location or name alone is NOT enough — bio, README, or repo descriptions must be in Spanish
-                if (!spanishAnalysis.hasSpanishText) {
-                    onLog(`  ❌ REJECTED — No Spanish text in profile. ${spanishAnalysis.reasons.length > 0 ? 'Secondary signals: ' + spanishAnalysis.reasons.join('; ') : 'No signals at all.'}`);
+                // FILTRO HISPANOHABLANTE: Pasa si AL MENOS UNA señal (nombre, ubicación, o texto)
+                // Mismo enfoque que LinkedIn (que funciona correctamente)
+                if (!spanishAnalysis.isSpanishSpeaker) {
+                    onLog(`  ❌ FILTRADO — No es hispanohablante. ${spanishAnalysis.reasons.length > 0 ? 'Señales: ' + spanishAnalysis.reasons.join('; ') : 'Sin señales hispanas.'}`);
                     return null;
                 }
 
-                if (spanishAnalysis.confidence >= 50) {
-                    onLog(`  🗣️ ✅ Spanish speaker (confidence: ${spanishAnalysis.confidence}%) - ${spanishAnalysis.reasons[0] || 'Multiple signals'}`);
-                } else {
-                    onLog(`  🗣️ ✅ Spanish text detected (confidence: ${spanishAnalysis.confidence}%) - ${spanishAnalysis.reasons[0] || 'Text match'}`);
-                }
+                onLog(`  🗣️ ✅ Hispanohablante (confianza: ${spanishAnalysis.confidence}%) - ${spanishAnalysis.reasons[0] || 'Múltiples señales'}`);
             }
 
             // 6. Anti-bootcamp filter

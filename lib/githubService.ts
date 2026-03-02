@@ -5,6 +5,7 @@ import { githubContactService } from './githubContactService';
 import { githubDeduplicationService } from './githubDeduplication';
 import { GitHubCandidatePersistence } from './githubCandidatePersistence';
 import { githubDeepContactResearch } from './githubDeepContactResearch';
+import { analyzeSpanishLanguageProficiency, filterBySpanishLanguage, isLikelyHispanohablante } from '../SistemaGithub/lib/githubSpanishLanguageFilter';
 
 export type GitHubLogCallback = (message: string) => void;
 
@@ -203,6 +204,18 @@ export class GitHubService {
                 }
             }
 
+            // 🛡️ POST-SEARCH SAFETY NET: Final batch filter for Spanish speakers
+            if (criteria.require_spanish_speaker && candidates.length > 0) {
+                const beforeCount = candidates.length;
+                const filtered = filterBySpanishLanguage(candidates, true);
+                const removedCount = beforeCount - filtered.length;
+                if (removedCount > 0) {
+                    onLog(`\n🛡️ Safety net: removed ${removedCount} non-Hispanic candidates from final batch`);
+                    candidates.length = 0;
+                    candidates.push(...filtered);
+                }
+            }
+
             // SAVE TO SUPABASE if campaign context available
             if (campaignId && userId && candidates.length > 0) {
                 onLog(`\n💾 Saving ${candidates.length} candidates to Supabase...`);
@@ -288,6 +301,43 @@ export class GitHubService {
                     onLog(`  ⏭️ No matching languages. Found: ${languages.join(', ')}`);
                     return null;
                 }
+            }
+
+            // 5.2 🗣️ FILTRO HISPANOHABLANTE: Check EARLY before expensive operations
+            if (criteria.require_spanish_speaker) {
+                // Collect repo descriptions for analysis
+                const repoDescriptions = repos
+                    .filter(r => r.description)
+                    .map(r => r.description as string)
+                    .slice(0, 10);
+
+                // Try to fetch profile README
+                let profileReadmeText: string | undefined;
+                try {
+                    const readmeResponse = await this.octokit!.rest.repos.getReadme({
+                        owner: username,
+                        repo: username
+                    });
+                    profileReadmeText = Buffer.from(readmeResponse.data.content, 'base64').toString();
+                } catch {
+                    // No profile README — that's ok
+                }
+
+                const spanishAnalysis = analyzeSpanishLanguageProficiency(
+                    user.bio,
+                    user.location,
+                    user.name,
+                    user.company,
+                    repoDescriptions,
+                    profileReadmeText
+                );
+
+                if (!spanishAnalysis.isSpanishSpeaker) {
+                    onLog(`  ❌ FILTRADO — No es hispanohablante. ${spanishAnalysis.reasons.length > 0 ? 'Señales: ' + spanishAnalysis.reasons.join('; ') : 'Sin señales hispanas.'}`);
+                    return null;
+                }
+
+                onLog(`  🗣️ ✅ Hispanohablante (confianza: ${spanishAnalysis.confidence}%) - ${spanishAnalysis.reasons[0] || 'Múltiples señales'}`);
             }
 
             // 6. Anti-bootcamp filter
@@ -596,9 +646,26 @@ export class GitHubService {
      * Build GitHub search query from criteria
      * NOTE: GitHub API doesn't support multiple language filters with AND logic
      * Instead, we search by primary language only for better results
+     * Now injects location filters for Spanish-speaking countries when require_spanish_speaker is true
      */
     private buildSearchQuery(criteria: GitHubFilterCriteria): string {
         const parts: string[] = [];
+
+        // Text search (Keywords / Role)
+        const textTerms: string[] = [];
+        if (criteria.target_role) {
+            const safeRole = criteria.target_role.replace(/[^\w\s-]/gi, '').trim();
+            if (safeRole) textTerms.push(`"${safeRole}"`);
+        }
+        if (criteria.keywords && criteria.keywords.length > 0) {
+            criteria.keywords.forEach(kw => {
+                const safeKw = kw.replace(/[^\w\s-]/gi, '').trim();
+                if (safeKw) textTerms.push(`"${safeKw}"`);
+            });
+        }
+        if (textTerms.length > 0) {
+            parts.push(textTerms.join(' '));
+        }
 
         // Languages - Use ONLY the first language to avoid AND logic
         if (criteria.languages.length > 0) {
@@ -611,6 +678,23 @@ export class GitHubService {
         // ⚡ PRE-FILTER: followers minimum eliminates low-quality profiles at API level
         if (criteria.min_followers > 0) {
             parts.push(`followers:>=${criteria.min_followers}`);
+        }
+
+        // 🗣️ HISPANOHABLANTE: Inject Spanish-speaking country locations
+        if (criteria.require_spanish_speaker) {
+            const spanishLocations = [
+                'Spain', 'Mexico', 'Argentina', 'Colombia', 'Chile',
+                'Peru', 'Venezuela', 'Ecuador', 'Bolivia', 'Uruguay',
+                'Paraguay', 'Guatemala', 'Costa Rica', 'Panama',
+                'Dominican Republic', 'Honduras', 'El Salvador',
+                'Nicaragua', 'Cuba', 'Puerto Rico'
+            ];
+            const allLocs = Array.from(new Set([...spanishLocations, ...(criteria.locations || [])]));
+            const locationParts = allLocs.map(loc => `location:"${loc}"`);
+            parts.push(`(${locationParts.join(' OR ')})`);
+        } else if (criteria.locations && criteria.locations.length > 0) {
+            const locationParts = criteria.locations.map(loc => `location:"${loc}"`);
+            parts.push(`(${locationParts.join(' OR ')})`);
         }
 
         const query = parts.length > 0 ? parts.join(' ') : 'language:typescript type:user';
