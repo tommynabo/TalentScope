@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GitHubMetrics } from '../../types/database';
-import { ExternalLink, Mail, BrainCircuit, ChevronDown, ChevronUp } from 'lucide-react';
+import { ExternalLink, Mail, BrainCircuit, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import Toast from '../../components/Toast';
 
 interface GitHubCandidatesPipelineProps {
