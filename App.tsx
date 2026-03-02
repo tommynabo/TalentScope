@@ -10,6 +10,7 @@ import TalentPoolView from './components/TalentPoolView';
 import AnalyticsView from './components/AnalyticsView';
 import Toast from './components/Toast';
 import SettingsView from './components/SettingsView';
+import GmailMainView from './components/GmailDashboard/GmailMainView';
 // Sistema GitHub imports
 import { GitHubCampaignList } from './SistemaGithub/components/GitHubCampaignList';
 import { GitHubCodeScan } from './SistemaGithub/components/GitHubCodeScan';
@@ -231,6 +232,12 @@ const App: React.FC = () => {
               <Route path="/marketplace-raid/:campaignId" element={
                 <ProtectedRoute user={user} loading={loading}>
                   <MarketplaceCampaignWrapper />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/gmail" element={
+                <ProtectedRoute user={user} loading={loading}>
+                  <GmailMainView />
                 </ProtectedRoute>
               } />
 

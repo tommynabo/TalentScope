@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Save, User, CreditCard, UserPlus } from 'lucide-react';
+import { Save, User, CreditCard, UserPlus, Mail } from 'lucide-react';
 
 interface SettingsViewProps {
     currentName: string;
@@ -89,6 +89,32 @@ const SettingsView: React.FC<SettingsViewProps> = ({ currentName, onNameChange }
                     </div>
                 </div>
 
+
+                <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2 bg-rose-900/30 rounded-lg text-rose-400">
+                            <Mail className="h-6 w-6" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-200">Cuentas de Correo (Gmail)</h3>
+                            <p className="text-sm text-slate-500">Gestiona tus cuentas para envíos automatizados.</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <p className="text-sm text-slate-400">
+                            La configuración de cuentas y la rotación de envíos (Round-Robin) se gestiona directamente desde el nuevo panel de Buzones.
+                        </p>
+                        <div className="pt-2">
+                            <a
+                                href="/gmail"
+                                className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-medium transition-colors border border-slate-700"
+                            >
+                                Ir a Gestión de Buzones
+                            </a>
+                        </div>
+                    </div>
+                </div>
 
             </div>
         </div>

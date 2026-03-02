@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, Activity, Settings, Zap, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Activity, Settings, Zap, LogOut, Mail } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 interface SidebarProps {
@@ -58,6 +58,14 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout }) => {
         >
           <Users className="h-5 w-5" />
           <span className="hidden lg:block font-medium">Talento</span>
+        </button>
+
+        <button
+          onClick={() => navigate('/gmail')}
+          className={getButtonClass('/gmail')}
+        >
+          <Mail className="h-5 w-5" />
+          <span className="hidden lg:block font-medium">Buzones</span>
         </button>
 
         <button
