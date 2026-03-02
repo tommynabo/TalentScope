@@ -1,9 +1,10 @@
 import React from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { Mail, BarChart2, List, Settings, AtSign } from 'lucide-react';
+import { Mail, BarChart2, List, Settings, AtSign, Users } from 'lucide-react';
 import GmailAnalytics from './GmailAnalytics';
 import GmailSequences from './GmailSequences';
 import GmailAccounts from './GmailAccounts';
+import GmailCandidates from './GmailCandidates';
 
 const GmailMainView: React.FC = () => {
     const navigate = useNavigate();
@@ -11,7 +12,7 @@ const GmailMainView: React.FC = () => {
 
     // Determine active tab from URL segment
     const pathSegment = location.pathname.split('/').pop() || 'analiticas';
-    const activeTab = ['analiticas', 'secuencias-y-leads', 'cuentas'].includes(pathSegment) ? pathSegment : 'analiticas';
+    const activeTab = ['analiticas', 'secuencias-y-leads', 'cuentas', 'candidatos'].includes(pathSegment) ? pathSegment : 'analiticas';
 
     return (
         <div className="p-6 md:p-8 max-w-7xl mx-auto h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -31,10 +32,10 @@ const GmailMainView: React.FC = () => {
             </div>
 
             {/* Tabs */}
-            <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-800 w-full mb-6 relative">
+            <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-800 w-full mb-6 relative overflow-x-auto">
                 <button
                     onClick={() => navigate('/buzones/analiticas')}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-medium transition-all ${activeTab === 'analiticas'
+                    className={`flex-1 flex min-w-[120px] items-center justify-center gap-2 py-3 px-4 rounded-lg font-medium transition-all ${activeTab === 'analiticas'
                         ? 'bg-slate-800 text-white shadow-md'
                         : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/50'
                         }`}
@@ -44,25 +45,36 @@ const GmailMainView: React.FC = () => {
                 </button>
 
                 <button
+                    onClick={() => navigate('/buzones/candidatos')}
+                    className={`flex-1 flex min-w-[120px] items-center justify-center gap-2 py-3 px-4 rounded-lg font-medium transition-all ${activeTab === 'candidatos'
+                        ? 'bg-slate-800 text-white shadow-md'
+                        : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/50'
+                        }`}
+                >
+                    <Users className="w-4 h-4" />
+                    <span className="hidden sm:inline">Candidatos</span>
+                </button>
+
+                <button
                     onClick={() => navigate('/buzones/secuencias-y-leads')}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-medium transition-all ${activeTab === 'secuencias-y-leads'
+                    className={`flex-1 flex min-w-[120px] items-center justify-center gap-2 py-3 px-4 rounded-lg font-medium transition-all ${activeTab === 'secuencias-y-leads'
                         ? 'bg-slate-800 text-white shadow-md'
                         : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/50'
                         }`}
                 >
                     <List className="w-4 h-4" />
-                    <span className="hidden sm:inline">Secuencias y Leads</span>
+                    <span className="hidden sm:inline">Secuencias</span>
                 </button>
 
                 <button
                     onClick={() => navigate('/buzones/cuentas')}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-medium transition-all ${activeTab === 'cuentas'
+                    className={`flex-1 flex min-w-[120px] items-center justify-center gap-2 py-3 px-4 rounded-lg font-medium transition-all ${activeTab === 'cuentas'
                         ? 'bg-slate-800 text-white shadow-md'
                         : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/50'
                         }`}
                 >
                     <AtSign className="w-4 h-4" />
-                    <span className="hidden sm:inline">Cuentas Gmail</span>
+                    <span className="hidden sm:inline">Cuentas</span>
                 </button>
             </div>
 
@@ -70,6 +82,7 @@ const GmailMainView: React.FC = () => {
             <div className="flex-1 overflow-y-auto w-full pb-10">
                 <Routes>
                     <Route path="analiticas" element={<GmailAnalytics />} />
+                    <Route path="candidatos" element={<GmailCandidates />} />
                     <Route path="secuencias-y-leads" element={<GmailSequences />} />
                     <Route path="cuentas" element={<GmailAccounts />} />
                     {/* Fallback segment */}
