@@ -27,17 +27,23 @@ export function generateOutreachMessages(
   // Template messages by user
   const templates = {
     mauro: {
-      icebreaker: `Hola ${name} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia en ${specialty}. Me gustaría conectar.`
+      icebreaker: `Hola ${name} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia en ${specialty}. Me gustaría conectar.`,
+      followup: `${name}, tras revisar tu perfil sabemos que eres el perfil ideal. ¿Podríamos agendar una llamada?`,
+      second: `${name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`
     },
     nyo: {
-      icebreaker: `Hola ${name} — soy Nyo, trabajador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia en ${specialty}. Me gustaría conectar.`
+      icebreaker: `Hola ${name} — soy Nyo, recruiter de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia en ${specialty}. Me gustaría conectar.`,
+      followup: `${name}, tras revisar tu perfil sabemos que eres el perfil ideal. ¿Podríamos agendar una llamada?`,
+      second: `${name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`
     }
   };
 
+  const t = templates[selectedUser];
+
   return {
-    icebreaker: templates[selectedUser].icebreaker || aiMessages?.icebreaker || `Hola ${name}, me encantaría conectar contigo.`,
-    followup_message: aiMessages?.followup_message || `${name}, tras revisar tu perfil sabemos que eres el perfil ideal. ¿Podríamos agendar una llamada?`,
-    second_followup: aiMessages?.second_followup || `${name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`
+    icebreaker: t.icebreaker,
+    followup_message: t.followup,
+    second_followup: t.second
   };
 }
 
