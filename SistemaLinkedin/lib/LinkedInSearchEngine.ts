@@ -670,7 +670,7 @@ export class LinkedInSearchEngine {
                                 "summary": "Resumen ejecutivo en 1 frase",
                                 "outreach_message": "Mensaje personalizado (<280 chars) directo y creativo para primer contacto",
                                 "icebreaker": "ICEBREAKER: Mensaje de invitación LINKEDIN máximo 200 caracteres, super personalizado, menciona algo específico del perfil",
-                                "followup_message": "FOLLOWUP: Mensaje más completo (300-400 chars) para enviar después de aceptar la conexión. Profesional y genuino",
+                                "followup_message": "FOLLOWUP: Mensaje EXACTO que diga: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers en [stack específico extraído del perfil, ej: Flutter y Node.js]. ¿Te interesa que te pase el brief técnico?'",
                                 "second_followup": "SEGUNDO FOLLOWUP: Mensaje de seguimiento (300-500 chars) si no hay respuesta inicial. Proporciona más valor e información",
                                 "skills": ["Habilidad 1", "Habilidad 2"],
                                 "symmetry_score": 75
@@ -678,7 +678,7 @@ export class LinkedInSearchEngine {
                             
                             IMPORTANTE:
                             - ICEBREAKER debe ser casual, corto (máx 200 chars), pedir conexión en LinkedIn
-                            - FOLLOWUP debe ser más profesional y completo, describe oportunidad sin vender directamente
+                            - FOLLOWUP debe usar EXACTAMENTE el formato solicitado para el mensaje post-aceptación con el nombre del candidato y su stack principal.
                             - SEGUNDO FOLLOWUP es para seguimiento después de X días sin respuesta, ofrece valor adicional
                             - Los 3 mensajes deben ser super personalizados basados en el perfil
                             - If snippet implies user is > ${context.maxAge || 40} years old, PENALIZE SCORE (<50)
@@ -707,7 +707,7 @@ export class LinkedInSearchEngine {
             const parsed = JSON.parse(cleanContent || '{}');
 
             parsed.icebreaker = parsed.icebreaker || `Hola ${context.name}, me encantaría conectar contigo.`;
-            parsed.followup_message = parsed.followup_message || `${context.name}, tras revisar tu perfil sabemos que eres el perfil ideal.`;
+            parsed.followup_message = parsed.followup_message || `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers. ¿Te interesa que te pase el brief técnico?`;
             parsed.second_followup = parsed.second_followup || `${context.name}, viendo tu trayectoria creemos que hay una gran alineación.`;
 
             return parsed;
@@ -720,7 +720,7 @@ export class LinkedInSearchEngine {
                 bottleneck: "Oportunidades personalizadas",
                 outreach_message: `¡Hola ${context.name}! Tenemos roles de alto nivel. https://symmetry.club/roles/product-engineer`,
                 icebreaker: `Hola ${context.name}, me encantaría conectar contigo. Tenemos roles exclusivos para profesionales como vos.`,
-                followup_message: `${context.name}, tras revisar tu perfil sabemos que eres el perfil ideal. ¿Podríamos agendar una llamada?`,
+                followup_message: `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers. ¿Te interesa que te pase el brief técnico?`,
                 second_followup: `${context.name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`,
                 skills: context.skills || ['N/A'],
                 symmetry_score: 65

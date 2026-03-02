@@ -176,7 +176,7 @@ Think about their actual situation, NOT generic advice:
 ### 7. OUTREACH MESSAGES (WALEAD MESSAGES)
 Craft 2 short verification messages targeting the candidate, strictly applying the "Sales Angle" you defined above.
 - Message 1 (Icebreaker): A very short, punchy, cold invite message. Less than 2 sentences. Make it engaging, informal but professional, without being overly wordy. 
-- Message 2 (Follow-up): A very short, punchy message to follow up. Less than 2 sentences. It should go straight to the point to discuss opportunities, applying the sales angle naturally. 
+- Message 2 (Follow-up): EXACTLY this template: "Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers en [stack específico extraído del perfil]. ¿Te interesa que te pase el brief técnico?"
 
 ════════════════════════════════════════════════════════════════════════
 📝 RESPONSE FORMAT - JSON ONLY
@@ -209,7 +209,7 @@ Respond ONLY with valid JSON (no markdown, no explanations). Every field must be
   "bottleneck": "PRIMARY: [main limiting factor with evidence]. SECONDARY: [if applicable]. IMPACT: [how it's limiting growth]. FIXABLE: [yes/no and how].",
   "walead_messages": {
     "icebreaker": "[Mensaje muy corto tipo invitación inicial que aplique el sales angle]",
-    "followup_message": "[Mensaje muy directo tras aceptar invitación, al grano]"
+    "followup_message": "Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers en [stack específico]. ¿Te interesa que te pase el brief técnico?"
   }
 }
 

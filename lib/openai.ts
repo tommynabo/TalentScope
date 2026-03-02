@@ -80,7 +80,7 @@ export const generateCandidateAnalysis = async (profileData: any): Promise<any> 
                 "analysis_sales_angle": "1 complete sentence hook.",
                 "analysis_bottleneck": "1 complete sentence on potential rejection reason.",
                 "outreach_icebreaker": "A hyper-personalized opening message referencing specific projects or skills. Start with 'Hola [name],' or similar. Max 2 sentences.",
-                "outreach_pitch": "A value proposition pitch explaining why this opportunity fits THEM. Mention tech stack or specific challenge. Max 1-2 sentences.",
+                "outreach_pitch": "A value proposition pitch explaining why this opportunity fits THEM. EXACTLY use this template: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers en [stack específico extraído del perfil, ej: Flutter y Node.js]. ¿Te interesa que te pase el brief técnico?'",
                 "outreach_followup": "A soft follow-up message saying you wanted to touch base about opportunity. Max 1 sentence.",
                 "ai_summary": ["Bullet 1 (Strength)", "Bullet 2 (Achievement)", "Bullet 3 (Risk/Oddity)"]
             }
