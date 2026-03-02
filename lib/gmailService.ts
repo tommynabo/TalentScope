@@ -114,7 +114,7 @@ export const GmailService = {
     async disconnectAccount(accountId: string): Promise<void> {
         const { error } = await supabase
             .from('gmail_accounts')
-            .update({ status: 'disconnected' })
+            .delete()
             .eq('id', accountId);
 
         if (error) throw error;
