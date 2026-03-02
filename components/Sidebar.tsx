@@ -61,8 +61,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout }) => {
         </button>
 
         <button
-          onClick={() => navigate('/gmail')}
-          className={getButtonClass('/gmail')}
+          onClick={() => navigate('/buzones/analiticas')}
+          className={getButtonClass('/buzones')}
         >
           <Mail className="h-5 w-5" />
           <span className="hidden lg:block font-medium">Buzones</span>

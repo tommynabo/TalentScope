@@ -235,7 +235,7 @@ const App: React.FC = () => {
                 </ProtectedRoute>
               } />
 
-              <Route path="/gmail" element={
+              <Route path="/buzones/*" element={
                 <ProtectedRoute user={user} loading={loading}>
                   <GmailMainView />
                 </ProtectedRoute>

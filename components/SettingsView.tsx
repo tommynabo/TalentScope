@@ -106,12 +106,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({ currentName, onNameChange }
                             La configuración de cuentas y la rotación de envíos (Round-Robin) se gestiona directamente desde el nuevo panel de Buzones.
                         </p>
                         <div className="pt-2">
-                            <a
-                                href="/gmail"
+                            <button
+                                onClick={() => window.location.href = '/buzones/cuentas'}
                                 className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg font-medium transition-colors border border-slate-700"
                             >
                                 Ir a Gestión de Buzones
-                            </a>
+                            </button>
                         </div>
                     </div>
                 </div>

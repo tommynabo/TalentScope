@@ -80,7 +80,7 @@ export const GmailService = {
                     access_type: 'offline',
                     prompt: 'consent',
                 },
-                redirectTo: `${window.location.origin}/gmail`
+                redirectTo: `${window.location.origin}/buzones/cuentas`
             }
         });
         if (error) throw error;
