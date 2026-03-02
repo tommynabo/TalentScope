@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GitHubMetrics } from '../../types/database';
-import { ExternalLink, Mail, BrainCircuit, Download, X, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+import { ExternalLink, Mail, BrainCircuit, ChevronDown, ChevronUp } from 'lucide-react';
 import Toast from '../../components/Toast';
 
 interface GitHubCandidatesPipelineProps {
@@ -62,11 +62,6 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
     campaignId
 }) => {
     const [sortConfig, setSortConfig] = useState<{ field: SortField; dir: SortDir }>({ field: 'created_at', dir: 'desc' });
-    const [showExportOptions, setShowExportOptions] = useState(false);
-    const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
-        start: new Date().toISOString().split('T')[0],
-        end: new Date().toISOString().split('T')[0]
-    });
     const [toast, setToast] = useState({ show: false, message: '' });
 
     const toggleSort = (field: SortField) => {
@@ -100,99 +95,6 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
 
     const sortedDateKeys = Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a));
 
-    // ═══ EXPORT with smart LinkedIn/Email split ═══
-    const handleExport = () => {
-        const { start, end } = dateRange;
-        if (!start || !end) return;
-
-        const startDate = new Date(start);
-        startDate.setHours(0, 0, 0, 0);
-        const endDate = new Date(end);
-        endDate.setHours(23, 59, 59, 999);
-
-        const filtered = candidates.filter(c => {
-            const cDate = new Date(c.created_at);
-            return cDate >= startDate && cDate <= endDate;
-        });
-
-        if (filtered.length === 0) {
-            setToast({ show: true, message: '⚠️ No hay desarrolladores en este rango' });
-            return;
-        }
-
-        const linkedinCandidates = filtered.filter(c => c.linkedin_url && c.linkedin_url.trim().length > 0);
-        const emailCandidates = filtered.filter(c =>
-            c.mentioned_email && c.mentioned_email.trim().length > 0 &&
-            (!c.linkedin_url || c.linkedin_url.trim().length === 0)
-        );
-
-        const esc = (val: string) => `"${(val || '').replace(/"/g, '""')}"`;
-
-        const downloadCSV = (data: GitHubMetrics[], filename: string) => {
-            const headers = [
-                'FIRST_NAME', 'LAST_NAME', 'ROL', 'EMAIL', 'LINKEDIN', 'GITHUB',
-                'SCORE', 'ICEBREAKER', 'PITCH', 'FOLLOWUP',
-                'ANALISIS', 'LENGUAJE', 'SEGUIDORES', 'REPOS', 'ÚLTIMO_COMMIT', 'FECHA'
-            ];
-            const csvContent = [
-                headers.join(','),
-                ...data.map(c => {
-                    const nameParts = (c.name || c.github_username || '').split(' ');
-                    const firstName = nameParts[0] || '';
-                    const lastName = nameParts.slice(1).join(' ') || '';
-                    const lang = c.most_used_language || '';
-                    const rol = detectRole(lang);
-                    const icebreaker = c.outreach_icebreaker || '';
-                    const pitch = c.outreach_pitch || '';
-                    const followup = c.outreach_followup || '';
-                    const analysis = c.ai_summary?.join(' | ') || c.analysis_business || '';
-                    const lastCommit = c.last_commit_date ? c.last_commit_date.split('T')[0] : 'N/A';
-                    const added = c.created_at ? c.created_at.split('T')[0] : '';
-
-                    return [
-                        esc(firstName), esc(lastName), esc(rol),
-                        esc(c.mentioned_email || ''), esc(c.linkedin_url || ''),
-                        esc(`https://github.com/${c.github_username}`),
-                        `"${Math.round(c.github_score)}"`,
-                        esc(icebreaker), esc(pitch), esc(followup), esc(analysis),
-                        esc(lang), `"${c.followers}"`, `"${c.public_repos}"`,
-                        esc(lastCommit), esc(added)
-                    ].join(',');
-                })
-            ].join('\n');
-
-            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            if (link.download !== undefined) {
-                const url = URL.createObjectURL(blob);
-                link.setAttribute('href', url);
-                link.setAttribute('download', filename);
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }
-        };
-
-        const dateTag = `${start}_${end}`;
-        if (linkedinCandidates.length > 0) {
-            downloadCSV(linkedinCandidates, `LINKEDIN_github_${campaignId || 'all'}_${dateTag}.csv`);
-        }
-        if (emailCandidates.length > 0) {
-            setTimeout(() => {
-                downloadCSV(emailCandidates, `EMAIL_github_${campaignId || 'all'}_${dateTag}.csv`);
-            }, 500);
-        }
-
-        const parts: string[] = [];
-        if (emailCandidates.length > 0) parts.push(`${emailCandidates.length} Email`);
-        if (linkedinCandidates.length > 0) parts.push(`${linkedinCandidates.length} LinkedIn`);
-        const noContact = filtered.length - linkedinCandidates.length - emailCandidates.length;
-        if (noContact > 0) parts.push(`${noContact} sin contacto`);
-        setToast({ show: true, message: `✅ Exportados ${filtered.length} devs → ${parts.join(' + ')}` });
-        setShowExportOptions(false);
-    };
-
     if (candidates.length === 0) {
         return (
             <div className="flex items-center justify-center h-96 text-slate-500">
@@ -203,53 +105,9 @@ export const GitHubCandidatesPipeline: React.FC<GitHubCandidatesPipelineProps> =
 
     return (
         <div className="flex flex-col h-full">
-            {/* Pipeline Header with Export */}
-            <div className="px-3 py-2 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-slate-900/60">
+            {/* Pipeline Header */}
+            <div className="px-3 py-2 border-b border-slate-800 flex items-center bg-slate-900/60">
                 <h3 className="font-semibold text-sm text-white whitespace-nowrap">Pipeline ({candidates.length})</h3>
-
-                {/* Export Controls */}
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <div className={`flex items-center gap-2 transition-all overflow-hidden ${showExportOptions ? 'w-full opacity-100' : 'w-auto'}`}>
-                        {showExportOptions ? (
-                            <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 rounded-lg p-1 animate-in slide-in-from-right-4 fade-in duration-200">
-                                <input
-                                    type="date"
-                                    value={dateRange.start}
-                                    onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                                    className="bg-transparent text-xs text-white border-0 p-1 focus:ring-0 w-24"
-                                />
-                                <span className="text-slate-500 text-xs">-</span>
-                                <input
-                                    type="date"
-                                    value={dateRange.end}
-                                    onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                                    className="bg-transparent text-xs text-white border-0 p-1 focus:ring-0 w-24"
-                                />
-                                <button
-                                    onClick={handleExport}
-                                    className="p-1 hover:bg-orange-500/20 rounded text-orange-400"
-                                    title="Descargar CSV"
-                                >
-                                    <Download className="h-3.5 w-3.5" />
-                                </button>
-                                <button
-                                    onClick={() => setShowExportOptions(false)}
-                                    className="p-1 hover:bg-slate-700 rounded text-slate-400"
-                                >
-                                    <X className="h-3.5 w-3.5" />
-                                </button>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={() => setShowExportOptions(true)}
-                                className="px-2.5 py-1.5 text-xs font-medium bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded-lg hover:bg-orange-500/20 transition-colors flex items-center gap-1.5"
-                            >
-                                <Download className="h-3.5 w-3.5" />
-                                <span className="hidden xs:inline">Exportar</span>
-                            </button>
-                        )}
-                    </div>
-                </div>
             </div>
 
             {/* Table */}
