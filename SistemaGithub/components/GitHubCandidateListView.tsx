@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { GitHubMetrics } from '../../types/database';
 import { ChevronLeft, Calendar, ChevronDown, ChevronUp, Download, X, Loader2, ExternalLink } from 'lucide-react';
 import Toast from '../../components/Toast';
+import UserSelectionModal from '../../components/UserSelectionModal';
+import { OutreachUser, generateOutreachMessages, extractSpecialty } from '../../lib/messageGenerator';
 
 interface GitHubCandidateListProps {
     campaignId?: string;
@@ -18,6 +20,8 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
     const [toast, setToast] = useState({ show: false, message: '' });
     const [sortConfig, setSortConfig] = useState<{ field: SortField; direction: SortDirection }>({ field: 'added_at', direction: 'desc' });
     const [showExportOptions, setShowExportOptions] = useState(false);
+    const [showUserSelection, setShowUserSelection] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<OutreachUser>('mauro');
     const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
         start: new Date().toISOString().split('T')[0],
         end: new Date().toISOString().split('T')[0]
@@ -137,8 +141,7 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
         const downloadCSV = (data: CandidateWithMeta[], filename: string) => {
             const headers = [
                 'FIRST_NAME', 'LAST_NAME', 'ROL', 'EMAIL', 'LINKEDIN', 'GITHUB',
-                'SCORE', 'ICEBREAKER', 'PITCH', 'FOLLOWUP',
-                'ANALISIS', 'LENGUAJE', 'SEGUIDORES', 'REPOS', 'ÚLTIMO_COMMIT', 'FECHA'
+                'SCORE', 'INVITACION_INICIAL', 'POST_ACEPTACION', 'ANALISIS', 'LENGUAJE', 'SEGUIDORES', 'REPOS', 'ÚLTIMO_COMMIT', 'FECHA'
             ];
             const csvContent = [
                 headers.join(','),
@@ -157,10 +160,20 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
                     else if (['dart', 'flutter', 'kotlin', 'swift'].some(t => lowerLang.includes(t))) rol = 'Mobile Engineer';
                     else if (['rust', 'go', 'c++', 'c'].some(t => lowerLang === t)) rol = 'Systems Engineer';
 
-                    // Outreach messages
-                    const icebreaker = c.outreach_icebreaker || '';
-                    const pitch = c.outreach_pitch || '';
-                    const followup = c.outreach_followup || '';
+                    // Extract specialty
+                    const specialty = extractSpecialty(rol, [], { most_used_language: lang });
+
+                    // Generate personalized messages based on selected user
+                    const personalized = generateOutreachMessages(
+                        c.name || c.github_username || '',
+                        specialty,
+                        selectedUser,
+                        {
+                            icebreaker: c.outreach_icebreaker,
+                            followup_message: c.outreach_followup,
+                            second_followup: c.outreach_pitch
+                        }
+                    );
 
                     // Analysis summary
                     const analysis = c.ai_summary?.join(' | ') || c.analysis_business || '';
@@ -168,12 +181,15 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
                     const lastCommit = c.last_commit_date ? c.last_commit_date.split('T')[0] : 'N/A';
                     const added = c.added_at ? c.added_at.split('T')[0] : new Date().toISOString().split('T')[0];
 
+                    // Helper: escape CSV value
+                    const esc = (val: string) => `"${(val || '').replace(/"/g, '""')}"`;
+
                     return [
                         esc(firstName), esc(lastName), esc(rol),
                         esc(c.mentioned_email || ''), esc(c.linkedin_url || ''),
                         esc(`https://github.com/${c.github_username}`),
                         `"${Math.round(c.github_score)}"`,
-                        esc(icebreaker), esc(pitch), esc(followup), esc(analysis),
+                        esc(personalized.icebreaker), esc(personalized.followup_message), esc(analysis),
                         esc(lang), `"${c.followers}"`, `"${c.public_repos}"`,
                         esc(lastCommit), esc(added)
                     ].join(',');
@@ -214,7 +230,7 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
 
         setToast({
             show: true,
-            message: `✅ Exportados ${filtered.length} devs → ${parts.join(' + ')}`
+            message: `✅ Exportados ${filtered.length} devs → ${parts.join(' + ')} (mensajes de ${selectedUser === 'mauro' ? 'Mauro' : 'Nyo'})`
         });
         setShowExportOptions(false);
     };
@@ -265,7 +281,7 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
                                 className="bg-transparent text-xs text-white border-0 p-1 focus:ring-0 w-24"
                             />
                             <button
-                                onClick={handleExport}
+                                onClick={() => setShowUserSelection(true)}
                                 className="p-1 hover:bg-orange-500/20 rounded text-orange-400"
                                 title="Descargar CSV"
                             >
@@ -413,6 +429,15 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
             </div>
 
             <Toast isVisible={toast.show} message={toast.message} onClose={() => setToast({ ...toast, show: false })} />
+
+            <UserSelectionModal
+                isOpen={showUserSelection}
+                onSelect={(user) => {
+                    setSelectedUser(user);
+                    handleExport();
+                }}
+                onClose={() => setShowUserSelection(false)}
+            />
         </div>
     );
 };

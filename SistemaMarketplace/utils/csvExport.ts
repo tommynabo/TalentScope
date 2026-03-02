@@ -43,8 +43,7 @@ export class MarketplaceCSVExport {
         'FIRST_NAME', 'LAST_NAME', 'ROL', 'PLATAFORMA', 'PAIS',
         'EMAIL', 'LINKEDIN', 'PERFIL_ORIGINAL',
         'TARIFA_HORA', 'SUCCESS_RATE', 'TALENT_SCORE',
-        'ICEBREAKER', 'FOLLOWUP',
-        'ANALISIS', 'FECHA'
+        'INVITACION_INICIAL', 'POST_ACEPTACION', 'ANALISIS', 'FECHA'
       ];
       const rows = items.map(c => {
         // Split name into first/last
