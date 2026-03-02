@@ -71,7 +71,8 @@ export const MarketplaceCandidatesList: React.FC<MarketplaceCandidatesListProps>
     }
   };
 
-  const handleExportWithUser = () => {
+  const handleExportWithUser = (userOverride?: OutreachUser) => {
+    const activeUser = userOverride || selectedUser;
     if (!dateRange.start || !dateRange.end) {
       setToast({ show: true, message: '⚠️ Selecciona un rango de fechas' });
       return;
@@ -93,11 +94,11 @@ export const MarketplaceCandidatesList: React.FC<MarketplaceCandidatesListProps>
     }
 
     try {
-      MarketplaceCSVExport.exportCandidates(raid, filtered, selectedUser);
+      MarketplaceCSVExport.exportCandidates(raid, filtered, activeUser);
 
       setToast({
         show: true,
-        message: `✅ CSV exportado con ${filtered.length} candidatos (mensajes de ${selectedUser === 'mauro' ? 'Mauro' : 'Nyo'})`,
+        message: `✅ CSV exportado con ${filtered.length} candidatos (mensajes de ${activeUser === 'mauro' ? 'Mauro' : 'Nyo'})`,
       });
       setShowExportOptions(false);
       setShowUserSelection(false);
@@ -212,7 +213,8 @@ export const MarketplaceCandidatesList: React.FC<MarketplaceCandidatesListProps>
         isOpen={showUserSelection}
         onSelect={(user) => {
           setSelectedUser(user);
-          handleExportWithUser();
+          setShowUserSelection(false);
+          handleExportWithUser(user);
         }}
         onClose={() => setShowUserSelection(false)}
       />

@@ -105,7 +105,8 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
         return groups;
     }, [sortedCandidates]);
 
-    const handleExport = () => {
+    const handleExport = (userOverride?: OutreachUser) => {
+        const activeUser = userOverride || selectedUser;
         const { start, end } = dateRange;
         if (!start || !end) return;
 
@@ -167,7 +168,7 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
                     const personalized = generateOutreachMessages(
                         c.name || c.github_username || '',
                         specialty,
-                        selectedUser,
+                        activeUser,
                         {
                             icebreaker: c.outreach_icebreaker,
                             followup_message: c.outreach_followup,
@@ -230,7 +231,7 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
 
         setToast({
             show: true,
-            message: `✅ Exportados ${filtered.length} devs → ${parts.join(' + ')} (mensajes de ${selectedUser === 'mauro' ? 'Mauro' : 'Nyo'})`
+            message: `✅ Exportados ${filtered.length} devs → ${parts.join(' + ')} (mensajes de ${activeUser === 'mauro' ? 'Mauro' : 'Nyo'})`
         });
         setShowExportOptions(false);
     };
@@ -434,7 +435,8 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
                 isOpen={showUserSelection}
                 onSelect={(user) => {
                     setSelectedUser(user);
-                    handleExport();
+                    setShowUserSelection(false);
+                    handleExport(user);
                 }}
                 onClose={() => setShowUserSelection(false)}
             />

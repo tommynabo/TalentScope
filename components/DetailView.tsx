@@ -372,7 +372,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
     }
   };
 
-  const handleExport = () => {
+  const handleExport = (userOverride?: OutreachUser) => {
+    const activeUser = userOverride || selectedUser;
     const { start, end } = dateRange;
     if (!start || !end) return;
 
@@ -405,7 +406,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
         const personalized = generateOutreachMessages(
           c.full_name || '',
           specialty,
-          selectedUser,
+          activeUser,
           {
             icebreaker: c.walead_messages?.icebreaker || analysis?.icebreaker,
             followup_message: c.walead_messages?.followup_message || analysis?.followup_message,
@@ -452,7 +453,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
 
       setToast({
         show: true,
-        message: `✅ CSV exportado con ${filtered.length} prospectos (mensajes de ${selectedUser === 'mauro' ? 'Mauro' : 'Nyo'})`
+        message: `✅ CSV exportado con ${filtered.length} prospectos (mensajes de ${activeUser === 'mauro' ? 'Mauro' : 'Nyo'})`
       });
       setShowExportOptions(false);
     }
@@ -1010,7 +1011,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
         isOpen={showUserSelection}
         onSelect={(user) => {
           setSelectedUser(user);
-          handleExport();
+          setShowUserSelection(false);
+          handleExport(user);
         }}
         onClose={() => setShowUserSelection(false)}
       />
