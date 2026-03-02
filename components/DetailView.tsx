@@ -10,9 +10,11 @@ import Scheduler from './Scheduler';
 import Toast from './Toast';
 import KanbanBoard from './KanbanBoard';
 import { WaleadMessagesEditor } from './WaleadMessagesEditor';
+import UserSelectionModal from './UserSelectionModal';
 import { saveSearchSnapshot, loadSearchSnapshot, clearSearchSnapshot } from '../lib/useSessionState';
 import { TabGuard } from '../lib/TabGuard';
 import { Square } from 'lucide-react';
+import { OutreachUser, generateOutreachMessages, extractSpecialty } from '../lib/messageGenerator';
 
 type SortField = 'added_at' | 'symmetry_score' | 'full_name';
 type SortDirection = 'asc' | 'desc';
@@ -43,6 +45,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
     end: new Date().toISOString().split('T')[0]
   });
   const [showExportOptions, setShowExportOptions] = useState(false);
+  const [showUserSelection, setShowUserSelection] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<OutreachUser>('mauro');
   const [isWaleadEditorOpen, setIsWaleadEditorOpen] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -395,7 +399,20 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
       headers.join(','),
       ...filtered.map(c => {
         const analysis = parseAnalysis(c.ai_analysis);
-        const icebreaker = c.walead_messages?.icebreaker || analysis?.icebreaker || '';
+        const specialty = extractSpecialty(c.job_title, analysis?.skills);
+        
+        // Generate personalized messages based on selected user
+        const personalized = generateOutreachMessages(
+          c.full_name || '',
+          specialty,
+          selectedUser,
+          {
+            icebreaker: c.walead_messages?.icebreaker || analysis?.icebreaker,
+            followup_message: c.walead_messages?.followup_message || analysis?.followup_message,
+            second_followup: c.walead_messages?.second_followup || analysis?.second_followup
+          }
+        );
+
         const followup = c.walead_messages?.followup_message || analysis?.followup_message || '';
         const secondFollowup = c.walead_messages?.second_followup || analysis?.second_followup || '';
         const summary = analysis?.summary || '';
@@ -412,7 +429,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
           `"${c.email || ''}"`,
           `"${normalizeLinkedInUrl(c.linkedin_url)}"`,
           `"${c.symmetry_score || 0}"`,
-          `"${icebreaker.replace(/"/g, '""')}"`,
+          `"${personalized.icebreaker.replace(/"/g, '""')}"`,
           `"${followup.replace(/"/g, '""')}"`,
           `"${secondFollowup.replace(/"/g, '""')}"`,
           `"${summary.replace(/"/g, '""')}"`,
@@ -435,7 +452,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
 
       setToast({
         show: true,
-        message: `✅ CSV exportado con ${filtered.length} prospectos`
+        message: `✅ CSV exportado con ${filtered.length} prospectos (mensajes de ${selectedUser === 'mauro' ? 'Mauro' : 'Nyo'})`
       });
       setShowExportOptions(false);
     }
@@ -608,7 +625,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
                     className="bg-transparent text-xs text-white border-0 p-1 focus:ring-0 w-24"
                   />
                   <button
-                    onClick={handleExport}
+                    onClick={() => setShowUserSelection(true)}
                     className="p-1 hover:bg-cyan-500/20 rounded text-cyan-400"
                     title="Descargar CSV"
                   >
@@ -988,6 +1005,15 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
       )}
 
       <Toast isVisible={toast.show} message={toast.message} onClose={() => setToast({ ...toast, show: false })} />
+
+      <UserSelectionModal
+        isOpen={showUserSelection}
+        onSelect={(user) => {
+          setSelectedUser(user);
+          handleExport();
+        }}
+        onClose={() => setShowUserSelection(false)}
+      />
 
       {editingCandidate && (
         <WaleadMessagesEditor

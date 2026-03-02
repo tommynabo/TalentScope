@@ -1,4 +1,5 @@
 import { MarketplaceRaid, EnrichedCandidate, OutreachCampaign } from '../types/marketplace';
+import { OutreachUser, generateOutreachMessages, extractSpecialty } from '../../lib/messageGenerator';
 
 /**
  * CSV Export utilities for Marketplace Raid
@@ -14,7 +15,8 @@ export class MarketplaceCSVExport {
    */
   static exportCandidatesSplit(
     raid: MarketplaceRaid,
-    candidates: EnrichedCandidate[] = []
+    candidates: EnrichedCandidate[] = [],
+    selectedUser: OutreachUser = 'mauro'
   ): string {
     const data = candidates.length > 0 ? candidates : raid.enrichedCandidates;
 
@@ -50,9 +52,20 @@ export class MarketplaceCSVExport {
         const firstName = nameParts[0] || '';
         const lastName = nameParts.slice(1).join(' ') || '';
 
-        // Outreach messages
-        const icebreaker = c.walead_messages?.icebreaker || '';
-        const followup = c.walead_messages?.followup_message || '';
+        // Extract specialty from candidate
+        const specialty = extractSpecialty(c.title);
+
+        // Generate personalized messages based on selected user
+        const personalized = generateOutreachMessages(
+          c.name || '',
+          specialty,
+          selectedUser,
+          {
+            icebreaker: c.walead_messages?.icebreaker,
+            followup_message: c.walead_messages?.followup_message,
+            second_followup: c.walead_messages?.second_followup
+          }
+        );
 
         // Analysis summary
         const analysis = [c.businessMoment, c.salesAngle, c.bottleneck]
@@ -64,7 +77,7 @@ export class MarketplaceCSVExport {
           esc(c.emails?.[0] || ''), esc(c.linkedInUrl || ''), esc(c.profileUrl),
           c.hourlyRate.toFixed(2), `${c.jobSuccessRate.toFixed(0)}%`,
           `${c.talentScore || 0}`,
-          esc(icebreaker), esc(followup), esc(analysis),
+          esc(personalized.icebreaker), esc(personalized.followup_message), esc(analysis),
           esc(c.scrapedAt.split('T')[0])
         ];
       });
@@ -104,10 +117,11 @@ export class MarketplaceCSVExport {
    */
   static exportCandidates(
     raid: MarketplaceRaid,
-    candidates: EnrichedCandidate[] = []
+    candidates: EnrichedCandidate[] = [],
+    selectedUser: OutreachUser = 'mauro'
   ): void {
     // Delegate to the new split export
-    this.exportCandidatesSplit(raid, candidates);
+    this.exportCandidatesSplit(raid, candidates, selectedUser);
   }
 
   /**

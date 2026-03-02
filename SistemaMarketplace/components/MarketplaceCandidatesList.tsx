@@ -2,6 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { Download, Calendar, ChevronDown, X } from 'lucide-react';
 import { EnrichedCandidate, MarketplaceRaid } from '../types/marketplace';
 import { MarketplaceCSVExport } from '../utils/csvExport';
+import UserSelectionModal from '../../components/UserSelectionModal';
+import { OutreachUser } from '../../lib/messageGenerator';
 
 interface MarketplaceCandidatesListProps {
   raid: MarketplaceRaid;
@@ -16,6 +18,8 @@ export const MarketplaceCandidatesList: React.FC<MarketplaceCandidatesListProps>
 }) => {
   const [selectedCandidate, setSelectedCandidate] = useState<EnrichedCandidate | null>(null);
   const [showExportOptions, setShowExportOptions] = useState(false);
+  const [showUserSelection, setShowUserSelection] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<OutreachUser>('mauro');
   const [selectedExport, setSelectedExport] = useState<'all' | 'enrichment' | 'contacts'>('all');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [toast, setToast] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
@@ -41,10 +45,14 @@ export const MarketplaceCandidatesList: React.FC<MarketplaceCandidatesListProps>
       return;
     }
 
+    // For 'all' export, show user selection modal
+    if (selectedExport === 'all') {
+      setShowUserSelection(true);
+      return;
+    }
+
     try {
-      if (selectedExport === 'all') {
-        MarketplaceCSVExport.exportCandidates(raid, filtered);
-      } else if (selectedExport === 'enrichment') {
+      if (selectedExport === 'enrichment') {
         MarketplaceCSVExport.exportEnrichmentReport(raid, filtered);
       } else if (selectedExport === 'contacts') {
         if (raid.campaigns.length > 0) {
@@ -57,6 +65,42 @@ export const MarketplaceCandidatesList: React.FC<MarketplaceCandidatesListProps>
         message: `✅ CSV exportado con ${filtered.length} candidatos`,
       });
       setShowExportOptions(false);
+      setTimeout(() => setToast({ show: false, message: '' }), 3000);
+    } catch (error) {
+      setToast({ show: true, message: '❌ Error al exportar CSV' });
+    }
+  };
+
+  const handleExportWithUser = () => {
+    if (!dateRange.start || !dateRange.end) {
+      setToast({ show: true, message: '⚠️ Selecciona un rango de fechas' });
+      return;
+    }
+
+    const startDate = new Date(dateRange.start);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(dateRange.end);
+    endDate.setHours(23, 59, 59, 999);
+
+    const filtered = candidates.filter(c => {
+      const cDate = new Date(c.scrapedAt);
+      return cDate >= startDate && cDate <= endDate;
+    });
+
+    if (filtered.length === 0) {
+      setToast({ show: true, message: '⚠️ No hay candidatos en este rango' });
+      return;
+    }
+
+    try {
+      MarketplaceCSVExport.exportCandidates(raid, filtered, selectedUser);
+
+      setToast({
+        show: true,
+        message: `✅ CSV exportado con ${filtered.length} candidatos (mensajes de ${selectedUser === 'mauro' ? 'Mauro' : 'Nyo'})`,
+      });
+      setShowExportOptions(false);
+      setShowUserSelection(false);
       setTimeout(() => setToast({ show: false, message: '' }), 3000);
     } catch (error) {
       setToast({ show: true, message: '❌ Error al exportar CSV' });
@@ -162,6 +206,16 @@ export const MarketplaceCandidatesList: React.FC<MarketplaceCandidatesListProps>
           {toast.message}
         </div>
       )}
+
+      {/* User Selection Modal */}
+      <UserSelectionModal
+        isOpen={showUserSelection}
+        onSelect={(user) => {
+          setSelectedUser(user);
+          handleExportWithUser();
+        }}
+        onClose={() => setShowUserSelection(false)}
+      />
 
       {/* Table */}
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden">
