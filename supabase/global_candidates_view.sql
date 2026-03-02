@@ -35,16 +35,18 @@ WHERE email IS NOT NULL AND email != ''
 UNION ALL
 
 -- 3️⃣ MARKETPLACE CANDIDATES (Upwork/Fiverr) 
+-- Joining with campaigns table because 'platform' is stored there, not in candidates table
 SELECT 
-    id as candidate_id,
-    platform as source_platform,
-    name,
-    email,
-    platform_data->>'profile_url' as profile_url,
+    mc.id as candidate_id,
+    cmp.platform as source_platform,
+    mc.name,
+    mc.email,
+    mc.platform_data->>'profile_url' as profile_url,
     'Freelancer' as current_role,
-    added_at as created_at
-FROM public.marketplace_candidates
-WHERE email IS NOT NULL AND email != '';
+    mc.added_at as created_at
+FROM public.marketplace_candidates mc
+JOIN public.marketplace_campaigns cmp ON mc.campaign_id = cmp.id
+WHERE mc.email IS NOT NULL AND mc.email != '';
 
 -- Grant access to authenticated users
 GRANT SELECT ON public.global_email_candidates TO authenticated;
