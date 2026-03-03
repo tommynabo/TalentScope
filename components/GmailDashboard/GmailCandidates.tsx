@@ -1,10 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { GmailCandidatesService, GlobalEmailCandidate } from '../../lib/gmailCandidatesService';
-import { GmailService, GmailSequence } from '../../lib/gmailService';
-import { Search, MailPlus, Filter, Github, Linkedin, Briefcase } from 'lucide-react';
+import { GmailService, GmailSequence, GmailOutreachLead } from '../../lib/gmailService';
+import { Search, MailPlus, Filter, Github, Linkedin, Briefcase, MoreHorizontal, MessageSquare, Calendar } from 'lucide-react';
+
+type CandidateWithLane = GlobalEmailCandidate & {
+    kanbanLane: string;
+    leadId?: string;
+};
+
+const COLUMNS = [
+    { id: 'todo', label: 'Por Contactar', color: 'bg-slate-500' },
+    { id: 'contacted', label: 'Contactado', color: 'bg-blue-500' },
+    { id: 'replied', label: 'Respondió', color: 'bg-yellow-500' },
+    { id: 'rejected', label: 'Rechazó', color: 'bg-red-500' },
+    { id: 'hired', label: 'Contratado', color: 'bg-emerald-500' },
+];
 
 const GmailCandidates: React.FC = () => {
-    const [candidates, setCandidates] = useState<GlobalEmailCandidate[]>([]);
+    const [candidates, setCandidates] = useState<CandidateWithLane[]>([]);
     const [sequences, setSequences] = useState<GmailSequence[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -26,24 +39,33 @@ const GmailCandidates: React.FC = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [candData, seqData] = await Promise.all([
+            const [candData, seqData, leadsData] = await Promise.all([
                 GmailCandidatesService.getGlobalEmailCandidates(),
-                GmailService.getSequences()
+                GmailService.getSequences(),
+                GmailService.getAllOutreachLeads()
             ]);
-            setCandidates(candData);
+
+            // Map candidates to their kanban lane based on outreach leads
+            const candidatesWithState = candData.map(c => {
+                const lead = leadsData.find(l => l.candidate_id === c.candidate_id);
+                let lane = 'todo';
+                if (lead) {
+                    if (lead.status === 'replied') lane = 'replied';
+                    else if (lead.status === 'bounced' || lead.status === 'failed') lane = 'rejected';
+                    else if (lead.status === 'completed') lane = 'hired'; // mapped for Kanban parity
+                    else if (lead.status === 'running') lane = 'contacted';
+                    else if (lead.status === 'pending') lane = 'todo';
+                    else lane = lead.status; // fallback
+                }
+                return { ...c, kanbanLane: lane, leadId: lead?.id };
+            });
+
+            setCandidates(candidatesWithState);
             setSequences(seqData);
         } catch (error) {
             console.error('Error fetching data for candidates view:', error);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.checked) {
-            setSelectedIds(new Set(filteredCandidates.map(c => c.candidate_id)));
-        } else {
-            setSelectedIds(new Set());
         }
     };
 
@@ -68,10 +90,56 @@ const GmailCandidates: React.FC = () => {
             alert(`Acción completada.\nAñadidos a la secuencia: ${result.success}\nFallidos/Duplicados: ${result.failed}`);
             setSelectedIds(new Set());
             setSelectedSequence('');
+            fetchData(); // Refresh pipeline
         } catch (error: any) {
             alert(`Error al añadir candidatos: ${error.message}`);
         } finally {
             setEnrolling(false);
+        }
+    };
+
+    // Drag and Drop
+    const handleDragStart = (e: React.DragEvent, candidateId: string) => {
+        e.dataTransfer.setData('candidateId', candidateId);
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+    };
+
+    const handleDrop = async (e: React.DragEvent, laneId: string) => {
+        e.preventDefault();
+        const candidateId = e.dataTransfer.getData('candidateId');
+        if (!candidateId) return;
+
+        const candidate = candidates.find(c => c.candidate_id === candidateId);
+        if (!candidate) return;
+
+        // Optimistic UI update
+        const previousCandidates = [...candidates];
+        setCandidates(candidates.map(c =>
+            c.candidate_id === candidateId ? { ...c, kanbanLane: laneId } : c
+        ));
+
+        // If they have a lead record, update status representing the lane
+        if (candidate.leadId) {
+            try {
+                let status = 'pending';
+                if (laneId === 'contacted') status = 'running';
+                if (laneId === 'replied') status = 'replied';
+                if (laneId === 'rejected') status = 'failed';
+                if (laneId === 'hired') status = 'completed'; // mapped appropriately
+
+                await GmailService.updateLeadStatus(candidate.leadId, status);
+            } catch (error) {
+                console.error("Failed to update status", error);
+                setCandidates(previousCandidates); // Revert
+                alert("Error al mover candidato");
+            }
+        } else {
+            // Cannot logically move if they aren't in a sequence yet. We can just keep the visual state locally or let them know!
+            alert('Añade primero al candidato a una secuencia antes de mover de estado manualmente.');
+            setCandidates(previousCandidates); // Revert
         }
     };
 
@@ -86,18 +154,22 @@ const GmailCandidates: React.FC = () => {
 
     const getPlatformIcon = (platform: string) => {
         switch (platform.toLowerCase()) {
-            case 'github': return <Github className="w-4 h-4 text-slate-400" />;
-            case 'linkedin': return <Linkedin className="w-4 h-4 text-blue-400" />;
-            default: return <Briefcase className="w-4 h-4 text-emerald-400" />;
+            case 'github': return <Github className="w-3 h-3 text-slate-400 inline" />;
+            case 'linkedin': return <Linkedin className="w-3 h-3 text-blue-400 inline" />;
+            default: return <Briefcase className="w-3 h-3 text-emerald-400 inline" />;
         }
     };
 
+    const getColumnCandidates = (laneId: string) => {
+        return filteredCandidates.filter(c => c.kanbanLane === laneId);
+    };
+
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="space-y-6 h-[calc(100vh-120px)] flex flex-col">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
                 <div>
-                    <h2 className="text-xl font-bold text-white">Candidatos Globales ({filteredCandidates.length})</h2>
-                    <p className="text-slate-400 text-sm mt-1">Todos los candidatos que disponen de email en la plataforma.</p>
+                    <h2 className="text-xl font-bold text-white">Pipeline de Candidatos ({filteredCandidates.length})</h2>
+                    <p className="text-slate-400 text-sm mt-1">Arrastra contactos o añádelos a una secuencia de correos.</p>
                 </div>
 
                 {selectedIds.size > 0 && (
@@ -131,7 +203,7 @@ const GmailCandidates: React.FC = () => {
                 )}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <div className="flex flex-col sm:flex-row gap-4 bg-slate-900 border border-slate-800 p-4 rounded-xl shrink-0">
                 <div className="flex-1 relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 w-4 h-4" />
                     <input
@@ -158,75 +230,88 @@ const GmailCandidates: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-slate-950/50 text-slate-400 uppercase text-xs">
-                            <tr>
-                                <th className="p-4 w-12">
-                                    <input
-                                        type="checkbox"
-                                        className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500/20 bg-slate-800"
-                                        checked={filteredCandidates.length > 0 && selectedIds.size === filteredCandidates.length}
-                                        onChange={handleSelectAll}
-                                    />
-                                </th>
-                                <th className="p-4 font-semibold">Candidato</th>
-                                <th className="p-4 font-semibold">Plataforma</th>
-                                <th className="p-4 font-semibold">Rol / Título</th>
-                                <th className="p-4 font-semibold text-right">Añadido</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800/50">
-                            {loading ? (
-                                <tr>
-                                    <td colSpan={5} className="p-8 text-center text-slate-500">
-                                        Cargando candidatos globales...
-                                    </td>
-                                </tr>
-                            ) : filteredCandidates.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="p-12 text-center text-slate-500 border border-slate-800 border-dashed m-4 rounded-xl block w-[calc(100%-2rem)]">
-                                        <p>No se encontraron candidatos con email registrado.</p>
-                                    </td>
-                                </tr>
-                            ) : (
-                                filteredCandidates.map(c => (
-                                    <tr
-                                        key={c.candidate_id}
-                                        className={`hover:bg-slate-800/30 transition-colors ${selectedIds.has(c.candidate_id) ? 'bg-cyan-500/5' : ''}`}
-                                    >
-                                        <td className="p-4">
-                                            <input
-                                                type="checkbox"
-                                                className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500/20 bg-slate-800"
-                                                checked={selectedIds.has(c.candidate_id)}
-                                                onChange={() => handleSelectOne(c.candidate_id)}
-                                            />
-                                        </td>
-                                        <td className="p-4">
-                                            <div className="font-medium text-slate-200">{c.name}</div>
-                                            <div className="text-slate-500 text-xs mt-0.5">{c.email}</div>
-                                        </td>
-                                        <td className="p-4">
-                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-800 inline-flex">
-                                                {getPlatformIcon(c.source_platform)}
-                                                <span className="text-xs text-slate-300">{c.source_platform}</span>
-                                            </div>
-                                        </td>
-                                        <td className="p-4 text-slate-400">
-                                            {c.current_role || '-'}
-                                        </td>
-                                        <td className="p-4 text-right text-slate-500 text-xs">
-                                            {new Date(c.created_at).toLocaleDateString()}
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+            {loading ? (
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
                 </div>
-            </div>
+            ) : (
+                <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4 custom-scrollbar">
+                    <div className="flex h-full gap-4">
+                        {COLUMNS.map(col => (
+                            <div
+                                key={col.id}
+                                onDragOver={handleDragOver}
+                                onDrop={(e) => handleDrop(e, col.id)}
+                                className="min-w-[280px] w-[280px] bg-slate-900/50 rounded-xl border border-slate-800 flex flex-col h-full"
+                            >
+                                <div className="p-3 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900/95 backdrop-blur z-10 rounded-t-xl shrink-0">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-2.5 h-2.5 rounded-full ${col.color}`}></div>
+                                        <span className="font-semibold text-slate-200 text-sm">{col.label}</span>
+                                        <span className="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.5 rounded-full">
+                                            {getColumnCandidates(col.id).length}
+                                        </span>
+                                    </div>
+                                    <MoreHorizontal className="h-4 w-4 text-slate-500 hover:text-white cursor-pointer" />
+                                </div>
+
+                                <div className="flex-1 p-2 overflow-y-auto space-y-2 custom-scrollbar">
+                                    {getColumnCandidates(col.id).map(candidate => (
+                                        <div
+                                            key={candidate.candidate_id}
+                                            draggable
+                                            onDragStart={(e) => handleDragStart(e, candidate.candidate_id)}
+                                            className={`p-3 rounded-lg bg-slate-800 border cursor-grab active:cursor-grabbing hover:shadow-md hover:bg-slate-800/80 transition-all select-none
+                                                ${selectedIds.has(candidate.candidate_id) ? 'border-cyan-500 ring-1 ring-cyan-500/50' : 'border-slate-700/50 hover:border-emerald-500/50'}`}
+                                            onClick={(e) => {
+                                                if (e.ctrlKey || e.metaKey || col.id === 'todo') { // allow selection mostly in todo
+                                                    handleSelectOne(candidate.candidate_id);
+                                                }
+                                            }}
+                                        >
+                                            <div className="flex items-start justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedIds.has(candidate.candidate_id)}
+                                                        onChange={() => handleSelectOne(candidate.candidate_id)}
+                                                        className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500/20 bg-slate-900"
+                                                        onClick={e => e.stopPropagation()}
+                                                    />
+                                                    <img
+                                                        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.name)}&background=0F172A&color=94A3B8`}
+                                                        alt={candidate.name}
+                                                        className="h-6 w-6 rounded-full object-cover ring-1 ring-slate-700"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <h4 className="font-semibold text-slate-200 text-sm mb-0.5 truncate" title={candidate.name}>{candidate.name}</h4>
+
+                                            <div className="text-[10px] text-slate-500 truncate mb-1 flex items-center gap-1.5">
+                                                {getPlatformIcon(candidate.source_platform)}
+                                                <span>{candidate.source_platform}</span>
+                                            </div>
+                                            <p className="text-xs text-slate-400 mb-2 truncate" title={candidate.email}>
+                                                {candidate.email}
+                                            </p>
+
+                                            <div className="flex items-center justify-between text-slate-500 pt-2 border-t border-slate-700/50">
+                                                <div className="flex gap-2">
+                                                    <MessageSquare className="h-3 w-3" />
+                                                    <Calendar className="h-3 w-3" />
+                                                </div>
+                                                <span className="text-[10px]">
+                                                    {new Date(candidate.created_at).toLocaleDateString()}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

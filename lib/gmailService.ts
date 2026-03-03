@@ -160,6 +160,40 @@ export const GmailService = {
         return data || [];
     },
 
+    async saveSequenceSteps(sequenceId: string, steps: Partial<GmailSequenceStep>[]): Promise<void> {
+        // First delete existing steps for this sequence to replace them
+        await supabase.from('gmail_sequence_steps').delete().eq('sequence_id', sequenceId);
+
+        if (steps.length === 0) return;
+
+        const stepsToInsert = steps.map((step, index) => ({
+            sequence_id: sequenceId,
+            step_number: index + 1,
+            subject_template: step.subject_template || '',
+            body_template: step.body_template || '',
+            delay_hours: step.delay_hours || 0,
+        }));
+
+        const { error } = await supabase.from('gmail_sequence_steps').insert(stepsToInsert);
+        if (error) throw error;
+    },
+
+    async getAllOutreachLeads(): Promise<GmailOutreachLead[]> {
+        const { data, error } = await supabase
+            .from('gmail_outreach_leads')
+            .select('*');
+        if (error) throw error;
+        return data || [];
+    },
+
+    async updateLeadStatus(leadId: string, newStatus: string): Promise<void> {
+        const { error } = await supabase
+            .from('gmail_outreach_leads')
+            .update({ status: newStatus })
+            .eq('id', leadId);
+        if (error) throw error;
+    },
+
     // Analytics
     async getAnalyticsStats(): Promise<{
         totalSent: number;

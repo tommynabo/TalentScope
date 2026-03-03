@@ -74,6 +74,7 @@ export interface EnrichedCandidate extends ScrapedCandidate {
   walead_messages?: {
     icebreaker: string;
     followup_message: string;
+    second_followup?: string;
   };
 }
 
