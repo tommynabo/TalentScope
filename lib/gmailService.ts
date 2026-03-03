@@ -160,6 +160,24 @@ export const GmailService = {
         return data || [];
     },
 
+    async deleteSequence(sequenceId: string): Promise<void> {
+        const { error } = await supabase
+            .from('gmail_sequences')
+            .delete()
+            .eq('id', sequenceId);
+
+        if (error) throw error;
+    },
+
+    async updateSequenceStatus(sequenceId: string, status: 'draft' | 'active' | 'paused' | 'completed'): Promise<void> {
+        const { error } = await supabase
+            .from('gmail_sequences')
+            .update({ status })
+            .eq('id', sequenceId);
+
+        if (error) throw error;
+    },
+
     async saveSequenceSteps(sequenceId: string, steps: Partial<GmailSequenceStep>[]): Promise<void> {
         // First delete existing steps for this sequence to replace them
         await supabase.from('gmail_sequence_steps').delete().eq('sequence_id', sequenceId);

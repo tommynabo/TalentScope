@@ -1,20 +1,28 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { GmailCandidatesService, GlobalEmailCandidate } from '../../lib/gmailCandidatesService';
-import { GmailService, GmailSequence, GmailOutreachLead } from '../../lib/gmailService';
-import { Search, MailPlus, Filter, Github, Linkedin, Briefcase, MoreHorizontal, MessageSquare, Calendar } from 'lucide-react';
+import { GmailService, GmailSequence } from '../../lib/gmailService';
+import { Search, MailPlus, Filter, Github, Linkedin, Briefcase, Calendar, MessageSquare } from 'lucide-react';
 
 type CandidateWithLane = GlobalEmailCandidate & {
     kanbanLane: string;
     leadId?: string;
 };
 
-const COLUMNS = [
-    { id: 'todo', label: 'Por Contactar', color: 'bg-slate-500' },
-    { id: 'contacted', label: 'Contactado', color: 'bg-blue-500' },
-    { id: 'replied', label: 'Respondió', color: 'bg-yellow-500' },
-    { id: 'rejected', label: 'Rechazó', color: 'bg-red-500' },
-    { id: 'hired', label: 'Contratado', color: 'bg-emerald-500' },
-];
+const laneLabels: Record<string, string> = {
+    todo: 'Por Contactar',
+    contacted: 'Contactado',
+    replied: 'Respondió',
+    rejected: 'Rechazó / Falló',
+    hired: 'Completado',
+};
+
+const laneBg: Record<string, string> = {
+    todo: 'bg-slate-500 hover:bg-slate-400',
+    contacted: 'bg-blue-500 hover:bg-blue-400',
+    replied: 'bg-yellow-500 hover:bg-yellow-400',
+    rejected: 'bg-red-500 hover:bg-red-400',
+    hired: 'bg-emerald-500 hover:bg-emerald-400',
+};
 
 const GmailCandidates: React.FC = () => {
     const [candidates, setCandidates] = useState<CandidateWithLane[]>([]);
@@ -24,9 +32,10 @@ const GmailCandidates: React.FC = () => {
     // Selection state
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-    // Filters
+    // Filters & Sorting
     const [searchTerm, setSearchTerm] = useState('');
     const [platformFilter, setPlatformFilter] = useState<string>('all');
+    const [filterLane, setFilterLane] = useState<string | null>(null);
 
     // Action state
     const [enrolling, setEnrolling] = useState(false);
@@ -45,20 +54,23 @@ const GmailCandidates: React.FC = () => {
                 GmailService.getAllOutreachLeads()
             ]);
 
-            // Map candidates to their kanban lane based on outreach leads
+            // Map candidates to their lane based on outreach leads
             const candidatesWithState = candData.map(c => {
                 const lead = leadsData.find(l => l.candidate_id === c.candidate_id);
                 let lane = 'todo';
                 if (lead) {
                     if (lead.status === 'replied') lane = 'replied';
                     else if (lead.status === 'bounced' || lead.status === 'failed') lane = 'rejected';
-                    else if (lead.status === 'completed') lane = 'hired'; // mapped for Kanban parity
+                    else if (lead.status === 'completed') lane = 'hired'; // mapped
                     else if (lead.status === 'running') lane = 'contacted';
                     else if (lead.status === 'pending') lane = 'todo';
                     else lane = lead.status; // fallback
                 }
                 return { ...c, kanbanLane: lane, leadId: lead?.id };
             });
+
+            // Default sort by added date (created_at) descending
+            candidatesWithState.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
             setCandidates(candidatesWithState);
             setSequences(seqData);
@@ -79,6 +91,14 @@ const GmailCandidates: React.FC = () => {
         setSelectedIds(newSet);
     };
 
+    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            setSelectedIds(new Set(filteredCandidates.map(c => c.candidate_id)));
+        } else {
+            setSelectedIds(new Set());
+        }
+    };
+
     const handleEnroll = async () => {
         if (selectedIds.size === 0 || !selectedSequence) return;
 
@@ -90,7 +110,7 @@ const GmailCandidates: React.FC = () => {
             alert(`Acción completada.\nAñadidos a la secuencia: ${result.success}\nFallidos/Duplicados: ${result.failed}`);
             setSelectedIds(new Set());
             setSelectedSequence('');
-            fetchData(); // Refresh pipeline
+            fetchData(); // Refresh list to get new status
         } catch (error: any) {
             alert(`Error al añadir candidatos: ${error.message}`);
         } finally {
@@ -98,48 +118,31 @@ const GmailCandidates: React.FC = () => {
         }
     };
 
-    // Drag and Drop
-    const handleDragStart = (e: React.DragEvent, candidateId: string) => {
-        e.dataTransfer.setData('candidateId', candidateId);
-    };
-
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault();
-    };
-
-    const handleDrop = async (e: React.DragEvent, laneId: string) => {
-        e.preventDefault();
-        const candidateId = e.dataTransfer.getData('candidateId');
-        if (!candidateId) return;
-
-        const candidate = candidates.find(c => c.candidate_id === candidateId);
-        if (!candidate) return;
+    // Change status from the dropdown
+    const handleStatusChange = async (candidate: CandidateWithLane, newLane: string) => {
+        if (!candidate.leadId) {
+            alert("El candidato aún no está asignado a ninguna secuencia. No puedes cambiar su estado manualmente.");
+            return;
+        }
 
         // Optimistic UI update
         const previousCandidates = [...candidates];
         setCandidates(candidates.map(c =>
-            c.candidate_id === candidateId ? { ...c, kanbanLane: laneId } : c
+            c.candidate_id === candidate.candidate_id ? { ...c, kanbanLane: newLane } : c
         ));
 
-        // If they have a lead record, update status representing the lane
-        if (candidate.leadId) {
-            try {
-                let status = 'pending';
-                if (laneId === 'contacted') status = 'running';
-                if (laneId === 'replied') status = 'replied';
-                if (laneId === 'rejected') status = 'failed';
-                if (laneId === 'hired') status = 'completed'; // mapped appropriately
+        try {
+            let status = 'pending';
+            if (newLane === 'contacted') status = 'running';
+            if (newLane === 'replied') status = 'replied';
+            if (newLane === 'rejected') status = 'failed';
+            if (newLane === 'hired') status = 'completed';
 
-                await GmailService.updateLeadStatus(candidate.leadId, status);
-            } catch (error) {
-                console.error("Failed to update status", error);
-                setCandidates(previousCandidates); // Revert
-                alert("Error al mover candidato");
-            }
-        } else {
-            // Cannot logically move if they aren't in a sequence yet. We can just keep the visual state locally or let them know!
-            alert('Añade primero al candidato a una secuencia antes de mover de estado manualmente.');
+            await GmailService.updateLeadStatus(candidate.leadId, status);
+        } catch (error) {
+            console.error("Failed to update status", error);
             setCandidates(previousCandidates); // Revert
+            alert("Error al actualizar el estado del candidato");
         }
     };
 
@@ -148,49 +151,82 @@ const GmailCandidates: React.FC = () => {
             const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 c.email.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesPlatform = platformFilter === 'all' || c.source_platform.toLowerCase() === platformFilter.toLowerCase();
-            return matchesSearch && matchesPlatform;
+            const matchesLane = filterLane ? c.kanbanLane === filterLane : true;
+            return matchesSearch && matchesPlatform && matchesLane;
         });
-    }, [candidates, searchTerm, platformFilter]);
+    }, [candidates, searchTerm, platformFilter, filterLane]);
 
     const getPlatformIcon = (platform: string) => {
         switch (platform.toLowerCase()) {
-            case 'github': return <Github className="w-3 h-3 text-slate-400 inline" />;
-            case 'linkedin': return <Linkedin className="w-3 h-3 text-blue-400 inline" />;
-            default: return <Briefcase className="w-3 h-3 text-emerald-400 inline" />;
+            case 'github': return <Github className="w-4 h-4 text-slate-400" />;
+            case 'linkedin': return <Linkedin className="w-4 h-4 text-blue-400" />;
+            default: return <Briefcase className="w-4 h-4 text-emerald-400" />;
         }
     };
 
-    const getColumnCandidates = (laneId: string) => {
-        return filteredCandidates.filter(c => c.kanbanLane === laneId);
-    };
-
     return (
-        <div className="space-y-6 h-[calc(100vh-120px)] flex flex-col">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
-                <div>
-                    <h2 className="text-xl font-bold text-white">Pipeline de Candidatos ({filteredCandidates.length})</h2>
-                    <p className="text-slate-400 text-sm mt-1">Arrastra contactos o añádelos a una secuencia de correos.</p>
+        <div className="space-y-6">
+            {/* Header Toolbar */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm">
+                <div className="flex-1 flex flex-col sm:flex-row gap-3 w-full">
+                    {/* Search */}
+                    <div className="relative flex-1 min-w-[200px]">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 w-4 h-4" />
+                        <input
+                            type="text"
+                            placeholder="Buscar por nombre o email..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 transition-colors"
+                        />
+                    </div>
+
+                    {/* Filters */}
+                    <div className="flex gap-3">
+                        <select
+                            value={platformFilter}
+                            onChange={e => setPlatformFilter(e.target.value)}
+                            className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-300 text-sm focus:outline-none focus:border-cyan-500 transition-colors"
+                        >
+                            <option value="all">Todas las plataformas</option>
+                            <option value="linkedin">LinkedIn</option>
+                            <option value="github">GitHub</option>
+                            <option value="upwork">Upwork / Fiverr</option>
+                        </select>
+
+                        <select
+                            value={filterLane || ''}
+                            onChange={(e) => setFilterLane(e.target.value || null)}
+                            className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-300 text-sm focus:outline-none focus:border-cyan-500 transition-colors"
+                        >
+                            <option value="">Todos los Estados</option>
+                            <option value="todo">Por Contactar</option>
+                            <option value="contacted">Contactado</option>
+                            <option value="replied">Respondió</option>
+                            <option value="rejected">Rechazó / Falló</option>
+                            <option value="hired">Completado</option>
+                        </select>
+                    </div>
                 </div>
 
+                {/* Bulk Actions Menu */}
                 {selectedIds.size > 0 && (
-                    <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700 animate-in fade-in zoom-in duration-200">
-                        <span className="text-sm font-medium text-cyan-400 px-2">{selectedIds.size} seleccionados</span>
-
+                    <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700 animate-in fade-in zoom-in duration-200 ml-auto w-full md:w-auto mt-4 md:mt-0">
+                        <span className="text-sm font-medium text-cyan-400 px-2 whitespace-nowrap">{selectedIds.size} selec.</span>
                         <select
                             value={selectedSequence}
                             onChange={(e) => setSelectedSequence(e.target.value)}
-                            className="bg-slate-900 border border-slate-700 rounded-md text-sm px-3 py-1.5 focus:outline-none focus:border-cyan-500"
+                            className="flex-1 min-w-[150px] bg-slate-950 border border-slate-700 rounded-md text-sm px-3 py-1.5 focus:outline-none focus:border-cyan-500 text-slate-200"
                         >
                             <option value="">Seleccionar Secuencia...</option>
                             {sequences.map(seq => (
                                 <option key={seq.id} value={seq.id}>{seq.name}</option>
                             ))}
                         </select>
-
                         <button
                             onClick={handleEnroll}
                             disabled={!selectedSequence || enrolling}
-                            className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+                            className="flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
                         >
                             {enrolling ? (
                                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -203,113 +239,128 @@ const GmailCandidates: React.FC = () => {
                 )}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 bg-slate-900 border border-slate-800 p-4 rounded-xl shrink-0">
-                <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 w-4 h-4" />
-                    <input
-                        type="text"
-                        placeholder="Buscar por nombre o email..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-cyan-500 transition-colors"
-                    />
-                </div>
-
-                <div className="sm:w-48 relative">
-                    <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 w-4 h-4" />
-                    <select
-                        value={platformFilter}
-                        onChange={e => setPlatformFilter(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-sm appearance-none focus:outline-none focus:border-cyan-500 transition-colors"
-                    >
-                        <option value="all">Todas las plataformas</option>
-                        <option value="linkedin">LinkedIn</option>
-                        <option value="github">GitHub</option>
-                        <option value="upwork">Upwork / Fiverr</option>
-                    </select>
-                </div>
+            {/* Pipeline List Table */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
+                {loading ? (
+                    <div className="p-16 flex justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
+                    </div>
+                ) : candidates.length === 0 ? (
+                    <div className="p-16 text-center text-slate-500">
+                        <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                        <h3 className="text-lg font-medium text-slate-300 mb-1">No hay candidatos importados</h3>
+                        <p>Los candidatos scrapeados con email en Github, LinkedIn y Marketplace aparecerán aquí.</p>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse min-w-[900px]">
+                            <thead className="bg-slate-950/80 border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
+                                <tr>
+                                    <th className="p-4 w-12 text-center">
+                                        <input
+                                            type="checkbox"
+                                            onChange={handleSelectAll}
+                                            checked={selectedIds.size === filteredCandidates.length && filteredCandidates.length > 0}
+                                            className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500/20 bg-slate-900"
+                                        />
+                                    </th>
+                                    <th className="p-4 font-semibold">Estado en Pipeline</th>
+                                    <th className="p-4 font-semibold">Candidato</th>
+                                    <th className="p-4 font-semibold">Origen</th>
+                                    <th className="p-4 font-semibold">Contacto</th>
+                                    <th className="p-4 font-semibold">Incorporado</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/50">
+                                {filteredCandidates.map(candidate => (
+                                    <tr
+                                        key={candidate.candidate_id}
+                                        className={`hover:bg-slate-800/30 transition-colors group ${selectedIds.has(candidate.candidate_id) ? 'bg-cyan-900/10' : ''}`}
+                                        onClick={(e) => {
+                                            // Handle row click (except when clicking select menus or anchors)
+                                            if ((e.target as HTMLElement).tagName !== 'SELECT' && (e.target as HTMLElement).tagName !== 'A' && (e.target as HTMLElement).tagName !== 'INPUT') {
+                                                handleSelectOne(candidate.candidate_id);
+                                            }
+                                        }}
+                                    >
+                                        <td className="p-4 text-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.has(candidate.candidate_id)}
+                                                onChange={() => handleSelectOne(candidate.candidate_id)}
+                                                className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500/20 bg-slate-900"
+                                                onClick={e => e.stopPropagation()}
+                                            />
+                                        </td>
+                                        <td className="p-4">
+                                            <select
+                                                value={candidate.kanbanLane}
+                                                onChange={(e) => handleStatusChange(candidate, e.target.value)}
+                                                className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider text-white border-0 cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 transition-colors ${laneBg[candidate.kanbanLane]}`}
+                                            >
+                                                {Object.entries(laneLabels).map(([key, label]) => (
+                                                    <option key={key} value={key} className="bg-slate-800 text-white capitalize font-medium">{label}</option>
+                                                ))}
+                                            </select>
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-3">
+                                                <img
+                                                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.name)}&background=0F172A&color=94A3B8`}
+                                                    alt={candidate.name}
+                                                    className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-700"
+                                                />
+                                                <div>
+                                                    <div className="font-medium text-slate-200">{candidate.name}</div>
+                                                    <div className="text-xs text-slate-500">{candidate.current_role}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-2 text-slate-400">
+                                                {getPlatformIcon(candidate.source_platform)}
+                                                <span className="text-sm font-medium">{candidate.source_platform}</span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex flex-col gap-1">
+                                                <div className="text-sm text-slate-300 max-w-[200px] truncate" title={candidate.email}>
+                                                    {candidate.email}
+                                                </div>
+                                                {candidate.profile_url && (
+                                                    <a href={candidate.profile_url} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 text-[11px] uppercase tracking-wider font-semibold w-fit">
+                                                        Ver Perfil
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-slate-400 text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <Calendar className="w-4 h-4 opacity-50" />
+                                                <span>{new Date(candidate.created_at).toLocaleDateString()}</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
 
-            {loading ? (
-                <div className="flex-1 flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
-                </div>
-            ) : (
-                <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4 custom-scrollbar">
-                    <div className="flex h-full gap-4">
-                        {COLUMNS.map(col => (
-                            <div
-                                key={col.id}
-                                onDragOver={handleDragOver}
-                                onDrop={(e) => handleDrop(e, col.id)}
-                                className="min-w-[280px] w-[280px] bg-slate-900/50 rounded-xl border border-slate-800 flex flex-col h-full"
-                            >
-                                <div className="p-3 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900/95 backdrop-blur z-10 rounded-t-xl shrink-0">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-2.5 h-2.5 rounded-full ${col.color}`}></div>
-                                        <span className="font-semibold text-slate-200 text-sm">{col.label}</span>
-                                        <span className="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.5 rounded-full">
-                                            {getColumnCandidates(col.id).length}
-                                        </span>
-                                    </div>
-                                    <MoreHorizontal className="h-4 w-4 text-slate-500 hover:text-white cursor-pointer" />
-                                </div>
-
-                                <div className="flex-1 p-2 overflow-y-auto space-y-2 custom-scrollbar">
-                                    {getColumnCandidates(col.id).map(candidate => (
-                                        <div
-                                            key={candidate.candidate_id}
-                                            draggable
-                                            onDragStart={(e) => handleDragStart(e, candidate.candidate_id)}
-                                            className={`p-3 rounded-lg bg-slate-800 border cursor-grab active:cursor-grabbing hover:shadow-md hover:bg-slate-800/80 transition-all select-none
-                                                ${selectedIds.has(candidate.candidate_id) ? 'border-cyan-500 ring-1 ring-cyan-500/50' : 'border-slate-700/50 hover:border-emerald-500/50'}`}
-                                            onClick={(e) => {
-                                                if (e.ctrlKey || e.metaKey || col.id === 'todo') { // allow selection mostly in todo
-                                                    handleSelectOne(candidate.candidate_id);
-                                                }
-                                            }}
-                                        >
-                                            <div className="flex items-start justify-between mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedIds.has(candidate.candidate_id)}
-                                                        onChange={() => handleSelectOne(candidate.candidate_id)}
-                                                        className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500/20 bg-slate-900"
-                                                        onClick={e => e.stopPropagation()}
-                                                    />
-                                                    <img
-                                                        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.name)}&background=0F172A&color=94A3B8`}
-                                                        alt={candidate.name}
-                                                        className="h-6 w-6 rounded-full object-cover ring-1 ring-slate-700"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <h4 className="font-semibold text-slate-200 text-sm mb-0.5 truncate" title={candidate.name}>{candidate.name}</h4>
-
-                                            <div className="text-[10px] text-slate-500 truncate mb-1 flex items-center gap-1.5">
-                                                {getPlatformIcon(candidate.source_platform)}
-                                                <span>{candidate.source_platform}</span>
-                                            </div>
-                                            <p className="text-xs text-slate-400 mb-2 truncate" title={candidate.email}>
-                                                {candidate.email}
-                                            </p>
-
-                                            <div className="flex items-center justify-between text-slate-500 pt-2 border-t border-slate-700/50">
-                                                <div className="flex gap-2">
-                                                    <MessageSquare className="h-3 w-3" />
-                                                    <Calendar className="h-3 w-3" />
-                                                </div>
-                                                <span className="text-[10px]">
-                                                    {new Date(candidate.created_at).toLocaleDateString()}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+            {/* Stats Summary Panel */}
+            {!loading && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                    {Object.entries(laneLabels).map(([lane, label]) => {
+                        const count = candidates.filter(c => c.kanbanLane === lane).length;
+                        return (
+                            <div key={lane} className="bg-slate-900 border border-slate-800 p-4 rounded-xl relative overflow-hidden group">
+                                <div className={`absolute top-0 left-0 w-1 h-full ${laneBg[lane].split(' ')[0]}`}></div>
+                                <div className="text-xs text-slate-400 mb-1 font-medium">{label}</div>
+                                <div className="text-2xl font-bold text-white tracking-tight">{count}</div>
                             </div>
-                        ))}
-                    </div>
+                        );
+                    })}
                 </div>
             )}
         </div>

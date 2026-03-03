@@ -83,6 +83,28 @@ const GmailSequences: React.FC = () => {
         setSteps(steps.filter((_, i) => i !== index));
     };
 
+    const handleDeleteSequence = async (id: string, name: string) => {
+        if (!confirm(`¿Estás seguro de que deseas eliminar la secuencia "${name}"? Esta acción no se puede deshacer.`)) return;
+        try {
+            await GmailService.deleteSequence(id);
+            setSequences(sequences.filter(s => s.id !== id));
+        } catch (error) {
+            console.error(error);
+            alert('Error al eliminar la secuencia');
+        }
+    };
+
+    const handleToggleStatus = async (seq: GmailSequence) => {
+        const newStatus = seq.status === 'active' ? 'paused' : 'active';
+        try {
+            await GmailService.updateSequenceStatus(seq.id, newStatus);
+            setSequences(sequences.map(s => s.id === seq.id ? { ...s, status: newStatus } : s));
+        } catch (error) {
+            console.error(error);
+            alert('Error al cambiar el estado de la secuencia');
+        }
+    };
+
     const filteredSequences = sequences.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
     if (view === 'editor' && activeSequence) {
@@ -276,10 +298,18 @@ const GmailSequences: React.FC = () => {
                                                 >
                                                     <Edit className="w-4 h-4" />
                                                 </button>
-                                                <button className="p-2 bg-slate-800 text-slate-300 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors border border-slate-700 hover:border-emerald-500/30">
-                                                    <Play className="w-4 h-4" />
+                                                <button
+                                                    onClick={() => handleToggleStatus(seq)}
+                                                    className={`p-2 bg-slate-800 text-slate-300 rounded-lg transition-colors border border-slate-700 ${seq.status === 'active' ? 'hover:text-yellow-400 hover:bg-yellow-500/10 hover:border-yellow-500/30' : 'hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/30'}`}
+                                                    title={seq.status === 'active' ? "Pausar Secuencia" : "Iniciar Secuencia"}
+                                                >
+                                                    {seq.status === 'active' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                                                 </button>
-                                                <button className="p-2 bg-slate-800 text-slate-300 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors border border-slate-700 hover:border-red-500/30">
+                                                <button
+                                                    onClick={() => handleDeleteSequence(seq.id, seq.name)}
+                                                    className="p-2 bg-slate-800 text-slate-300 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors border border-slate-700 hover:border-red-500/30"
+                                                    title="Eliminar Secuencia"
+                                                >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
