@@ -10,6 +10,77 @@ export const GitHubCandidatePersistence = {
      * Guardar o actualizar candidato individual en Supabase
      * Crea tabla github_search_results con campaña + candidato
      */
+    /**
+     * Build the record object from a GitHubMetrics candidate
+     */
+    _buildRecord(campaignId: string, userId: string, candidate: GitHubMetrics) {
+        return {
+            campaign_id: campaignId,
+            user_id: userId,
+            github_username: candidate.github_username,
+            github_url: candidate.github_url,
+            github_id: candidate.github_id,
+            github_metrics: candidate,
+            email: candidate.mentioned_email,
+            linkedin_url: candidate.linkedin_url,
+            score: candidate.github_score,
+            updated_at: new Date().toISOString(),
+            analysis_psychological: candidate.analysis_psychological || null,
+            analysis_business: candidate.analysis_business || null,
+            analysis_sales_angle: candidate.analysis_sales_angle || null,
+            analysis_bottleneck: candidate.analysis_bottleneck || null,
+            outreach_icebreaker: candidate.outreach_icebreaker || null,
+            outreach_pitch: candidate.outreach_pitch || null,
+            outreach_followup: candidate.outreach_followup || null
+        };
+    },
+
+    /**
+     * Fallback: guardar candidatos uno por uno cuando el bulk upsert falla (Error 409).
+     */
+    async _saveCandidatesFallback(
+        campaignId: string,
+        candidates: GitHubMetrics[],
+        userId: string
+    ): Promise<boolean> {
+        let allOk = true;
+        for (const candidate of candidates) {
+            try {
+                const record = this._buildRecord(campaignId, userId, candidate);
+
+                const { data: existing } = await supabase
+                    .from('github_search_results')
+                    .select('id')
+                    .eq('campaign_id', campaignId)
+                    .eq('github_username', candidate.github_username)
+                    .maybeSingle();
+
+                if (existing) {
+                    const { error: updateErr } = await supabase
+                        .from('github_search_results')
+                        .update(record)
+                        .eq('id', existing.id);
+                    if (updateErr) {
+                        console.warn(`[saveCandidatesFallback] update failed for ${candidate.github_username}:`, updateErr);
+                        allOk = false;
+                    }
+                } else {
+                    const { error: insertErr } = await supabase
+                        .from('github_search_results')
+                        .insert(record);
+                    if (insertErr) {
+                        console.warn(`[saveCandidatesFallback] insert failed for ${candidate.github_username}:`, insertErr);
+                        allOk = false;
+                    }
+                }
+            } catch (e) {
+                console.warn(`[saveCandidatesFallback] exception for ${candidate.github_username}:`, e);
+                allOk = false;
+            }
+        }
+        return allOk;
+    },
+
     async saveCandidates(
         campaignId: string,
         candidates: GitHubMetrics[],
@@ -18,45 +89,34 @@ export const GitHubCandidatePersistence = {
         try {
             if (candidates.length === 0) return true;
 
-            // Convertir GitHubMetrics a formato para guardar
-            const recordsToSave = candidates.map(candidate => ({
-                campaign_id: campaignId,
-                user_id: userId,
-                github_username: candidate.github_username,
-                github_url: candidate.github_url,
-                github_id: candidate.github_id,
-                github_metrics: candidate, // Guardar todo el objeto como JSONB
-                email: candidate.mentioned_email,
-                linkedin_url: candidate.linkedin_url,
-                score: candidate.github_score,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                analysis_psychological: candidate.analysis_psychological || null,
-                analysis_business: candidate.analysis_business || null,
-                analysis_sales_angle: candidate.analysis_sales_angle || null,
-                analysis_bottleneck: candidate.analysis_bottleneck || null,
-                outreach_icebreaker: candidate.outreach_icebreaker || null,
-                outreach_pitch: candidate.outreach_pitch || null,
-                outreach_followup: candidate.outreach_followup || null
-            }));
+            const recordsToSave = candidates.map(c => this._buildRecord(campaignId, userId, c));
 
-            // Upsert - si existe con mismo github_username, actualizar; si no, insertar
             const { error } = await supabase
                 .from('github_search_results')
                 .upsert(recordsToSave, {
-                    onConflict: 'campaign_id,github_username', // Avoid duplicates
-                    ignoreDuplicates: false // Update if exists
+                    onConflict: 'campaign_id,github_username',
+                    ignoreDuplicates: false
                 });
 
             if (error) {
+                if (error.code === '23505' || error.message?.includes('409') || error.code === 'PGRST116' || (error as any).status === 409) {
+                    console.warn('[saveCandidates] Upsert conflict (409) → falling back to individual saves...');
+                    return await this._saveCandidatesFallback(campaignId, candidates, userId);
+                }
                 console.error('Error saving candidates to Supabase:', error);
-                return false;
+                console.warn('[saveCandidates] Attempting individual fallback for any error...');
+                return await this._saveCandidatesFallback(campaignId, candidates, userId);
             }
 
             return true;
         } catch (err) {
             console.error('Error in saveCandidates:', err);
-            return false;
+            try {
+                return await this._saveCandidatesFallback(campaignId, candidates, userId);
+            } catch (fallbackErr) {
+                console.error('Fallback also failed:', fallbackErr);
+                return false;
+            }
         }
     },
 
