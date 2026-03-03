@@ -22,6 +22,11 @@ CREATE TABLE IF NOT EXISTS github_search_results (
     analysis_business TEXT,
     analysis_sales_angle TEXT,
     analysis_bottleneck TEXT,
+
+    -- AI Outreach Columns
+    outreach_icebreaker TEXT,
+    outreach_pitch TEXT,
+    outreach_followup TEXT,
     
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
@@ -48,6 +53,18 @@ BEGIN
     
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'github_search_results' AND column_name = 'analysis_bottleneck') THEN
         ALTER TABLE github_search_results ADD COLUMN analysis_bottleneck TEXT;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'github_search_results' AND column_name = 'outreach_icebreaker') THEN
+        ALTER TABLE github_search_results ADD COLUMN outreach_icebreaker TEXT;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'github_search_results' AND column_name = 'outreach_pitch') THEN
+        ALTER TABLE github_search_results ADD COLUMN outreach_pitch TEXT;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'github_search_results' AND column_name = 'outreach_followup') THEN
+        ALTER TABLE github_search_results ADD COLUMN outreach_followup TEXT;
     END IF;
 
     -- Ensure RLS is enabled or policies exist if needed

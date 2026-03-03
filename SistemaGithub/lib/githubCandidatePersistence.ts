@@ -30,7 +30,14 @@ export const GitHubCandidatePersistence = {
                 linkedin_url: candidate.linkedin_url,
                 score: candidate.github_score,
                 created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
+                updated_at: new Date().toISOString(),
+                analysis_psychological: candidate.analysis_psychological || null,
+                analysis_business: candidate.analysis_business || null,
+                analysis_sales_angle: candidate.analysis_sales_angle || null,
+                analysis_bottleneck: candidate.analysis_bottleneck || null,
+                outreach_icebreaker: candidate.outreach_icebreaker || null,
+                outreach_pitch: candidate.outreach_pitch || null,
+                outreach_followup: candidate.outreach_followup || null
             }));
 
             // Upsert - si existe con mismo github_username, actualizar; si no, insertar
