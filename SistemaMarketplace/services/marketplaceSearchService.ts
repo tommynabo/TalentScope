@@ -190,7 +190,10 @@ export class MarketplaceSearchService {
 
     // Just do ONE search with the provided keyword
     // The loop and query variations are handled by RaidService, not here
-    const dorkQuery = `site:upwork.com/freelancers OR site:upwork.com/o/profiles "${filter.keyword.trim()}"`;
+    // NOTE: Do NOT wrap keyword in quotes — RaidService query variations already include
+    // their own quoting (e.g. Flutter "Spanish" OR "Español"). Adding outer quotes
+    // would create broken nested quotes like "Flutter "Spanish" OR "Español""
+    const dorkQuery = `site:upwork.com/freelancers OR site:upwork.com/o/profiles ${filter.keyword.trim()}`;
     const results = await this.scrapeUpworkOnce(dorkQuery, filter.maxResults || 50, filter.languages?.[0]);
 
     // Simple dedup against existing URLs/emails
@@ -291,19 +294,24 @@ export class MarketplaceSearchService {
       .filter((c): c is ScrapedCandidate => c !== null)
       .filter(c => c.name.trim().length > 0)
       // FILTER BY LANGUAGE: Validate candidate speaks required language
+      // Lenient for marketplace: Google snippets have limited data (country='Unknown').
+      // If snippet text mentions Spanish/Español, accept the candidate.
       .filter(c => {
         if (language === 'es' || language === 'español') {
+          // Primary check: multi-signal (name, location, bio text)
           const speaksSpanish = LanguageDetectionService.speaksLanguage(
-            c.bio,
-            c.title,
-            c.country,
-            'es',
-            c.name
+            c.bio, c.title, c.country, 'es', c.name
           );
-          if (!speaksSpanish) {
-            console.log(`⏭️  Candidato filtrado (no hispanohablante): ${c.name}`);
+          if (speaksSpanish) return true;
+
+          // Fallback: Google snippet mentions Spanish/Español → accept
+          const textLower = `${c.bio || ''} ${c.title || ''}`.toLowerCase();
+          if (/\b(spanish|español|espanol|hispanohablante|habla español|castellano)\b/i.test(textLower)) {
+            return true;
           }
-          return speaksSpanish;
+
+          console.log(`⏭️  Candidato filtrado (no hispanohablante): ${c.name}`);
+          return false;
         }
         return true;
       });
@@ -448,8 +456,8 @@ export class MarketplaceSearchService {
 
   private async scrapeFiverrOnce(query: string, language: string = 'en'): Promise<ScrapedCandidate[]> {
     // Use Google Search Scraper for Fiverr (much faster than web-scraper)
-    const dorkQuery = `site:fiverr.com/gigs "${query.trim()}"`;
-
+    // NOTE: Do NOT wrap query in quotes — RaidService variations already include quoting
+    const dorkQuery = `site:fiverr.com/gigs ${query.trim()}`;
     console.log(`🔗 Fiverr Dork: ${dorkQuery}`);
     console.log(`🌐 Búsqueda en idioma: ${language}`);
 
@@ -513,20 +521,21 @@ export class MarketplaceSearchService {
       .map((item, idx) => this.parseFiverrItem(item, idx, language))
       .filter((c): c is ScrapedCandidate => c !== null)
       .filter(c => c.name.trim().length > 0)
-      // FILTER BY LANGUAGE: Validate candidate speaks required language
+      // FILTER BY LANGUAGE: Lenient for Google snippets
       .filter(c => {
         if (language === 'es' || language === 'español') {
           const speaksSpanish = LanguageDetectionService.speaksLanguage(
-            c.bio,
-            c.title,
-            c.country,
-            'es',
-            c.name
+            c.bio, c.title, c.country, 'es', c.name
           );
-          if (!speaksSpanish) {
-            console.log(`⏭️  Candidato filtrado (no hispanohablante): ${c.name}`);
+          if (speaksSpanish) return true;
+
+          const textLower = `${c.bio || ''} ${c.title || ''}`.toLowerCase();
+          if (/\b(spanish|español|espanol|hispanohablante|habla español|castellano)\b/i.test(textLower)) {
+            return true;
           }
-          return speaksSpanish;
+
+          console.log(`⏭️  Candidato filtrado (no hispanohablante): ${c.name}`);
+          return false;
         }
         return true;
       });
