@@ -86,6 +86,32 @@ export const GmailCandidatesService = {
             console.warn('[GmailCandidates] Could not query candidates:', e);
         }
 
+        // Query Marketplace candidates directly (Upwork/Fiverr)
+        try {
+            const { data: mpData } = await supabase
+                .from('marketplace_candidates')
+                .select('id, name, email, linkedin_url, platform, platform_data, added_at')
+                .not('email', 'is', null)
+                .neq('email', '')
+                .order('added_at', { ascending: false });
+
+            if (mpData) {
+                for (const row of mpData) {
+                    results.push({
+                        candidate_id: row.id,
+                        source_platform: row.platform || 'Upwork',
+                        name: row.name || 'Unknown',
+                        email: row.email,
+                        profile_url: row.linkedin_url || row.platform_data?.profile_url || null,
+                        current_role: 'Freelancer',
+                        created_at: row.added_at
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('[GmailCandidates] Could not query marketplace_candidates:', e);
+        }
+
         // Sort by created_at descending
         results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 

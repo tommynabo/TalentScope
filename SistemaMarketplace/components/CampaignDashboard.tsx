@@ -14,6 +14,8 @@ import { ScrapingFilter, FreelancePlatform } from '../types/marketplace';
 
 import Toast from '../../components/Toast';
 import UserSelectionModal from '../../components/UserSelectionModal';
+import { MarketplaceCandidatePersistence } from '../services/marketplaceCandidatePersistence';
+import { supabase } from '../../lib/supabase';
 import { OutreachUser, generateOutreachMessages, extractSpecialty } from '../../lib/messageGenerator';
 
 // ─── Sort types ─────────────────────────────────────────────────────────
@@ -451,6 +453,33 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       onUpdateCampaign({ ...campaign, candidates: updatedCandidates, stats });
 
       setLogs(prev => [...prev, `✅ ${dedupedNewCandidates.length} candidatos REALES añadidos al pipeline exitosamente`]);
+
+      // 💾 Persist to Supabase for Buzones > Candidatos
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const currentUserId = sessionData?.session?.user?.id;
+        if (currentUserId) {
+          setLogs(prev => [...prev, `💾 Guardando candidatos en Supabase...`]);
+          const saved = await MarketplaceCandidatePersistence.saveCandidates(
+            campaign.id,
+            campaign.name,
+            campaign.platform,
+            dedupedNewCandidates,
+            currentUserId
+          );
+          if (saved) {
+            setLogs(prev => [...prev, `✅ Candidatos guardados en Supabase → aparecerán en Buzones > Candidatos`]);
+          } else {
+            setLogs(prev => [...prev, `⚠️ No se pudieron guardar en Supabase (solo en localStorage)`]);
+          }
+        } else {
+          setLogs(prev => [...prev, `⚠️ Sin sesión de usuario → candidatos solo en localStorage`]);
+        }
+      } catch (persistError) {
+        console.warn('[MarketplacePersistence] Error:', persistError);
+        setLogs(prev => [...prev, `⚠️ Error al guardar en Supabase (candidatos disponibles en localStorage)`]);
+      }
+
       setLogs(prev => [...prev, `🚀 Búsqueda completada con éxito`]);
       setToast({ show: true, message: `✅ ${dedupedNewCandidates.length} nuevos candidatos enriquecidos añadidos` });
     } catch (error) {
