@@ -48,11 +48,20 @@ const GmailCandidates: React.FC = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [candData, seqData, leadsData] = await Promise.all([
+            // Fetch each independently so one failure doesn't block the others
+            const [candResult, seqResult, leadsResult] = await Promise.allSettled([
                 GmailCandidatesService.getGlobalEmailCandidates(),
                 GmailService.getSequences(),
                 GmailService.getAllOutreachLeads()
             ]);
+
+            const candData = candResult.status === 'fulfilled' ? candResult.value : [];
+            const seqData = seqResult.status === 'fulfilled' ? seqResult.value : [];
+            const leadsData = leadsResult.status === 'fulfilled' ? leadsResult.value : [];
+
+            if (candResult.status === 'rejected') console.warn('[GmailCandidates] Failed to load candidates:', candResult.reason);
+            if (seqResult.status === 'rejected') console.warn('[GmailCandidates] Failed to load sequences:', seqResult.reason);
+            if (leadsResult.status === 'rejected') console.warn('[GmailCandidates] Failed to load leads:', leadsResult.reason);
 
             // Map candidates to their lane based on outreach leads
             const candidatesWithState = candData.map(c => {

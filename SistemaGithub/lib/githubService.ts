@@ -466,8 +466,9 @@ export class GitHubService {
 
             const readmePromises = reposToCheck.map(async (repo) => {
                 try {
+                    const repoOwner = repo.owner?.login || username;
                     const readmeResponse = await this.octokit!.rest.repos.getReadme({
-                        owner: username,
+                        owner: repoOwner,
                         repo: repo.name
                     });
                     return Buffer.from(readmeResponse.data.content, 'base64').toString();
@@ -517,8 +518,9 @@ export class GitHubService {
             const commitResults = await Promise.all(
                 reposToCheck.map(async (repo) => {
                     try {
+                        const repoOwner = repo.owner?.login || username;
                         const commits = await this.octokit!.rest.repos.listCommits({
-                            owner: username,
+                            owner: repoOwner,
                             repo: repo.name,
                             per_page: 1,
                             author: username
