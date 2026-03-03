@@ -20,12 +20,13 @@ SELECT
     id as candidate_id,
     'GitHub' as source_platform,
     COALESCE(github_metrics->>'name', github_username) as name,
-    email,
+    COALESCE(email, github_metrics->>'mentioned_email') as email,
     github_url as profile_url,
     'Developer' as current_role,
     created_at
 FROM public.github_search_results
-WHERE email IS NOT NULL AND email != ''
+WHERE (email IS NOT NULL AND email != '') 
+   OR (github_metrics->>'mentioned_email' IS NOT NULL AND github_metrics->>'mentioned_email' != '')
 
 UNION ALL
 
