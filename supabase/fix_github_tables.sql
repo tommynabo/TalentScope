@@ -67,6 +67,10 @@ BEGIN
         ALTER TABLE github_search_results ADD COLUMN outreach_followup TEXT;
     END IF;
 
+    -- Force primary constraint cleanup to avoid Error 409 Conflict
+    ALTER TABLE github_search_results DROP CONSTRAINT IF EXISTS github_search_results_campaign_id_github_username_key;
+    ALTER TABLE github_search_results ADD CONSTRAINT github_search_results_campaign_id_github_username_key UNIQUE(campaign_id, github_username);
+
     -- Ensure RLS is enabled or policies exist if needed
     -- For now, we assume public/authenticated access is handled by application logic or existing policies
     -- But we explicitly allow authenticated users to view/insert
