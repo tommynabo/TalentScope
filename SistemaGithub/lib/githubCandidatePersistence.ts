@@ -121,11 +121,13 @@ export const GitHubCandidatePersistence = {
             let rpcSuccess = 0;
             let rpcFailed = 0;
             let rpcAvailable = true;
+            const rpcSuccessSet = new Set<string>();
 
             for (const candidate of uniqueCandidates) {
                 const ok = await this._saveViaRPC(campaignId, userId, candidate);
                 if (ok) {
                     rpcSuccess++;
+                    rpcSuccessSet.add(candidate.github_username);
                 } else {
                     rpcFailed++;
                     if (rpcSuccess === 0 && rpcFailed === 1) {
@@ -142,8 +144,12 @@ export const GitHubCandidatePersistence = {
             }
 
             // Strategy 2: Bulk upsert via PostgREST
-            if (!rpcAvailable) {
-                const recordsToSave = uniqueCandidates.map(c => this._buildRecord(campaignId, userId, c));
+            const candidatesForFallback = rpcAvailable
+                ? uniqueCandidates.filter(c => !rpcSuccessSet.has(c.github_username))
+                : uniqueCandidates;
+
+            if (!rpcAvailable || candidatesForFallback.length > 0) {
+                const recordsToSave = candidatesForFallback.map(c => this._buildRecord(campaignId, userId, c));
                 const { error } = await supabase
                     .from('github_search_results')
                     .upsert(recordsToSave, {
@@ -152,25 +158,24 @@ export const GitHubCandidatePersistence = {
                     });
 
                 if (!error) {
-                    console.log(`[saveCandidates] ✅ All candidates saved via bulk upsert`);
+                    console.log(`[saveCandidates] ✅ ${candidatesForFallback.length} candidates saved via bulk upsert`);
                     return true;
                 }
                 console.warn('[saveCandidates] Bulk upsert failed:', error.message);
             }
 
             // Strategy 3: Individual fallback
-            console.warn('[saveCandidates] Using individual fallback...');
-            return await this._saveCandidatesFallback(campaignId, uniqueCandidates, userId);
+            if (candidatesForFallback.length > 0) {
+                console.warn(`[saveCandidates] Using individual fallback for ${candidatesForFallback.length} candidates...`);
+                return await this._saveCandidatesFallback(campaignId, candidatesForFallback, userId);
+            }
+
+            return rpcSuccess > 0;
         } catch (err) {
             console.error('Error in saveCandidates:', err);
             try {
                 return await this._saveCandidatesFallback(campaignId, candidates, userId);
             } catch (fallbackErr) {
-                console.error('Fallback also failed:', fallbackErr);
-                return false;
-            }
-        }
-    },            } catch (fallbackErr) {
                 console.error('Fallback also failed:', fallbackErr);
                 return false;
             }
