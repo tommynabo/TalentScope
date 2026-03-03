@@ -216,7 +216,8 @@ export class GitHubContactService {
         if (topRepos && topRepos.length > 0) {
             // ⚡ Reduced from 10 to 3 repos for email search
             for (const repo of topRepos.slice(0, 3)) {
-                email = await this.extractEmailFromCommits(username, repo.name);
+                const repoOwner = repo.owner?.login || username;
+                email = await this.extractEmailFromCommits(repoOwner, repo.name, username);
                 if (email) {
                     this.emailCache.set(username, email);
                     return email;
@@ -274,8 +275,9 @@ export class GitHubContactService {
      * Extrae email de commits con validación profunda
      */
     private async extractEmailFromCommits(
-        username: string,
-        repoName: string
+        repoOwner: string,
+        repoName: string,
+        authorUsername?: string
     ): Promise<string | null> {
         try {
             if (!this.octokit) {
@@ -284,10 +286,10 @@ export class GitHubContactService {
 
             // Obtener múltiples commits para aumentar chances
             const commits = await this.octokit.rest.repos.listCommits({
-                owner: username,
+                owner: repoOwner,
                 repo: repoName,
                 per_page: 20,
-                author: username
+                author: authorUsername || repoOwner
             });
 
             for (const commit of commits.data) {

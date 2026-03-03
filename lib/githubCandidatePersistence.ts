@@ -18,33 +18,51 @@ export const GitHubCandidatePersistence = {
             campaign_id: campaignId,
             user_id: userId,
             github_username: candidate.github_username,
-            github_url: candidate.github_url,
-            github_id: candidate.github_id,
+            github_url: candidate.github_url || null,
+            github_id: candidate.github_id || null,
             github_metrics: candidate, // Guardar todo el objeto como JSONB
-            email: candidate.mentioned_email,
-            linkedin_url: candidate.linkedin_url,
-            score: candidate.github_score,
+            email: candidate.mentioned_email || null,
+            linkedin_url: candidate.linkedin_url || null,
+            score: candidate.github_score || null,
             updated_at: new Date().toISOString(),
 
             // Add AI fields if they exist in metrics
-            analysis_psychological: candidate.analysis_psychological,
-            analysis_business: candidate.analysis_business,
-            analysis_sales_angle: candidate.analysis_sales_angle,
-            analysis_bottleneck: candidate.analysis_bottleneck,
+            analysis_psychological: candidate.analysis_psychological || null,
+            analysis_business: candidate.analysis_business || null,
+            analysis_sales_angle: candidate.analysis_sales_angle || null,
+            analysis_bottleneck: candidate.analysis_bottleneck || null,
 
             // Add outreach messages if they exist
-            outreach_icebreaker: candidate.outreach_icebreaker,
-            outreach_pitch: candidate.outreach_pitch,
-            outreach_followup: candidate.outreach_followup
+            outreach_icebreaker: candidate.outreach_icebreaker || null,
+            outreach_pitch: candidate.outreach_pitch || null,
+            outreach_followup: candidate.outreach_followup || null
         };
     },
 
     /**
-     * Fallback: guardar candidatos uno por uno cuando el bulk upsert falla (Error 409).
-     * Para cada candidato:
-     *   1) Intenta SELECT por campaign_id + github_username
-     *   2) Si existe → UPDATE
-     *   3) Si no existe → INSERT
+     * Save a single candidate via the RPC function (bypasses PostgREST schema cache).
+     * This is the most reliable method — the upsert logic runs inside PostgreSQL.
+     */
+    async _saveViaRPC(campaignId: string, userId: string, candidate: GitHubMetrics): Promise<boolean> {
+        try {
+            const record = this._buildRecord(campaignId, userId, candidate);
+            const { error } = await supabase.rpc('upsert_github_candidate', {
+                candidate_data: record
+            });
+            if (error) {
+                console.warn(`[saveViaRPC] Failed for ${candidate.github_username}:`, error.message);
+                return false;
+            }
+            return true;
+        } catch (e) {
+            console.warn(`[saveViaRPC] Exception for ${candidate.github_username}:`, e);
+            return false;
+        }
+    },
+
+    /**
+     * Fallback: guardar candidatos uno por uno con SELECT + INSERT/UPDATE directo.
+     * Se usa SOLO si la función RPC no existe en Supabase.
      */
     async _saveCandidatesFallback(
         campaignId: string,
@@ -72,7 +90,7 @@ export const GitHubCandidatePersistence = {
                         .eq('id', existing.id);
 
                     if (updateErr) {
-                        console.warn(`[saveCandidatesFallback] update failed for ${candidate.github_username}:`, updateErr);
+                        console.warn(`[saveCandidatesFallback] update failed for ${candidate.github_username}:`, updateErr.message);
                         allOk = false;
                     }
                 } else {
@@ -82,7 +100,7 @@ export const GitHubCandidatePersistence = {
                         .insert(record);
 
                     if (insertErr) {
-                        console.warn(`[saveCandidatesFallback] insert failed for ${candidate.github_username}:`, insertErr);
+                        console.warn(`[saveCandidatesFallback] insert failed for ${candidate.github_username}:`, insertErr.message);
                         allOk = false;
                     }
                 }
@@ -102,32 +120,65 @@ export const GitHubCandidatePersistence = {
         try {
             if (candidates.length === 0) return true;
 
-            const recordsToSave = candidates.map(c => this._buildRecord(campaignId, userId, c));
+            // Deduplicate candidates by github_username (keep last occurrence)
+            const seen = new Map<string, GitHubMetrics>();
+            for (const c of candidates) {
+                seen.set(c.github_username, c);
+            }
+            const uniqueCandidates = Array.from(seen.values());
 
-            // Attempt bulk upsert first (fastest path)
-            const { error } = await supabase
-                .from('github_search_results')
-                .upsert(recordsToSave, {
-                    onConflict: 'campaign_id,github_username',
-                    ignoreDuplicates: false
-                });
+            // Strategy 1: Try RPC function (most reliable — bypasses PostgREST cache)
+            console.log(`[saveCandidates] Saving ${uniqueCandidates.length} candidates via RPC...`);
+            let rpcSuccess = 0;
+            let rpcFailed = 0;
+            let rpcAvailable = true;
 
-            if (error) {
-                // 409 = unique-constraint mismatch in PostgREST → fall back to individual inserts/updates
-                if (error.code === '23505' || error.message?.includes('409') || error.code === 'PGRST116' || (error as any).status === 409) {
-                    console.warn('[saveCandidates] Upsert conflict (409) → falling back to individual saves...');
-                    return await this._saveCandidatesFallback(campaignId, candidates, userId);
+            for (const candidate of uniqueCandidates) {
+                const ok = await this._saveViaRPC(campaignId, userId, candidate);
+                if (ok) {
+                    rpcSuccess++;
+                } else {
+                    rpcFailed++;
+                    // If first RPC call fails, the function probably doesn't exist — switch to fallback
+                    if (rpcSuccess === 0 && rpcFailed === 1) {
+                        console.warn('[saveCandidates] RPC function not available, switching to direct insert...');
+                        rpcAvailable = false;
+                        break;
+                    }
                 }
-                console.error('Error saving candidates to Supabase:', error);
-                // Last resort: try individual saves anyway
-                console.warn('[saveCandidates] Attempting individual fallback for any error...');
-                return await this._saveCandidatesFallback(campaignId, candidates, userId);
             }
 
-            return true;
+            if (rpcAvailable && rpcFailed === 0) {
+                console.log(`[saveCandidates] ✅ All ${rpcSuccess} candidates saved via RPC`);
+                return true;
+            }
+
+            // Strategy 2: Try bulk upsert via PostgREST
+            if (!rpcAvailable) {
+                const recordsToSave = uniqueCandidates.map(c => this._buildRecord(campaignId, userId, c));
+                const { error } = await supabase
+                    .from('github_search_results')
+                    .upsert(recordsToSave, {
+                        onConflict: 'campaign_id,github_username',
+                        ignoreDuplicates: false
+                    });
+
+                if (!error) {
+                    console.log(`[saveCandidates] ✅ All candidates saved via bulk upsert`);
+                    return true;
+                }
+
+                console.warn('[saveCandidates] Bulk upsert failed:', error.message);
+            }
+
+            // Strategy 3: Individual SELECT + INSERT/UPDATE fallback
+            console.warn('[saveCandidates] Using individual fallback...');
+            const remaining = rpcAvailable
+                ? uniqueCandidates.filter(c => !seen.has(c.github_username)) // should be empty if RPC worked partially
+                : uniqueCandidates;
+            return await this._saveCandidatesFallback(campaignId, remaining, userId);
         } catch (err) {
             console.error('Error in saveCandidates:', err);
-            // Even on exception, try fallback
             try {
                 return await this._saveCandidatesFallback(campaignId, candidates, userId);
             } catch (fallbackErr) {
