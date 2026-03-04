@@ -1,19 +1,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase } from './_lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 
-/**
- * Diagnostic endpoint to check system status
- * Returns information about pending leads, accounts, sequences
- * Useful for debugging without triggering actual email sends
- */
-export const config = {
-    maxDuration: 30,
-};
+export const config = { maxDuration: 30 };
+
+function getSupabase() {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+  if (!url || !key) throw new Error(`Missing Supabase env vars. URL=${!!url}, KEY=${!!key}`);
+  return createClient(url, key);
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Content-Type', 'application/json');
 
     try {
+        const supabase = getSupabase();
         console.log('[Diagnose] Running system diagnostics...');
 
         const diagnostics: Record<string, any> = {
