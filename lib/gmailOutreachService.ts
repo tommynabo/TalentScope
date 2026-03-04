@@ -19,67 +19,80 @@ export const GmailOutreachService = {
     const result: OutreachResult = { success: 0, failed: 0, errors: [] };
 
     try {
-      // 1. Get all pending and running leads that are due to be sent
+      console.log('[GmailOutreach] Starting to process pending leads...');
+
+      // 1. Get all pending and running leads
       const { data: leads, error: leadsError } = await supabase
         .from('gmail_outreach_leads')
-        .select(`
-          id,
-          sequence_id,
-          campaign_id,
-          candidate_id,
-          candidate_name,
-          candidate_email,
-          status,
-          current_step_number,
-          scheduled_for,
-          gmail_sequences:sequence_id (
-            id,
-            user_id,
-            name,
-            status,
-            gmail_sequence_steps (
-              id,
-              sequence_id,
-              step_number,
-              subject_template,
-              body_template,
-              delay_hours
-            )
-          )
-        `)
+        .select('*')
         .in('status', ['pending', 'running']);
 
-      if (leadsError) throw leadsError;
+      if (leadsError) {
+        throw new Error(`Failed to fetch leads: ${leadsError.message}`);
+      }
+
       if (!leads || leads.length === 0) {
-        console.log('[GmailOutreach] No pending leads');
+        console.log('[GmailOutreach] No pending leads found');
         return result;
       }
 
-      console.log(`[GmailOutreach] Processing ${leads.length} leads...`);
+      console.log(`[GmailOutreach] Found ${leads.length} leads to process`);
 
       // 2. For each lead, check if it's time to send
       for (const lead of leads) {
+        if (!lead || !lead.id) {
+          console.warn('[GmailOutreach] Skipping invalid lead');
+          continue;
+        }
+
         try {
-          const sequence = (lead as any).gmail_sequences;
-          if (!sequence) {
-            throw new Error('Sequence not found');
-          }
-
-          const steps = sequence.gmail_sequence_steps || [];
-          const currentStep = steps.find((s: any) => s.step_number === lead.current_step_number);
-
-          if (!currentStep) {
-            // No more steps - mark as completed
-            await this.updateLeadStatus(lead.id, 'completed');
-            result.success++;
-            continue;
-          }
+          console.log(`[GmailOutreach] Processing lead ${lead.id}`);
 
           // Check if it's time to send this step
           const scheduledTime = new Date(lead.scheduled_for).getTime();
           const now = Date.now();
           if (scheduledTime > now) {
             // Not yet time
+            console.log(`[GmailOutreach] Lead ${lead.id} not yet scheduled (${new Date(lead.scheduled_for).toISOString()})`);
+            continue;
+          }
+
+          // Get the sequence and steps
+          const { data: sequence, error: seqError } = await supabase
+            .from('gmail_sequences')
+            .select('id, user_id, name, status')
+            .eq('id', lead.sequence_id)
+            .single();
+
+          if (seqError) {
+            throw new Error(`Sequence error: ${seqError.message}`);
+          }
+
+          if (!sequence) {
+            throw new Error(`Sequence not found: ${lead.sequence_id}`);
+          }
+
+          const { data: steps, error: stepsError } = await supabase
+            .from('gmail_sequence_steps')
+            .select('*')
+            .eq('sequence_id', lead.sequence_id)
+            .order('step_number', { ascending: true });
+
+          if (stepsError) {
+            throw new Error(`Steps error: ${stepsError.message}`);
+          }
+
+          if (!steps || steps.length === 0) {
+            throw new Error(`No steps found for sequence ${lead.sequence_id}`);
+          }
+
+          const currentStep = steps.find(s => s.step_number === lead.current_step_number);
+
+          if (!currentStep) {
+            // No more steps - mark as completed
+            await this.updateLeadStatus(lead.id, 'completed');
+            result.success++;
+            console.log(`[GmailOutreach] Lead ${lead.id} completed (no more steps)`);
             continue;
           }
 
@@ -91,8 +104,16 @@ export const GmailOutreachService = {
             .eq('status', 'active')
             .single();
 
-          if (accountError || !account) {
-            throw new Error('No active Gmail account found');
+          if (accountError) {
+            throw new Error(`Account fetch error: ${accountError.message}`);
+          }
+
+          if (!account) {
+            throw new Error(`No active Gmail account found for user ${sequence.user_id}. Please reconnect your Gmail.`);
+          }
+
+          if (!account.access_token) {
+            throw new Error(`Gmail account has no access token. Account status: ${account.user_id}`);
           }
 
           // Replace variables in templates
@@ -108,21 +129,28 @@ export const GmailOutreachService = {
             specialty: this.extractSpecialty(lead.candidate_name),
           });
 
-          // Send the email
-          const messageSent = await this.sendEmailViaGmail(
-            account.access_token,
-            account.email,
-            lead.candidate_email,
-            subject,
-            body
-          );
+          console.log(`[GmailOutreach] Sending email to ${lead.candidate_email}, subject: ${subject}`);
 
-          if (!messageSent) {
-            throw new Error('Failed to send email via Gmail API');
+          // Send the email
+          let messageSent;
+          try {
+            messageSent = await this.sendEmailViaGmail(
+              account.access_token,
+              account.email,
+              lead.candidate_email,
+              subject,
+              body
+            );
+          } catch (gmailError: any) {
+            throw new Error(`Failed to send email via Gmail: ${gmailError.message}`);
+          }
+
+          if (!messageSent || !messageSent.id) {
+            throw new Error('Gmail API did not return message ID after sending');
           }
 
           // Log the sent email
-          await supabase.from('gmail_logs').insert({
+          const { error: logError } = await supabase.from('gmail_logs').insert({
             user_id: sequence.user_id,
             action_type: 'sent',
             message_id: messageSent.id,
@@ -136,6 +164,11 @@ export const GmailOutreachService = {
             },
           });
 
+          if (logError) {
+            console.error(`[GmailOutreach] Error logging email: ${logError.message}`);
+            // Don't fail the entire operation for a logging error
+          }
+
           // Calculate next scheduled time
           const nextStepNumber = lead.current_step_number + 1;
           const nextStep = steps.find((s: any) => s.step_number === nextStepNumber);
@@ -143,7 +176,7 @@ export const GmailOutreachService = {
           if (nextStep) {
             // Schedule next step
             const nextScheduledTime = new Date(now + nextStep.delay_hours * 3600 * 1000).toISOString();
-            await supabase
+            const { error: updateError } = await supabase
               .from('gmail_outreach_leads')
               .update({
                 status: 'running',
@@ -152,6 +185,10 @@ export const GmailOutreachService = {
                 last_error: null,
               })
               .eq('id', lead.id);
+
+            if (updateError) {
+              throw new Error(`Failed to update lead: ${updateError.message}`);
+            }
           } else {
             // All steps completed
             await this.updateLeadStatus(lead.id, 'completed');
@@ -165,7 +202,7 @@ export const GmailOutreachService = {
           result.errors.push({ leadId: lead.id, error: errorMsg });
 
           // Update lead with error status
-          await supabase
+          const { error: updateError } = await supabase
             .from('gmail_outreach_leads')
             .update({
               status: 'failed',
@@ -173,14 +210,26 @@ export const GmailOutreachService = {
             })
             .eq('id', lead.id);
 
+          if (updateError) {
+            console.error(`[GmailOutreach] Could not update lead status: ${updateError.message}`);
+          }
+
           console.error(`[GmailOutreach] ✗ Error for lead ${lead.id}:`, errorMsg);
         }
       }
-    } catch (error) {
-      console.error('[GmailOutreach] Fatal error:', error);
+    } catch (error: any) {
+      const errorMsg = error?.message || String(error);
+      console.error('[GmailOutreach] Fatal error in processPendingLeads:', errorMsg);
+      console.error('[GmailOutreach] Stack:', error?.stack);
+      
+      // Add critical error to results so frontend knows something failed
+      result.errors.push({ 
+        leadId: 'SYSTEM', 
+        error: `System error: ${errorMsg}` 
+      });
     }
 
-    console.log(`[GmailOutreach] Results - Success: ${result.success}, Failed: ${result.failed}`);
+    console.log(`[GmailOutreach] Results - Success: ${result.success}, Failed: ${result.failed}, Errors: ${result.errors.length}`);
     return result;
   },
 
@@ -195,6 +244,14 @@ export const GmailOutreachService = {
     body: string
   ): Promise<{ id: string } | null> {
     try {
+      if (!accessToken) {
+        throw new Error('No access token provided to sendEmailViaGmail');
+      }
+
+      if (!fromEmail || !toEmail) {
+        throw new Error(`Invalid email addresses: from=${fromEmail}, to=${toEmail}`);
+      }
+
       // Create the email message in RFC 2822 format
       const email = [
         `From: ${fromEmail}`,
@@ -208,6 +265,7 @@ export const GmailOutreachService = {
 
       // Encode to base64
       const encodedMessage = Buffer.from(email).toString('base64');
+      console.log(`[GmailAPI] Preparing to send email to ${toEmail} from ${fromEmail}`);
 
       // Call Gmail API using fetch
       const response = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/send', {
@@ -223,14 +281,17 @@ export const GmailOutreachService = {
 
       if (!response.ok) {
         const errorData = await response.text();
-        throw new Error(`Gmail API error: ${response.status} - ${errorData}`);
+        console.error(`[GmailAPI] Failed response: ${response.status}`, errorData);
+        throw new Error(`Gmail API error: ${response.status} - ${errorData.substring(0, 200)}`);
       }
 
       const data = await response.json();
+      console.log(`[GmailAPI] Email sent successfully, message ID: ${data.id}`);
       return data;
     } catch (error) {
-      console.error('[GmailAPI] Error:', error);
-      return null;
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error('[GmailAPI] Error sending email:', errorMsg);
+      throw error; // Re-throw instead of returning null, so caller knows there was an error
     }
   },
 
@@ -240,12 +301,12 @@ export const GmailOutreachService = {
   async updateLeadStatus(leadId: string, status: string): Promise<void> {
     const { error } = await supabase
       .from('gmail_outreach_leads')
-      .update({ status })
+      .update({ status, last_error: null })
       .eq('id', leadId);
 
     if (error) {
       console.error('[GmailOutreach] Error updating status:', error);
-      throw error;
+      throw new Error(`Failed to update lead status: ${error.message}`);
     }
   },
 

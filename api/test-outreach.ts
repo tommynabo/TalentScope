@@ -16,9 +16,15 @@ export const config = {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    // Set proper headers for JSON response
+    res.setHeader('Content-Type', 'application/json');
+
     // Only allow POST
     if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
+        return res.status(405).json({ 
+            error: 'Method not allowed',
+            success: false 
+        });
     }
 
     try {
@@ -29,7 +35,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
             return res.status(401).json({ 
                 error: 'Unauthorized',
-                message: 'Missing or invalid authorization header'
+                message: 'Missing or invalid authorization header',
+                success: false
             });
         }
 
@@ -47,13 +54,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             timestamp: new Date().toISOString(),
         });
     } catch (error: any) {
-        console.error('[TestOutreach] Error:', error);
-        const errorMessage = error?.message || error?.toString() || 'Unknown error';
+        console.error('[TestOutreach] FATAL ERROR:', error);
+        const errorMessage = error?.message || error?.toString() || 'Unknown error occurred';
+        const errorDetails = error?.stack?.split('\n').slice(0, 5).join('\n') || '';
+        
         return res.status(500).json({
             success: false,
             message: 'Test outreach trigger failed',
             error: errorMessage,
-            details: error?.stack?.split('\n').slice(0, 3),
+            details: errorDetails,
+            timestamp: new Date().toISOString(),
         });
     }
 }

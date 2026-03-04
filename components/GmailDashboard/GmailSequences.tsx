@@ -249,29 +249,47 @@ const GmailSequences: React.FC = () => {
                 headers['Authorization'] = `Bearer ${cronSecret}`;
             }
 
+            console.log('[Test] Starting outreach test...');
             const response = await fetch('/api/test-outreach', {
                 method: 'POST',
                 headers,
             });
 
-            const data = await response.json();
+            console.log('[Test] Response status:', response.status);
+
+            // Try to parse JSON
+            let data;
+            try {
+                data = await response.json();
+            } catch (parseError) {
+                // If JSON parsing fails, the server likely returned HTML error
+                const text = await response.text();
+                console.error('[Test] Non-JSON response:', text.substring(0, 200));
+                throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}...`);
+            }
 
             if (!response.ok) {
-                throw new Error(data?.message || data?.error || 'Error en el test');
+                const errorMsg = data?.error || data?.message || 'Unknown error';
+                const details = data?.details || '';
+                console.error('[Test] Error response:', data);
+                throw new Error(`${errorMsg}${details ? '\n' + details : ''}`);
             }
 
             const result = data?.data || {};
+            const errorsList = result.errors?.map((e: any) => `${e.leadId}: ${e.error}`).join('\n') || 'Sin errores especiales';
+            
             alert(
                 `✅ Test completado\n\n` +
                 `Enviados: ${result.success}\n` +
                 `Fallos: ${result.failed}\n\n` +
-                (result.errors?.length > 0 
-                    ? `Errores:\n${result.errors.map((e: any) => `- ${e.error}`).join('\n')}` 
-                    : 'Sin errores')
+                `Detalles:\n${errorsList}`
             );
+            
+            console.log('[Test] Success:', result);
         } catch (error: any) {
-            console.error(error);
-            alert(`❌ Error en test: ${error?.message}`);
+            console.error('[Test] Error:', error);
+            const errorMsg = error?.message || String(error);
+            alert(`❌ Error en test: ${errorMsg}`);
         } finally {
             setTesting(false);
         }
