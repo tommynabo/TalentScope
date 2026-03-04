@@ -314,30 +314,52 @@ const GmailSequences: React.FC = () => {
 
             const summary = diagnostics.summary || {};
             const checks = diagnostics.checks || {};
+            const leadsCheck = checks.leads || {};
+            const byStatus = leadsCheck.byStatus || {};
 
-            let message = `📊 SYSTEM DIAGNOSTICS\n${diagnostics.timestamp}\n\n`;
-            message += `Status: ${summary.healthy ? '✅ HEALTHY' : '⚠️ ISSUES DETECTED'}\n`;
-            message += `Issues: ${summary.issueCount}\n\n`;
+            let message = `📊 DIAGNÓSTICO DEL SISTEMA\n\n`;
+            message += `Supabase: ${checks.supabaseConnection?.status === 'ok' ? '✅ Conectado' : '❌ Error'}\n`;
+            message += `Gmail Accounts: ${checks.gmailAccounts?.count || 0}\n`;
+            message += `Secuencias activas: ${checks.sequences?.count || 0}\n\n`;
 
-            message += `📋 Checks:\n`;
-            message += `• Pending Leads: ${checks.pendingLeads?.count || 0}\n`;
-            message += `• Gmail Accounts: ${checks.gmailAccounts?.count || 0}\n`;
-            message += `• Active Sequences: ${checks.sequences?.count || 0}\n`;
-            message += `• Supabase: ${checks.supabaseConnection?.status === 'ok' ? '✅ Connected' : '❌ Error'}\n\n`;
+            message += `📧 Leads de outreach:\n`;
+            message += `  Total: ${leadsCheck.total || 0}\n`;
+            Object.entries(byStatus).forEach(([status, count]) => {
+                message += `  • ${status}: ${count}\n`;
+            });
 
-            if (summary.issueCount > 0) {
-                message += `⚠️ Issues:\n`;
-                summary.nextSteps?.forEach((step: string) => {
-                    message += `${step}\n`;
-                });
-            } else {
-                message += `✅ Everything looks good!\n`;
+            if (byStatus.failed) {
+                message += `\n⚠️ Hay ${byStatus.failed} leads fallidos.\n`;
+                message += `¿Quieres resetearlos para reenviar?\n`;
+                message += `(Click "Resetear Leads" para reintentar)\n`;
             }
 
-            alert(message);
+            if (diagnostics.issues?.length > 0) {
+                message += `\n⚠️ Problemas:\n`;
+                diagnostics.issues.forEach((issue: string) => {
+                    message += `• ${issue}\n`;
+                });
+            }
+
+            const shouldReset = byStatus.failed > 0 && confirm(message + '\n\n¿Resetear leads fallidos a "pending" para reintentar?');
+            
+            if (shouldReset) {
+                const resetResp = await fetch('/api/diagnose?action=reset', { method: 'POST' });
+                const resetText = await resetResp.text();
+                let resetData;
+                try { resetData = JSON.parse(resetText); } catch { throw new Error('Reset failed: ' + resetText.substring(0, 100)); }
+                
+                if (resetData.success) {
+                    alert(`✅ ${resetData.message}\n\nAhora puedes hacer "Probar Envío" de nuevo.`);
+                } else {
+                    alert(`❌ Error reseteando: ${resetData.error}`);
+                }
+            } else if (!byStatus.failed) {
+                alert(message);
+            }
         } catch (error: any) {
             console.error('[Diagnose] Error:', error);
-            alert(`❌ Diagnostic failed: ${error?.message}`);
+            alert(`❌ Diagnóstico falló: ${error?.message}`);
         }
     };
 

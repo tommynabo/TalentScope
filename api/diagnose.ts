@@ -15,6 +15,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
         const supabase = getSupabase();
+
+        // Handle reset action: POST /api/diagnose?action=reset
+        const action = req.query?.action;
+        if (req.method === 'POST' && action === 'reset') {
+            console.log('[Diagnose] Resetting failed leads to pending...');
+            const { data, error } = await supabase
+                .from('gmail_outreach_leads')
+                .update({ status: 'pending', last_error: null, current_step_number: 1, scheduled_for: new Date().toISOString() })
+                .eq('status', 'failed')
+                .select('id, candidate_email');
+
+            if (error) {
+                return res.status(500).json({ success: false, error: error.message });
+            }
+            return res.status(200).json({
+                success: true,
+                message: `Reset ${data?.length || 0} failed leads to pending`,
+                leads: data,
+            });
+        }
+
         console.log('[Diagnose] Running system diagnostics...');
 
         const diagnostics: Record<string, any> = {
@@ -23,25 +44,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             issues: [],
         };
 
-        // 1. Check for pending leads
+        // 1. Check for ALL leads (including failed)
         try {
             const { data: leads, error: leadsError } = await supabase
                 .from('gmail_outreach_leads')
-                .select('id, sequence_id, candidate_email, status, scheduled_for, current_step_number')
-                .in('status', ['pending', 'running']);
+                .select('id, sequence_id, candidate_email, candidate_name, status, scheduled_for, current_step_number, last_error');
 
             if (leadsError) {
-                diagnostics.checks.pendingLeads = { error: leadsError.message };
+                diagnostics.checks.leads = { error: leadsError.message };
                 diagnostics.issues.push(`Could not fetch leads: ${leadsError.message}`);
             } else {
-                diagnostics.checks.pendingLeads = {
-                    count: leads?.length || 0,
-                    data: leads?.slice(0, 5) || [],
-                    notes: `Showing first 5 of ${leads?.length || 0} leads`,
+                const allLeads = leads || [];
+                const byStatus: Record<string, number> = {};
+                allLeads.forEach(l => { byStatus[l.status] = (byStatus[l.status] || 0) + 1; });
+
+                diagnostics.checks.leads = {
+                    total: allLeads.length,
+                    byStatus,
+                    data: allLeads.slice(0, 10),
                 };
+
+                if (byStatus['failed'] > 0) {
+                    diagnostics.issues.push(`${byStatus['failed']} lead(s) in 'failed' status. Use POST /api/diagnose?action=reset to retry them.`);
+                }
+                if (!byStatus['pending'] && !byStatus['running'] && allLeads.length > 0) {
+                    diagnostics.issues.push('No pending/running leads. All may be failed or completed.');
+                }
+                if (allLeads.length === 0) {
+                    diagnostics.issues.push('No leads found at all. Add candidates to a sequence first.');
+                }
             }
         } catch (error: any) {
-            diagnostics.checks.pendingLeads = { error: error.message };
+            diagnostics.checks.leads = { error: error.message };
             diagnostics.issues.push(`Exception fetching leads: ${error.message}`);
         }
 
