@@ -25,6 +25,53 @@ function getSupabase() {
   return createClient(url, key);
 }
 
+// ── Refresh Gmail OAuth token ──
+async function refreshGmailToken(
+  supabase: any,
+  accountId: string,
+  refreshToken: string
+): Promise<string> {
+  const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.VITE_GOOGLE_CLIENT_SECRET || '';
+
+  if (!clientId || !clientSecret) {
+    throw new Error('Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET in environment variables. Add them to Vercel.');
+  }
+  if (!refreshToken) {
+    throw new Error('No refresh_token stored for this Gmail account. Reconnect Gmail via the UI.');
+  }
+
+  console.log('[GmailToken] Refreshing access token...');
+
+  const resp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }).toString(),
+  });
+
+  const tokenData = await resp.json();
+
+  if (!resp.ok || !tokenData.access_token) {
+    throw new Error(`Token refresh failed (${resp.status}): ${JSON.stringify(tokenData)}`);
+  }
+
+  const newToken = tokenData.access_token;
+  console.log('[GmailToken] ✓ Got new access token, saving to DB...');
+
+  // Persist the new token so subsequent sends work
+  await supabase
+    .from('gmail_accounts')
+    .update({ access_token: newToken, updated_at: new Date().toISOString() })
+    .eq('id', accountId);
+
+  return newToken;
+}
+
 // ── Template variable replacement ──
 function replaceVariables(template: string, variables: Record<string, string>): string {
   let result = template;
@@ -211,7 +258,20 @@ async function processPendingLeads(): Promise<OutreachResult> {
       if (accErr) throw new Error(`Gmail account error: ${accErr.message}`);
       if (!accounts || accounts.length === 0) throw new Error(`No active Gmail account for user ${sequence.user_id}`);
       const account = accounts[0];
-      if (!account.access_token) throw new Error('Gmail account has no access_token. Reconnect Gmail.');
+      if (!account.access_token && !account.refresh_token) throw new Error('Gmail account has no tokens. Reconnect Gmail from the UI.');
+
+      // Always refresh the token before sending — access_tokens expire in ~1 hour
+      let accessToken = account.access_token;
+      if (account.refresh_token) {
+        try {
+          accessToken = await refreshGmailToken(supabase, account.id, account.refresh_token);
+        } catch (refreshErr: any) {
+          console.warn(`[Outreach] Token refresh failed, trying stored token: ${refreshErr.message}`);
+          // If refresh fails due to missing env vars, warn and fall back
+        }
+      }
+
+      if (!accessToken) throw new Error('No valid access token. Reconnect Gmail from the UI.');
 
       const vars = {
         name: lead.candidate_name || '',
@@ -223,7 +283,7 @@ async function processPendingLeads(): Promise<OutreachResult> {
 
       console.log(`[Outreach] Sending to ${lead.candidate_email}, step ${currentStep.step_number}`);
 
-      const sent = await sendEmailViaGmail(account.access_token, account.email, lead.candidate_email, subject, body);
+      const sent = await sendEmailViaGmail(accessToken, account.email, lead.candidate_email, subject, body);
 
       await supabase.from('gmail_logs').insert({
         user_id: sequence.user_id,

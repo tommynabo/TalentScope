@@ -12,6 +12,24 @@ function getSupabase() {
   return createClient(url, key);
 }
 
+async function refreshGmailToken(supabase: any, accountId: string, refreshToken: string): Promise<string> {
+  const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.VITE_GOOGLE_CLIENT_SECRET || '';
+  if (!clientId || !clientSecret) throw new Error('Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET env vars');
+  if (!refreshToken) throw new Error('No refresh_token for this account. Reconnect Gmail.');
+
+  const resp = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, grant_type: 'refresh_token' }).toString(),
+  });
+  const tokenData = await resp.json();
+  if (!resp.ok || !tokenData.access_token) throw new Error(`Token refresh failed: ${JSON.stringify(tokenData)}`);
+
+  await supabase.from('gmail_accounts').update({ access_token: tokenData.access_token, updated_at: new Date().toISOString() }).eq('id', accountId);
+  return tokenData.access_token;
+}
+
 function replaceVariables(template: string, variables: Record<string, string>): string {
   let result = template;
   Object.entries(variables).forEach(([key, value]) => {
@@ -88,17 +106,25 @@ async function processPendingLeads() {
       }
 
       const { data: accounts, error: accErr } = await supabase
-        .from('gmail_accounts').select('id, email, access_token, user_id').eq('user_id', sequence.user_id).eq('status', 'active').limit(1);
+        .from('gmail_accounts').select('id, email, access_token, refresh_token, user_id').eq('user_id', sequence.user_id).eq('status', 'active').limit(1);
       if (accErr) throw new Error(`Gmail account error: ${accErr.message}`);
       if (!accounts?.length) throw new Error(`No active Gmail account for user ${sequence.user_id}`);
       const account = accounts[0];
-      if (!account.access_token) throw new Error('Gmail account has no access_token. Reconnect Gmail.');
+      if (!account.access_token && !account.refresh_token) throw new Error('No tokens for Gmail account. Reconnect Gmail.');
+
+      // Refresh the access token before sending
+      let accessToken = account.access_token;
+      if (account.refresh_token) {
+        try { accessToken = await refreshGmailToken(supabase, account.id, account.refresh_token); }
+        catch (e: any) { console.warn('[Cron] Token refresh failed, using stored token:', e.message); }
+      }
+      if (!accessToken) throw new Error('No valid access token. Reconnect Gmail.');
 
       const vars = { name: lead.candidate_name || '', email: lead.candidate_email || '', specialty: 'product engineering' };
       const subject = replaceVariables(currentStep.subject_template, vars);
       const body = replaceVariables(currentStep.body_template, vars);
 
-      const sent = await sendEmailViaGmail(account.access_token, account.email, lead.candidate_email, subject, body);
+      const sent = await sendEmailViaGmail(accessToken, account.email, lead.candidate_email, subject, body);
 
       await supabase.from('gmail_logs').insert({
         user_id: sequence.user_id, action_type: 'sent', message_id: sent.id,
