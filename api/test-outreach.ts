@@ -7,8 +7,17 @@ export const config = { maxDuration: 30 };
 function getSupabase() {
   const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
   const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+  
+  console.log('[Supabase] Initializing with:', { 
+    urlExists: !!url, 
+    urlStarts: url.substring(0, 20),
+    keyExists: !!key,
+    keyStarts: key.substring(0, 10),
+    allEnvKeys: Object.keys(process.env).filter(k => k.includes('SUPABASE'))
+  });
+
   if (!url || !key) {
-    throw new Error(`Missing Supabase env vars. URL=${!!url}, KEY=${!!key}. Available SUPABASE keys: ${Object.keys(process.env).filter(k => k.includes('SUPABASE')).join(', ')}`);
+    throw new Error(`Missing Supabase env vars. URL=${!!url}, KEY=${!!key}. Available: ${Object.keys(process.env).filter(k => k.includes('SUPABASE')).join(', ')}`);
   }
   return createClient(url, key);
 }
@@ -78,14 +87,31 @@ async function processPendingLeads(): Promise<OutreachResult> {
 
   console.log('[Outreach] Starting...');
 
+  // First, get ALL leads to verify the table is accessible
+  const { data: allLeads, error: allErr } = await supabase
+    .from('gmail_outreach_leads')
+    .select('*');
+
+  console.log('[Outreach] ALL leads count:', allLeads?.length || 0, 'Error:', allErr?.message);
+
+  // Now filter for pending/running
   const { data: leads, error: leadsErr } = await supabase
     .from('gmail_outreach_leads')
     .select('*')
     .in('status', ['pending', 'running']);
 
-  if (leadsErr) throw new Error(`Leads fetch error: ${leadsErr.message}`);
+  console.log('[Outreach] Pending/running leads count:', leads?.length || 0, 'Error:', leadsErr?.message);
+  if (leadsErr) {
+    console.error('[Outreach] Detailed error:', leadsErr);
+    throw new Error(`Leads fetch error: ${leadsErr.message}`);
+  }
+
   if (!leads || leads.length === 0) {
-    console.log('[Outreach] No pending leads');
+    console.log('[Outreach] No pending/running leads found');
+    if (!allErr && allLeads?.length) {
+      const statuses = new Set(allLeads.map((l: any) => l.status));
+      console.log('[Outreach] Available statuses:', Array.from(statuses));
+    }
     return result;
   }
 

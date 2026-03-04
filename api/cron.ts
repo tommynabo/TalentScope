@@ -6,7 +6,10 @@ export const config = { maxDuration: 30 };
 function getSupabase() {
   const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
   const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
-  if (!url || !key) throw new Error('Missing Supabase env vars');
+  
+  console.log('[Supabase] Init with URL:', !!url, 'KEY:', !!key, 'Env keys:', Object.keys(process.env).filter(k => k.includes('SUPABASE')).join(', '));
+
+  if (!url || !key) throw new Error(`Missing Supabase: URL=${!!url}, KEY=${!!key}`);
   return createClient(url, key);
 }
 
@@ -39,9 +42,17 @@ async function processPendingLeads() {
   const supabase = getSupabase();
   const result = { success: 0, failed: 0, errors: [] as Array<{ leadId: string; error: string }> };
 
+  console.log('[Outreach] Starting...');
+
+  const { data: allLeads, error: allErr } = await supabase
+    .from('gmail_outreach_leads').select('*');
+  
+  console.log('[Outreach] total leads available:', allLeads?.length || 0);
+
   const { data: leads, error: leadsErr } = await supabase
     .from('gmail_outreach_leads').select('*').in('status', ['pending', 'running']);
 
+  console.log('[Outreach] pending/running leads count:', leads?.length || 0, 'error:', leadsErr?.message);
   if (leadsErr) throw new Error(`Leads error: ${leadsErr.message}`);
   if (!leads?.length) return result;
 
