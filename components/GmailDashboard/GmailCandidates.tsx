@@ -6,6 +6,8 @@ import { Search, MailPlus, Filter, Github, Linkedin, Briefcase, Calendar, Messag
 type CandidateWithLane = GlobalEmailCandidate & {
     kanbanLane: string;
     leadId?: string;
+    sequenceId?: string;
+    sequenceName?: string;
 };
 
 const laneLabels: Record<string, string> = {
@@ -35,8 +37,7 @@ const GmailCandidates: React.FC = () => {
     // Filters & Sorting
     const [searchTerm, setSearchTerm] = useState('');
     const [platformFilter, setPlatformFilter] = useState<string>('all');
-    const [filterLane, setFilterLane] = useState<string | null>(null);
-
+    const [filterLane, setFilterLane] = useState<string | null>(null);    const [filterSequence, setFilterSequence] = useState<string>('all'); // ← Nuevo filtro por secuencia
     // Action state
     const [enrolling, setEnrolling] = useState(false);
     const [selectedSequence, setSelectedSequence] = useState<string>('');
@@ -66,6 +67,7 @@ const GmailCandidates: React.FC = () => {
             // Map candidates to their lane based on outreach leads
             const candidatesWithState = candData.map(c => {
                 const lead = leadsData.find(l => l.candidate_id === c.candidate_id);
+                const sequence = seqData.find(s => s.id === lead?.sequence_id);
                 let lane = 'todo';
                 if (lead) {
                     if (lead.status === 'replied') lane = 'replied';
@@ -75,7 +77,7 @@ const GmailCandidates: React.FC = () => {
                     else if (lead.status === 'pending') lane = 'todo';
                     else lane = lead.status; // fallback
                 }
-                return { ...c, kanbanLane: lane, leadId: lead?.id };
+                return { ...c, kanbanLane: lane, leadId: lead?.id, sequenceId: lead?.sequence_id, sequenceName: sequence?.name };
             });
 
             // Default sort by added date (created_at) descending
@@ -161,9 +163,10 @@ const GmailCandidates: React.FC = () => {
                 c.email.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesPlatform = platformFilter === 'all' || c.source_platform.toLowerCase() === platformFilter.toLowerCase();
             const matchesLane = filterLane ? c.kanbanLane === filterLane : true;
-            return matchesSearch && matchesPlatform && matchesLane;
+            const matchesSequence = filterSequence === 'all' ? true : (filterSequence === 'unassigned' ? !c.sequenceId : c.sequenceId === filterSequence);
+            return matchesSearch && matchesPlatform && matchesLane && matchesSequence;
         });
-    }, [candidates, searchTerm, platformFilter, filterLane]);
+    }, [candidates, searchTerm, platformFilter, filterLane, filterSequence]);
 
     const getPlatformIcon = (platform: string) => {
         switch (platform.toLowerCase()) {
@@ -191,11 +194,23 @@ const GmailCandidates: React.FC = () => {
                     </div>
 
                     {/* Filters */}
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 flex-wrap">
+                        <select
+                            value={filterSequence}
+                            onChange={e => setFilterSequence(e.target.value)}
+                            className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-slate-300 text-sm focus:outline-none focus:border-cyan-500 transition-colors font-medium"
+                        >
+                            <option value="all">Todas las Secuencias</option>
+                            <option value="unassigned">Sin Asignar</option>
+                            {sequences.map(seq => (
+                                <option key={seq.id} value={seq.id}>{seq.name}</option>
+                            ))}
+                        </select>
+
                         <select
                             value={platformFilter}
                             onChange={e => setPlatformFilter(e.target.value)}
-                            className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-300 text-sm focus:outline-none focus:border-cyan-500 transition-colors"
+                            className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-slate-300 text-sm focus:outline-none focus:border-cyan-500 transition-colors"
                         >
                             <option value="all">Todas las plataformas</option>
                             <option value="linkedin">LinkedIn</option>
@@ -206,7 +221,7 @@ const GmailCandidates: React.FC = () => {
                         <select
                             value={filterLane || ''}
                             onChange={(e) => setFilterLane(e.target.value || null)}
-                            className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-300 text-sm focus:outline-none focus:border-cyan-500 transition-colors"
+                            className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-slate-300 text-sm focus:outline-none focus:border-cyan-500 transition-colors"
                         >
                             <option value="">Todos los Estados</option>
                             <option value="todo">Por Contactar</option>
@@ -220,12 +235,12 @@ const GmailCandidates: React.FC = () => {
 
                 {/* Bulk Actions Menu */}
                 {selectedIds.size > 0 && (
-                    <div className="flex items-center gap-2 bg-slate-800/80 p-2 rounded-lg border border-slate-700 animate-in fade-in zoom-in duration-200 ml-auto w-full md:w-auto mt-4 md:mt-0">
-                        <span className="text-sm font-medium text-cyan-400 px-2 whitespace-nowrap">{selectedIds.size} selec.</span>
+                    <div className="flex items-center gap-3 bg-slate-800/80 p-3 rounded-lg border border-slate-700 animate-in fade-in zoom-in duration-200 ml-auto w-full md:w-auto mt-4 md:mt-0">
+                        <span className="text-sm font-semibold text-cyan-400 px-2 whitespace-nowrap bg-cyan-500/10 py-1.5 rounded-md">{selectedIds.size} seleccionados</span>
                         <select
                             value={selectedSequence}
                             onChange={(e) => setSelectedSequence(e.target.value)}
-                            className="flex-1 min-w-[150px] bg-slate-950 border border-slate-700 rounded-md text-sm px-3 py-1.5 focus:outline-none focus:border-cyan-500 text-slate-200"
+                            className="flex-1 min-w-[200px] bg-slate-950 border border-slate-700 rounded-md text-sm px-4 py-2.5 focus:outline-none focus:border-cyan-500 text-slate-200 font-medium"
                         >
                             <option value="">Seleccionar Secuencia...</option>
                             {sequences.map(seq => (
@@ -235,14 +250,14 @@ const GmailCandidates: React.FC = () => {
                         <button
                             onClick={handleEnroll}
                             disabled={!selectedSequence || enrolling}
-                            className="flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+                            className="flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-4 py-2.5 rounded-md text-sm font-semibold transition-colors whitespace-nowrap"
                         >
                             {enrolling ? (
                                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                             ) : (
-                                <MailPlus className="w-4 h-4" />
+                                <MailPlus className="w-5 h-5" />
                             )}
-                            Añadir
+                            Añadir a Secuencia
                         </button>
                     </div>
                 )}
@@ -262,22 +277,23 @@ const GmailCandidates: React.FC = () => {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse min-w-[900px]">
-                            <thead className="bg-slate-950/80 border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
+                        <table className="w-full text-left border-collapse min-w-[1000px]">
+                            <thead className="bg-slate-950/80 border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider font-semibold">
                                 <tr>
-                                    <th className="p-4 w-12 text-center">
+                                    <th className="px-5 py-4 w-12 text-center">
                                         <input
                                             type="checkbox"
                                             onChange={handleSelectAll}
                                             checked={selectedIds.size === filteredCandidates.length && filteredCandidates.length > 0}
-                                            className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500/20 bg-slate-900"
+                                            className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500/20 bg-slate-900 cursor-pointer"
                                         />
                                     </th>
-                                    <th className="p-4 font-semibold">Estado en Pipeline</th>
-                                    <th className="p-4 font-semibold">Candidato</th>
-                                    <th className="p-4 font-semibold">Origen</th>
-                                    <th className="p-4 font-semibold">Contacto</th>
-                                    <th className="p-4 font-semibold">Incorporado</th>
+                                    <th className="px-5 py-4 font-semibold text-slate-300">Estado</th>
+                                    <th className="px-5 py-4 font-semibold text-slate-300">Candidato</th>
+                                    <th className="px-5 py-4 font-semibold text-slate-300">Origen</th>
+                                    <th className="px-5 py-4 font-semibold text-slate-300">Secuencia</th>
+                                    <th className="px-5 py-4 font-semibold text-slate-300">Email</th>
+                                    <th className="px-5 py-4 font-semibold text-slate-300">Incorporado</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800/50">
@@ -292,60 +308,85 @@ const GmailCandidates: React.FC = () => {
                                             }
                                         }}
                                     >
-                                        <td className="p-4 text-center">
+                                        <td className="px-5 py-4 text-center">
                                             <input
                                                 type="checkbox"
                                                 checked={selectedIds.has(candidate.candidate_id)}
                                                 onChange={() => handleSelectOne(candidate.candidate_id)}
-                                                className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500/20 bg-slate-900"
+                                                className="rounded border-slate-700 text-cyan-500 focus:ring-cyan-500/20 bg-slate-900 cursor-pointer"
                                                 onClick={e => e.stopPropagation()}
                                             />
                                         </td>
-                                        <td className="p-4">
+
+                                        {/* Estado */}
+                                        <td className="px-5 py-4">
                                             <select
                                                 value={candidate.kanbanLane}
                                                 onChange={(e) => handleStatusChange(candidate, e.target.value)}
-                                                className={`px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider text-white border-0 cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 transition-colors ${laneBg[candidate.kanbanLane]}`}
+                                                className={`px-3 py-2 rounded-full text-xs font-bold uppercase tracking-wider text-white border-0 cursor-pointer focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 transition-colors ${laneBg[candidate.kanbanLane]}`}
                                             >
                                                 {Object.entries(laneLabels).map(([key, label]) => (
                                                     <option key={key} value={key} className="bg-slate-800 text-white capitalize font-medium">{label}</option>
                                                 ))}
                                             </select>
                                         </td>
-                                        <td className="p-4">
+
+                                        {/* Candidato */}
+                                        <td className="px-5 py-4">
                                             <div className="flex items-center gap-3">
                                                 <img
                                                     src={`https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.name)}&background=0F172A&color=94A3B8`}
                                                     alt={candidate.name}
-                                                    className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-700"
+                                                    className="h-10 w-10 rounded-full object-cover ring-1 ring-slate-700 flex-shrink-0"
                                                 />
-                                                <div>
-                                                    <div className="font-medium text-slate-200">{candidate.name}</div>
-                                                    <div className="text-xs text-slate-500">{candidate.current_role}</div>
+                                                <div className="min-w-0">
+                                                    <div className="font-semibold text-slate-100 text-sm">{candidate.name}</div>
+                                                    <div className="text-xs text-slate-400">{candidate.current_role}</div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="p-4">
-                                            <div className="flex items-center gap-2 text-slate-400">
+
+                                        {/* Origen */}
+                                        <td className="px-5 py-4">
+                                            <div className="flex items-center gap-2 text-slate-300">
                                                 {getPlatformIcon(candidate.source_platform)}
-                                                <span className="text-sm font-medium">{candidate.source_platform}</span>
+                                                <span className="text-sm font-semibold">{candidate.source_platform}</span>
                                             </div>
                                         </td>
-                                        <td className="p-4">
-                                            <div className="flex flex-col gap-1">
-                                                <div className="text-sm text-slate-300 max-w-[200px] truncate" title={candidate.email}>
+
+                                        {/* Secuencia */}
+                                        <td className="px-5 py-4">
+                                            {candidate.sequenceName ? (
+                                                <div className="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/30 rounded-lg px-3 py-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0"></span>
+                                                    <span className="text-sm font-medium text-purple-300">{candidate.sequenceName}</span>
+                                                </div>
+                                            ) : (
+                                                <div className="inline-flex items-center gap-2 bg-slate-800/50 border border-slate-700 rounded-lg px-3 py-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-slate-500 flex-shrink-0"></span>
+                                                    <span className="text-sm text-slate-400">Sin asignar</span>
+                                                </div>
+                                            )}
+                                        </td>
+
+                                        {/* Email */}
+                                        <td className="px-5 py-4">
+                                            <div className="flex flex-col gap-2">
+                                                <div className="text-sm text-slate-300 max-w-[250px] truncate font-mono" title={candidate.email}>
                                                     {candidate.email}
                                                 </div>
                                                 {candidate.profile_url && (
-                                                    <a href={candidate.profile_url} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 text-[11px] uppercase tracking-wider font-semibold w-fit">
-                                                        Ver Perfil
+                                                    <a href={candidate.profile_url} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 text-xs uppercase tracking-wider font-semibold w-fit">
+                                                        Ver Perfil ↗
                                                     </a>
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="p-4 text-slate-400 text-sm">
+
+                                        {/* Incorporado */}
+                                        <td className="px-5 py-4 text-slate-400 text-sm font-medium">
                                             <div className="flex items-center gap-2">
-                                                <Calendar className="w-4 h-4 opacity-50" />
+                                                <Calendar className="w-4 h-4 opacity-60" />
                                                 <span>{new Date(candidate.created_at).toLocaleDateString()}</span>
                                             </div>
                                         </td>
