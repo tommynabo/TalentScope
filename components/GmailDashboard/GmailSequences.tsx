@@ -300,7 +300,15 @@ const GmailSequences: React.FC = () => {
         try {
             console.log('[Diagnose] Checking system health...');
             const response = await fetch('/api/diagnose');
-            const diagnostics = await response.json();
+            const rawText = await response.text();
+            
+            let diagnostics;
+            try {
+                diagnostics = JSON.parse(rawText);
+            } catch {
+                console.error('[Diagnose] Non-JSON response:', rawText.substring(0, 200));
+                throw new Error(`Server error (${response.status}): ${rawText.substring(0, 150)}`);
+            }
 
             console.log('[Diagnose] Results:', diagnostics);
 

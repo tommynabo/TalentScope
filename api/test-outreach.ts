@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GmailOutreachService } from '../lib/gmailOutreachService';
+import { GmailOutreachService } from './_lib/gmailOutreachService';
 
 /**
  * Manual trigger for Gmail outreach processing

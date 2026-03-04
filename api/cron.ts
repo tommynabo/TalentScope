@@ -1,6 +1,6 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GmailOutreachService } from '../lib/gmailOutreachService';
+import { GmailOutreachService } from './_lib/gmailOutreachService';
 
 // Vercel Serverless Function
 export const config = {
