@@ -178,6 +178,31 @@ export const GmailService = {
         if (error) throw error;
     },
 
+    /**
+     * Activate a sequence - marks it as active and all leads inside as pending to send
+     */
+    async activateSequence(sequenceId: string): Promise<void> {
+        try {
+            // 1. Update sequence status to active
+            await this.updateSequenceStatus(sequenceId, 'active');
+
+            // 2. Get all leads for this sequence
+            const { data: leads, error: leadsError } = await supabase
+                .from('gmail_outreach_leads')
+                .select('id, scheduled_for')
+                .eq('sequence_id', sequenceId)
+                .in('status', ['pending', 'running']);
+
+            if (leadsError) throw leadsError;
+
+            // All leads are now ready to be processed by the cron
+            console.log(`[GmailService] Sequence ${sequenceId} activated with ${leads?.length || 0} leads ready`);
+        } catch (error) {
+            console.error('[GmailService] Error activating sequence:', error);
+            throw error;
+        }
+    },
+
     async saveSequenceSteps(sequenceId: string, steps: Partial<GmailSequenceStep>[]): Promise<void> {
         // First delete existing steps for this sequence to replace them
         await supabase.from('gmail_sequence_steps').delete().eq('sequence_id', sequenceId);

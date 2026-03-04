@@ -1,9 +1,10 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { GmailOutreachService } from '../lib/gmailOutreachService';
 
-// Vercel Serverless Function (switched from edge due to global outage)
+// Vercel Serverless Function
 export const config = {
-    maxDuration: 10,
+    maxDuration: 30,
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -13,8 +14,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // 2. Logic: Trigger Search for Active Campaigns (Placeholder)
-    console.log("Cron Job Triggered: Executing Daily Search...");
+    try {
+        console.log('[Cron] Starting Gmail outreach processing...');
+        
+        // 2. Process pending Gmail outreach leads
+        const result = await GmailOutreachService.processPendingLeads();
+        
+        console.log('[Cron] Gmail outreach completed:', result);
 
-    return res.status(200).json({ success: true, message: "Daily search executed" });
+        return res.status(200).json({
+            success: true,
+            message: 'Gmail outreach processed',
+            result,
+        });
+    } catch (error: any) {
+        console.error('[Cron] Error:', error);
+        return res.status(500).json({
+            success: false,
+            message: error?.message || 'Cron job failed',
+        });
+    }
 }

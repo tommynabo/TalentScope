@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GmailService, GmailSequence, GmailSequenceStep } from '../../lib/gmailService';
-import { PlusCircle, Search, Play, Pause, Edit, Trash2, ArrowLeft, Clock, Save, Plus, GripVertical, AlertCircle, FileText, Zap, MessageSquare } from 'lucide-react';
+import { PlusCircle, Search, Play, Pause, Edit, Trash2, ArrowLeft, Clock, Save, Plus, GripVertical, AlertCircle, FileText, Zap, MessageSquare, Rocket } from 'lucide-react';
 
 // ── Outreach message templates ──────────────────────────────────
 interface OutreachTemplate {
@@ -95,6 +95,8 @@ const GmailSequences: React.FC = () => {
     const [steps, setSteps] = useState<Partial<GmailSequenceStep>[]>([]);
     const [saving, setSaving] = useState(false);
     const [showTemplatePanel, setShowTemplatePanel] = useState(false);
+    const [activating, setActivating] = useState(false);
+    const [testing, setTesting] = useState(false);
 
     useEffect(() => {
         loadSequences();
@@ -212,6 +214,62 @@ const GmailSequences: React.FC = () => {
         }
     };
 
+    const handleActivateSequence = async () => {
+        if (!activeSequence) return;
+        if (steps.length === 0) {
+            alert('⚠️ Debes añadir al menos un paso a la secuencia');
+            return;
+        }
+        setActivating(true);
+        try {
+            await GmailService.activateSequence(activeSequence.id);
+            // Update local state
+            setSequences(sequences.map(s => s.id === activeSequence.id ? { ...s, status: 'active' } : s));
+            setActiveSequence({ ...activeSequence, status: 'active' });
+            alert('✅ Secuencia activada. Los emails comenzarán a enviarse automáticamente.');
+        } catch (error) {
+            console.error(error);
+            alert('Error al activar la secuencia');
+        } finally {
+            setActivating(false);
+        }
+    };
+
+    const handleTestOutreach = async () => {
+        if (!activeSequence) return;
+        setTesting(true);
+        try {
+            const response = await fetch('/api/test-outreach', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.REACT_APP_CRON_SECRET || 'test-secret'}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data?.message || 'Error en el test');
+            }
+
+            const result = data?.data || {};
+            alert(
+                `✅ Test completado\n\n` +
+                `Enviados: ${result.success}\n` +
+                `Fallos: ${result.failed}\n\n` +
+                (result.errors?.length > 0 
+                    ? `Errores:\n${result.errors.map((e: any) => e.error).join('\n')}` 
+                    : 'Sin errores')
+            );
+        } catch (error: any) {
+            console.error(error);
+            alert(`❌ Error en test: ${error?.message}`);
+        } finally {
+            setTesting(false);
+        }
+    };
+
     const filteredSequences = sequences.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
     if (view === 'editor' && activeSequence) {
@@ -243,6 +301,34 @@ const GmailSequences: React.FC = () => {
                         >
                             <FileText className="w-4 h-4" />
                             <span className="hidden sm:inline">Plantillas</span>
+                        </button>
+                        {activeSequence.status === 'draft' && (
+                            <button
+                                onClick={handleActivateSequence}
+                                disabled={activating || steps.length === 0}
+                                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-4 py-2.5 rounded-lg font-medium transition-colors shadow-[0_0_15px_rgba(16,185,129,0.4)]"
+                                title="Activar secuencia para comenzar a enviar emails"
+                            >
+                                {activating ? (
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                ) : (
+                                    <Rocket className="w-5 h-5" />
+                                )}
+                                <span>Activar Secuencia</span>
+                            </button>
+                        )}
+                        <button
+                            onClick={handleTestOutreach}
+                            disabled={testing || steps.length === 0}
+                            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-4 py-2.5 rounded-lg font-medium transition-colors shadow-[0_0_15px_rgba(147,51,234,0.4)]"
+                            title="Probar el envío ahora sin esperar al cron"
+                        >
+                            {testing ? (
+                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            ) : (
+                                <Zap className="w-5 h-5" />
+                            )}
+                            <span>Probar Envío</span>
                         </button>
                         <button
                             onClick={handleSaveSteps}
