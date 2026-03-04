@@ -42,19 +42,27 @@ async function processPendingLeads() {
   const supabase = getSupabase();
   const result = { success: 0, failed: 0, errors: [] as Array<{ leadId: string; error: string }> };
 
-  console.log('[Outreach] Starting...');
+  console.log('[Cron] 1. Starting...');
 
   const { data: allLeads, error: allErr } = await supabase
-    .from('gmail_outreach_leads').select('*');
+    .from('gmail_outreach_leads').select('id, status, candidate_email');
   
-  console.log('[Outreach] total leads available:', allLeads?.length || 0);
+  console.log('[Cron] 2. ALL leads count:', allLeads?.length, 'error:', allErr?.message);
+  if (allLeads?.length) {
+    console.log('[Cron] Available statuses:', new Set(allLeads.map(l => l.status)));
+  }
 
   const { data: leads, error: leadsErr } = await supabase
     .from('gmail_outreach_leads').select('*').in('status', ['pending', 'running']);
 
-  console.log('[Outreach] pending/running leads count:', leads?.length || 0, 'error:', leadsErr?.message);
+  console.log('[Cron] 3. Pending/running leads count:', leads?.length, 'error:', leadsErr?.message);
   if (leadsErr) throw new Error(`Leads error: ${leadsErr.message}`);
-  if (!leads?.length) return result;
+  if (!leads?.length) {
+    console.log('[Cron] No leads to process');
+    return result;
+  }
+  
+  console.log('[Cron] 4. Processing', leads.length, 'leads...');
 
   for (const lead of leads) {
     if (!lead?.id) continue;

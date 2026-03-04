@@ -85,35 +85,37 @@ async function processPendingLeads(): Promise<OutreachResult> {
   const supabase = getSupabase();
   const result: OutreachResult = { success: 0, failed: 0, errors: [] };
 
-  console.log('[Outreach] Starting...');
+  console.log('[Outreach] 1. Starting...');
+  console.log('[Outreach] 2. Supabase instance created, querying ALL leads...');
 
   // First, get ALL leads to verify the table is accessible
   const { data: allLeads, error: allErr } = await supabase
     .from('gmail_outreach_leads')
-    .select('*');
+    .select('id, status, candidate_email');
 
-  console.log('[Outreach] ALL leads count:', allLeads?.length || 0, 'Error:', allErr?.message);
+  console.log('[Outreach] 3. ALL leads response:', { count: allLeads?.length, error: allErr?.message, data: allLeads?.slice(0, 2) });
 
   // Now filter for pending/running
+  console.log('[Outreach] 4. Querying pending/running leads with filter...');
   const { data: leads, error: leadsErr } = await supabase
     .from('gmail_outreach_leads')
     .select('*')
     .in('status', ['pending', 'running']);
 
-  console.log('[Outreach] Pending/running leads count:', leads?.length || 0, 'Error:', leadsErr?.message);
+  console.log('[Outreach] 5. Pending/running query result:', { count: leads?.length, error: leadsErr?.message });
+  
   if (leadsErr) {
-    console.error('[Outreach] Detailed error:', leadsErr);
+    console.error('[Outreach] 6. QUERY ERROR:', leadsErr);
     throw new Error(`Leads fetch error: ${leadsErr.message}`);
   }
 
   if (!leads || leads.length === 0) {
-    console.log('[Outreach] No pending/running leads found');
-    if (!allErr && allLeads?.length) {
-      const statuses = new Set(allLeads.map((l: any) => l.status));
-      console.log('[Outreach] Available statuses:', Array.from(statuses));
-    }
+    console.log('[Outreach] 7. No pending/running leads. Return empty result.');
+    console.log('[Outreach] Debug: allLeads total count:', allLeads?.length, 'statuses:', allLeads?.map(l => l.status));
     return result;
   }
+
+  console.log('[Outreach] 8. Found', leads.length, 'leads to process');
 
   console.log(`[Outreach] Found ${leads.length} leads`);
 
