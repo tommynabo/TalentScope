@@ -239,18 +239,25 @@ const GmailSequences: React.FC = () => {
         if (!activeSequence) return;
         setTesting(true);
         try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+            
+            // Only add auth header if CRON_SECRET is configured
+            const cronSecret = import.meta.env.VITE_CRON_SECRET;
+            if (cronSecret) {
+                headers['Authorization'] = `Bearer ${cronSecret}`;
+            }
+
             const response = await fetch('/api/test-outreach', {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${process.env.REACT_APP_CRON_SECRET || 'test-secret'}`,
-                    'Content-Type': 'application/json',
-                },
+                headers,
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data?.message || 'Error en el test');
+                throw new Error(data?.message || data?.error || 'Error en el test');
             }
 
             const result = data?.data || {};
@@ -259,7 +266,7 @@ const GmailSequences: React.FC = () => {
                 `Enviados: ${result.success}\n` +
                 `Fallos: ${result.failed}\n\n` +
                 (result.errors?.length > 0 
-                    ? `Errores:\n${result.errors.map((e: any) => e.error).join('\n')}` 
+                    ? `Errores:\n${result.errors.map((e: any) => `- ${e.error}`).join('\n')}` 
                     : 'Sin errores')
             );
         } catch (error: any) {

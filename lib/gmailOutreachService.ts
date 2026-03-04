@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import https from 'https';
 
 export interface OutreachResult {
   success: number;
@@ -186,7 +185,7 @@ export const GmailOutreachService = {
   },
 
   /**
-   * Send email via Google Gmail API
+   * Send email via Google Gmail API using fetch
    */
   async sendEmailViaGmail(
     accessToken: string,
@@ -210,44 +209,25 @@ export const GmailOutreachService = {
       // Encode to base64
       const encodedMessage = Buffer.from(email).toString('base64');
 
-      // Call Gmail API
-      return await new Promise((resolve, reject) => {
-        const path = '/gmail/v1/users/me/messages/send';
-        const payload = JSON.stringify({
+      // Call Gmail API using fetch
+      const response = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           raw: encodedMessage,
-        });
-
-        const options = {
-          hostname: 'www.googleapis.com',
-          path,
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(payload),
-          },
-        };
-
-        const req = https.request(options, (res) => {
-          let data = '';
-          res.on('data', (chunk) => (data += chunk));
-          res.on('end', () => {
-            if (res.statusCode === 200) {
-              try {
-                resolve(JSON.parse(data));
-              } catch (e) {
-                reject(new Error('Failed to parse Gmail API response'));
-              }
-            } else {
-              reject(new Error(`Gmail API error: ${res.statusCode} - ${data}`));
-            }
-          });
-        });
-
-        req.on('error', reject);
-        req.write(payload);
-        req.end();
+        }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`Gmail API error: ${response.status} - ${errorData}`);
+      }
+
+      const data = await response.json();
+      return data;
     } catch (error) {
       console.error('[GmailAPI] Error:', error);
       return null;
