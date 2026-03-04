@@ -198,14 +198,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-      const auth = req.headers['authorization'];
-      if (auth !== `Bearer ${cronSecret}`) {
-        return res.status(401).json({ success: false, error: 'Unauthorized' });
-      }
-    }
-
+    // No auth required for manual test — this endpoint is called from the UI
     console.log('[TestOutreach] Triggering...');
     const data = await processPendingLeads();
     console.log('[TestOutreach] Done:', data);
