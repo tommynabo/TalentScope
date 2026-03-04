@@ -4,20 +4,23 @@ import { createClient } from '@supabase/supabase-js';
 export const config = { maxDuration: 30 };
 
 // ── Inline Supabase client (process.env for Node.js runtime) ──
+// Uses service role key to bypass RLS — required for server-side operations
 function getSupabase() {
   const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+  // Prefer service role key (bypasses RLS), fallback to anon key
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+  const key = serviceKey || anonKey;
   
-  console.log('[Supabase] Initializing with:', { 
-    urlExists: !!url, 
-    urlStarts: url.substring(0, 20),
-    keyExists: !!key,
-    keyStarts: key.substring(0, 10),
-    allEnvKeys: Object.keys(process.env).filter(k => k.includes('SUPABASE'))
+  console.log('[Supabase] Init:', { 
+    url: url.substring(0, 30),
+    usingServiceKey: !!serviceKey,
+    usingAnonKey: !serviceKey && !!anonKey,
+    allKeys: Object.keys(process.env).filter(k => k.includes('SUPABASE'))
   });
 
   if (!url || !key) {
-    throw new Error(`Missing Supabase env vars. URL=${!!url}, KEY=${!!key}. Available: ${Object.keys(process.env).filter(k => k.includes('SUPABASE')).join(', ')}`);
+    throw new Error(`Missing Supabase env vars. URL=${!!url}, KEY=${!!key}`);
   }
   return createClient(url, key);
 }
@@ -130,13 +133,23 @@ async function processPendingLeads(): Promise<OutreachResult> {
         continue;
       }
 
-      const { data: sequence, error: seqErr } = await supabase
+      console.log(`[Outreach] Lead ${lead.id} — sequence_id: ${lead.sequence_id}`);
+
+      if (!lead.sequence_id) {
+        throw new Error(`Lead has no sequence_id. Lead data: ${JSON.stringify(lead)}`);
+      }
+
+      const { data: sequences, error: seqErr } = await supabase
         .from('gmail_sequences')
         .select('id, user_id, name, status')
         .eq('id', lead.sequence_id)
-        .single();
+        .limit(1);
 
-      if (seqErr || !sequence) throw new Error(`Sequence error: ${seqErr?.message || 'not found'}`);
+      console.log(`[Outreach] Sequence query result: count=${sequences?.length}, err=${seqErr?.message}`);
+
+      if (seqErr) throw new Error(`Sequence error: ${seqErr.message}`);
+      if (!sequences || sequences.length === 0) throw new Error(`Sequence not found: ${lead.sequence_id}`);
+      const sequence = sequences[0];
 
       const { data: steps, error: stepsErr } = await supabase
         .from('gmail_sequence_steps')
@@ -155,14 +168,18 @@ async function processPendingLeads(): Promise<OutreachResult> {
         continue;
       }
 
-      const { data: account, error: accErr } = await supabase
+      const { data: accounts, error: accErr } = await supabase
         .from('gmail_accounts')
         .select('id, email, access_token, refresh_token, user_id')
         .eq('user_id', sequence.user_id)
         .eq('status', 'active')
-        .single();
+        .limit(1);
 
-      if (accErr || !account) throw new Error(`Gmail account error: ${accErr?.message || 'no active account for user ' + sequence.user_id}`);
+      console.log(`[Outreach] Gmail account query: count=${accounts?.length}, err=${accErr?.message}, user=${sequence.user_id}`);
+
+      if (accErr) throw new Error(`Gmail account error: ${accErr.message}`);
+      if (!accounts || accounts.length === 0) throw new Error(`No active Gmail account for user ${sequence.user_id}`);
+      const account = accounts[0];
       if (!account.access_token) throw new Error('Gmail account has no access_token. Reconnect Gmail.');
 
       const vars = {

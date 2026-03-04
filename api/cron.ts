@@ -5,10 +5,9 @@ export const config = { maxDuration: 30 };
 
 function getSupabase() {
   const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
-  
-  console.log('[Supabase] Init with URL:', !!url, 'KEY:', !!key, 'Env keys:', Object.keys(process.env).filter(k => k.includes('SUPABASE')).join(', '));
-
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+  const key = serviceKey || anonKey;
   if (!url || !key) throw new Error(`Missing Supabase: URL=${!!url}, KEY=${!!key}`);
   return createClient(url, key);
 }
@@ -69,9 +68,13 @@ async function processPendingLeads() {
     try {
       if (new Date(lead.scheduled_for).getTime() > Date.now()) continue;
 
-      const { data: sequence, error: seqErr } = await supabase
-        .from('gmail_sequences').select('id, user_id, name, status').eq('id', lead.sequence_id).single();
-      if (seqErr || !sequence) throw new Error(`Sequence error: ${seqErr?.message || 'not found'}`);
+      if (!lead.sequence_id) throw new Error(`Lead ${lead.id} has no sequence_id`);
+
+      const { data: sequences, error: seqErr } = await supabase
+        .from('gmail_sequences').select('id, user_id, name, status').eq('id', lead.sequence_id).limit(1);
+      if (seqErr) throw new Error(`Sequence error: ${seqErr.message}`);
+      if (!sequences?.length) throw new Error(`Sequence not found: ${lead.sequence_id}`);
+      const sequence = sequences[0];
 
       const { data: steps, error: stepsErr } = await supabase
         .from('gmail_sequence_steps').select('*').eq('sequence_id', lead.sequence_id).order('step_number', { ascending: true });
@@ -84,9 +87,12 @@ async function processPendingLeads() {
         continue;
       }
 
-      const { data: account, error: accErr } = await supabase
-        .from('gmail_accounts').select('id, email, access_token, user_id').eq('user_id', sequence.user_id).eq('status', 'active').single();
-      if (accErr || !account?.access_token) throw new Error(`Gmail account error: ${accErr?.message || 'no token'}`);
+      const { data: accounts, error: accErr } = await supabase
+        .from('gmail_accounts').select('id, email, access_token, user_id').eq('user_id', sequence.user_id).eq('status', 'active').limit(1);
+      if (accErr) throw new Error(`Gmail account error: ${accErr.message}`);
+      if (!accounts?.length) throw new Error(`No active Gmail account for user ${sequence.user_id}`);
+      const account = accounts[0];
+      if (!account.access_token) throw new Error('Gmail account has no access_token. Reconnect Gmail.');
 
       const vars = { name: lead.candidate_name || '', email: lead.candidate_email || '', specialty: 'product engineering' };
       const subject = replaceVariables(currentStep.subject_template, vars);
