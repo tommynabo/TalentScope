@@ -92,17 +92,28 @@ async function sendEmailViaGmail(
   if (!accessToken) throw new Error('No access token');
   if (!fromEmail || !toEmail) throw new Error(`Invalid emails: from=${fromEmail}, to=${toEmail}`);
 
+  // RFC 2047 encode the subject so non-ASCII chars (em dash, accents, etc.) render correctly
+  const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
+  // Encode body as base64 to safely carry UTF-8 content
+  const encodedBody = Buffer.from(body, 'utf8').toString('base64');
+
   const email = [
     `From: ${fromEmail}`,
     `To: ${toEmail}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodedSubject}`,
+    'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=UTF-8',
-    'Content-Transfer-Encoding: 7bit',
+    'Content-Transfer-Encoding: base64',
     '',
-    body,
-  ].join('\n');
+    encodedBody,
+  ].join('\r\n');
 
-  const encodedMessage = Buffer.from(email).toString('base64');
+  // Gmail API requires base64url (URL-safe, no padding)
+  const encodedMessage = Buffer.from(email, 'utf8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
   console.log(`[GmailAPI] Sending to ${toEmail} from ${fromEmail}`);
 
   const response = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/send', {

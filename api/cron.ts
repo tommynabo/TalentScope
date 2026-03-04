@@ -39,8 +39,10 @@ function replaceVariables(template: string, variables: Record<string, string>): 
 }
 
 async function sendEmailViaGmail(accessToken: string, fromEmail: string, toEmail: string, subject: string, body: string): Promise<{ id: string }> {
-  const email = [`From: ${fromEmail}`, `To: ${toEmail}`, `Subject: ${subject}`, 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: 7bit', '', body].join('\n');
-  const encodedMessage = Buffer.from(email).toString('base64');
+  const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
+  const encodedBody = Buffer.from(body, 'utf8').toString('base64');
+  const email = [`From: ${fromEmail}`, `To: ${toEmail}`, `Subject: ${encodedSubject}`, 'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', encodedBody].join('\r\n');
+  const encodedMessage = Buffer.from(email, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
   const response = await fetch('https://www.googleapis.com/gmail/v1/users/me/messages/send', {
     method: 'POST',
