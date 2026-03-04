@@ -257,15 +257,16 @@ const GmailSequences: React.FC = () => {
 
             console.log('[Test] Response status:', response.status);
 
-            // Try to parse JSON
+            // Read body as text first, then try to parse as JSON
+            const rawText = await response.text();
+            console.log('[Test] Raw response:', rawText.substring(0, 300));
+
             let data;
             try {
-                data = await response.json();
+                data = JSON.parse(rawText);
             } catch (parseError) {
-                // If JSON parsing fails, the server likely returned HTML error
-                const text = await response.text();
-                console.error('[Test] Non-JSON response:', text.substring(0, 200));
-                throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}...`);
+                console.error('[Test] Non-JSON response:', rawText.substring(0, 200));
+                throw new Error(`Server error (${response.status}): ${rawText.substring(0, 150)}`);
             }
 
             if (!response.ok) {
