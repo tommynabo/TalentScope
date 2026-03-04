@@ -1,6 +1,88 @@
 import React, { useState, useEffect } from 'react';
 import { GmailService, GmailSequence, GmailSequenceStep } from '../../lib/gmailService';
-import { PlusCircle, Search, Play, Pause, Edit, Trash2, ArrowLeft, Clock, Save, Plus, GripVertical, AlertCircle } from 'lucide-react';
+import { PlusCircle, Search, Play, Pause, Edit, Trash2, ArrowLeft, Clock, Save, Plus, GripVertical, AlertCircle, FileText, Zap, MessageSquare } from 'lucide-react';
+
+// ── Outreach message templates ──────────────────────────────────
+interface OutreachTemplate {
+    label: string;
+    description: string;
+    icon: 'zap' | 'message';
+    steps: Partial<GmailSequenceStep>[];
+}
+
+const OUTREACH_TEMPLATES: OutreachTemplate[] = [
+    {
+        label: 'Secuencia Outreach Completa',
+        description: 'Invitación → Post-aceptación (24h) → Seguimiento (48h)',
+        icon: 'zap',
+        steps: [
+            {
+                subject_template: 'Oportunidad para {{name}} en {{specialty}}',
+                body_template: `Hola {{name}},
+
+Soy parte del equipo de Symmetry, una app de salud y bienestar con fuerte crecimiento. Vi tu experiencia en {{specialty}} y me pareció muy interesante.
+
+Me encantaría conectar contigo y compartir más sobre lo que estamos construyendo.
+
+¡Saludos!`,
+                delay_hours: 0,
+            },
+            {
+                subject_template: 'Re: Oportunidad para {{name}} en {{specialty}}',
+                body_template: `Hola {{name}},
+
+Gracias por tu interés. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y un equipo de producto pequeño pero potente.
+
+Buscamos product engineers con experiencia en {{specialty}}. Creemos que tu perfil encaja muy bien.
+
+¿Te interesaría que te pase el brief técnico del proyecto?
+
+¡Quedo atento!`,
+                delay_hours: 24,
+            },
+            {
+                subject_template: 'Re: Oportunidad para {{name}} en {{specialty}}',
+                body_template: `Hola {{name}},
+
+Te escribo de nuevo porque viendo tu trayectoria creemos que hay una gran alineación con lo que buscamos.
+
+Es una oportunidad de trabajar en un producto con tracción real y un equipo senior. Si tienes unos minutos, me encantaría agendar una llamada rápida.
+
+¿Qué dices?`,
+                delay_hours: 48,
+            },
+        ],
+    },
+    {
+        label: 'Invitación + Post-aceptación',
+        description: 'Solo los 2 primeros pasos: invitación y pitch (24h)',
+        icon: 'message',
+        steps: [
+            {
+                subject_template: 'Hola {{name}} — Una propuesta que creo te va a interesar',
+                body_template: `Hola {{name}},
+
+Vi tu experiencia en {{specialty}} y me pareció que podrías encajar perfecto con un proyecto en el que estamos trabajando.
+
+¿Te gustaría saber más?
+
+¡Saludos!`,
+                delay_hours: 0,
+            },
+            {
+                subject_template: 'Re: Hola {{name}} — Una propuesta que creo te va a interesar',
+                body_template: `Hola {{name}},
+
+Gracias por tu respuesta. Te cuento un poco más: estamos escalando Symmetry, una app de salud y bienestar con +400k descargas/mes.
+
+Buscamos product engineers en {{specialty}} para un equipo senior y pequeño. Creo que tu perfil es ideal.
+
+¿Te interesaría revisar el brief técnico o agendar una llamada corta?`,
+                delay_hours: 24,
+            },
+        ],
+    },
+];
 
 const GmailSequences: React.FC = () => {
     const [sequences, setSequences] = useState<GmailSequence[]>([]);
@@ -12,6 +94,7 @@ const GmailSequences: React.FC = () => {
     const [activeSequence, setActiveSequence] = useState<GmailSequence | null>(null);
     const [steps, setSteps] = useState<Partial<GmailSequenceStep>[]>([]);
     const [saving, setSaving] = useState(false);
+    const [showTemplatePanel, setShowTemplatePanel] = useState(false);
 
     useEffect(() => {
         loadSequences();
@@ -39,6 +122,30 @@ const GmailSequences: React.FC = () => {
             console.error(error);
             alert('Error al crear la secuencia');
         }
+    };
+
+    const handleCreateFromTemplate = async (template: OutreachTemplate) => {
+        try {
+            const name = prompt('Nombre de la nueva secuencia:', template.label);
+            if (!name) return;
+            const newSeq = await GmailService.createSequence(name);
+            setSequences([newSeq, ...sequences]);
+            setActiveSequence(newSeq);
+            setSteps(template.steps.map(s => ({ ...s })));
+            setView('editor');
+            setShowTemplatePanel(false);
+        } catch (error) {
+            console.error(error);
+            alert('Error al crear la secuencia');
+        }
+    };
+
+    const loadTemplateIntoEditor = (template: OutreachTemplate) => {
+        if (steps.some(s => s.body_template && s.body_template.trim() !== '')) {
+            if (!confirm('⚠️ Esto reemplazará los pasos actuales. ¿Continuar?')) return;
+        }
+        setSteps(template.steps.map(s => ({ ...s })));
+        setShowTemplatePanel(false);
     };
 
     const openEditor = async (seq: GmailSequence) => {
@@ -128,19 +235,68 @@ const GmailSequences: React.FC = () => {
                             <p className="text-sm text-slate-400">Constructor visual de la secuencia.</p>
                         </div>
                     </div>
-                    <button
-                        onClick={handleSaveSteps}
-                        disabled={saving}
-                        className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-[0_0_15px_rgba(8,145,178,0.4)]"
-                    >
-                        {saving ? (
-                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        ) : (
-                            <Save className="w-5 h-5" />
-                        )}
-                        <span>Guardar Cambios</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowTemplatePanel(!showTemplatePanel)}
+                            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all border ${showTemplatePanel ? 'bg-purple-600/20 text-purple-300 border-purple-500/40' : 'bg-slate-800 text-slate-300 hover:text-purple-300 border-slate-700 hover:border-purple-500/30 hover:bg-purple-500/10'}`}
+                            title="Cargar plantilla de mensajes de outreach"
+                        >
+                            <FileText className="w-4 h-4" />
+                            <span className="hidden sm:inline">Plantillas</span>
+                        </button>
+                        <button
+                            onClick={handleSaveSteps}
+                            disabled={saving}
+                            className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-[0_0_15px_rgba(8,145,178,0.4)]"
+                        >
+                            {saving ? (
+                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            ) : (
+                                <Save className="w-5 h-5" />
+                            )}
+                            <span>Guardar Cambios</span>
+                        </button>
+                    </div>
                 </div>
+
+                {/* ── Template selection panel ────────────────────── */}
+                {showTemplatePanel && (
+                    <div className="bg-gradient-to-br from-purple-950/40 to-slate-900 border border-purple-500/20 rounded-2xl p-5 shadow-xl shadow-purple-900/10 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                    <Zap className="w-5 h-5 text-purple-400" />
+                                    Cargar Plantilla de Outreach
+                                </h3>
+                                <p className="text-sm text-slate-400 mt-0.5">
+                                    Precarga los mensajes de invitación, post-aceptación y seguimiento.
+                                    Variables disponibles: <code className="text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded text-xs">{'{{name}}'}</code> <code className="text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded text-xs">{'{{specialty}}'}</code> <code className="text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded text-xs">{'{{role}}'}</code>
+                                </p>
+                            </div>
+                            <button onClick={() => setShowTemplatePanel(false)} className="text-slate-500 hover:text-white p-1">✕</button>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            {OUTREACH_TEMPLATES.map((tpl, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => loadTemplateIntoEditor(tpl)}
+                                    className="group text-left bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-purple-500/30 rounded-xl p-4 transition-all"
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className="mt-0.5 p-2 rounded-lg bg-purple-500/10 text-purple-400 group-hover:bg-purple-500/20 transition-colors shrink-0">
+                                            {tpl.icon === 'zap' ? <Zap className="w-5 h-5" /> : <MessageSquare className="w-5 h-5" />}
+                                        </div>
+                                        <div>
+                                            <p className="font-semibold text-white group-hover:text-purple-300 transition-colors">{tpl.label}</p>
+                                            <p className="text-xs text-slate-400 mt-1">{tpl.description}</p>
+                                            <p className="text-[10px] text-slate-500 mt-2 uppercase tracking-wider font-medium">{tpl.steps.length} pasos</p>
+                                        </div>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <div className="space-y-4 relative before:absolute before:inset-0 before:ml-6 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-800 before:to-transparent">
                     {steps.map((step, index) => (
@@ -191,7 +347,7 @@ const GmailSequences: React.FC = () => {
                                     <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
                                         <span>Cuerpo del Mensaje</span>
                                         <span className="text-[10px] text-slate-500 normal-case font-normal flex items-center gap-1">
-                                            <AlertCircle className="w-3 h-3" /> Soporta variables {'{{name}}'}, {'{{role}}'}
+                                            <AlertCircle className="w-3 h-3" /> Soporta variables {'{{name}}'}, {'{{role}}'}, {'{{specialty}}'}
                                         </span>
                                     </label>
                                     <textarea
@@ -234,13 +390,42 @@ const GmailSequences: React.FC = () => {
                     />
                 </div>
 
-                <button
-                    onClick={handleCreateNew}
-                    className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-[0_0_15px_rgba(8,145,178,0.3)]"
-                >
-                    <PlusCircle className="w-5 h-5" />
-                    <span>Nueva Secuencia</span>
-                </button>
+                <div className="flex items-center gap-2">
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowTemplatePanel(!showTemplatePanel)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all border ${showTemplatePanel ? 'bg-purple-600/20 text-purple-300 border-purple-500/40' : 'bg-slate-800 text-slate-300 hover:text-purple-300 border-slate-700 hover:border-purple-500/30 hover:bg-purple-500/10'}`}
+                        >
+                            <Zap className="w-4 h-4" />
+                            <span className="hidden sm:inline">Desde Plantilla</span>
+                        </button>
+                        {showTemplatePanel && (
+                            <div className="absolute right-0 top-full mt-2 w-80 bg-slate-900 border border-purple-500/20 rounded-xl p-3 shadow-2xl shadow-black/40 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                                <p className="text-xs font-semibold text-purple-300 uppercase tracking-wider mb-2 px-1">Crear con plantilla de outreach</p>
+                                {OUTREACH_TEMPLATES.map((tpl, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => handleCreateFromTemplate(tpl)}
+                                        className="w-full text-left bg-slate-800/60 hover:bg-slate-800 border border-slate-800 hover:border-purple-500/30 rounded-lg p-3 mb-2 last:mb-0 transition-all group"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            {tpl.icon === 'zap' ? <Zap className="w-4 h-4 text-purple-400" /> : <MessageSquare className="w-4 h-4 text-purple-400" />}
+                                            <span className="font-medium text-sm text-white group-hover:text-purple-300 transition-colors">{tpl.label}</span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-1 ml-6">{tpl.description}</p>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <button
+                        onClick={handleCreateNew}
+                        className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-[0_0_15px_rgba(8,145,178,0.3)]"
+                    >
+                        <PlusCircle className="w-5 h-5" />
+                        <span>Nueva Secuencia</span>
+                    </button>
+                </div>
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
