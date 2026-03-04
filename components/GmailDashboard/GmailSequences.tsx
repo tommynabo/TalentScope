@@ -295,6 +295,43 @@ const GmailSequences: React.FC = () => {
         }
     };
 
+    const handleDiagnostics = async () => {
+        try {
+            console.log('[Diagnose] Checking system health...');
+            const response = await fetch('/api/diagnose');
+            const diagnostics = await response.json();
+
+            console.log('[Diagnose] Results:', diagnostics);
+
+            const summary = diagnostics.summary || {};
+            const checks = diagnostics.checks || {};
+
+            let message = `📊 SYSTEM DIAGNOSTICS\n${diagnostics.timestamp}\n\n`;
+            message += `Status: ${summary.healthy ? '✅ HEALTHY' : '⚠️ ISSUES DETECTED'}\n`;
+            message += `Issues: ${summary.issueCount}\n\n`;
+
+            message += `📋 Checks:\n`;
+            message += `• Pending Leads: ${checks.pendingLeads?.count || 0}\n`;
+            message += `• Gmail Accounts: ${checks.gmailAccounts?.count || 0}\n`;
+            message += `• Active Sequences: ${checks.sequences?.count || 0}\n`;
+            message += `• Supabase: ${checks.supabaseConnection?.status === 'ok' ? '✅ Connected' : '❌ Error'}\n\n`;
+
+            if (summary.issueCount > 0) {
+                message += `⚠️ Issues:\n`;
+                summary.nextSteps?.forEach((step: string) => {
+                    message += `${step}\n`;
+                });
+            } else {
+                message += `✅ Everything looks good!\n`;
+            }
+
+            alert(message);
+        } catch (error: any) {
+            console.error('[Diagnose] Error:', error);
+            alert(`❌ Diagnostic failed: ${error?.message}`);
+        }
+    };
+
     const filteredSequences = sequences.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
     if (view === 'editor' && activeSequence) {
@@ -342,6 +379,14 @@ const GmailSequences: React.FC = () => {
                                 <span>Activar Secuencia</span>
                             </button>
                         )}
+                        <button
+                            onClick={handleDiagnostics}
+                            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white px-4 py-2.5 rounded-lg font-medium transition-colors"
+                            title="Verificar salud del sistema (cuentas, leads, secuencias)"
+                        >
+                            <AlertCircle className="w-5 h-5" />
+                            <span className="hidden sm:inline">Diagnóstico</span>
+                        </button>
                         <button
                             onClick={handleTestOutreach}
                             disabled={testing || steps.length === 0}
