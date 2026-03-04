@@ -21,7 +21,10 @@ const SPANISH_FIRST_NAMES = new Set([
     'miguel', 'nicolás', 'nicolas', 'óscar', 'oscar', 'pablo', 'patricio', 'pedro', 'rafael', 'ramiro',
     'ramón', 'ramon', 'raúl', 'raul', 'ricardo', 'roberto', 'rodrigo', 'rubén', 'ruben', 'salvador',
     'samuel', 'santiago', 'sebastián', 'sebastian', 'sergio', 'tomás', 'tomas', 'valentín', 'valentin',
-    'víctor', 'victor', 'xavier',
+    'víctor', 'victor', 'xavier', 'armando', 'agustín', 'agustin', 'benjamín', 'benjamin', 'beltrán',
+    'beltran', 'breogán', 'kike', 'pelayo', 'nazar', 'emerson', 'erik', 'israel', 'jeduan', 'moaz',
+    'edgar', 'iñaki', 'inaki', 'asier', 'koldo', 'unai', 'gorka', 'aitor', 'iker', 'pol', 'arnau',
+    'albert', 'oriol', 'pere', 'jordi', 'adrián', 'adrian', 'álvaro', 'alonso',
     // Female
     'adriana', 'alejandra', 'alicia', 'ana', 'andrea', 'ángela', 'angela', 'beatriz', 'camila',
     'carmen', 'carolina', 'catalina', 'claudia', 'constanza', 'cristina', 'daniela', 'diana',
@@ -32,7 +35,9 @@ const SPANISH_FIRST_NAMES = new Set([
     'mercedes', 'miriam', 'mónica', 'monica', 'natalia', 'noemí', 'noemi', 'nuria', 'olga', 'paloma',
     'patricia', 'paula', 'pilar', 'raquel', 'rebeca', 'rocío', 'rocio', 'rosa', 'rosario', 'ruth',
     'sandra', 'sara', 'silvia', 'sofía', 'sofia', 'soledad', 'sonia', 'susana', 'teresa', 'valentina',
-    'valeria', 'vanessa', 'verónica', 'veronica', 'virginia', 'ximena', 'yolanda'
+    'valeria', 'vanessa', 'verónica', 'veronica', 'virginia', 'ximena', 'yolanda', 'agustina',
+    'rochi', 'macarena', 'ainara', 'nerea', 'leire', 'ainhoa', 'alba', 'laia', 'berta', 'clara',
+    'montserrat', 'concha', 'amparo', 'inmaculada', 'dolores', 'lourdes', 'milagros', 'remedios'
 ]);
 
 // ─── Common Hispanic surnames ────────────────────────────────────────────────
@@ -54,7 +59,19 @@ const SPANISH_SURNAMES = new Set([
     'sánchez', 'sanchez', 'sandoval', 'santana', 'santos', 'serrano', 'silva', 'solís', 'solis',
     'soto', 'suárez', 'suarez', 'tapia', 'torres', 'trujillo', 'valdés', 'valdes', 'valencia',
     'valenzuela', 'vargas', 'vásquez', 'vasquez', 'vega', 'velasco', 'vera', 'vidal', 'villanueva',
-    'zamora', 'zapata', 'zúñiga', 'zuniga'
+    'zamora', 'zapata', 'zúñiga', 'zuniga',
+    // Extended surnames (from real search false negatives)
+    'diez', 'picón', 'picon', 'morgade', 'asensio', 'caballer', 'alonso', 'bruned', 'ottobre',
+    'abad', 'leal', 'areán', 'arean', 'barrio', 'prados', 'cornejo', 'carreño', 'carreno',
+    'torrijos', 'sagredo', 'pareja', 'urtecho', 'cuello', 'elgueta', 'campo', 'monsalve',
+    'sorribes', 'ortuño', 'ortuno', 'salmerón', 'salmeron', 'pla', 'scasserra', 'giudice',
+    'caballero', 'cebrian', 'cebrián', 'bermejo', 'bernabé', 'bernabe', 'bueno', 'calvo',
+    'cano', 'castaño', 'castano', 'cuesta', 'dueñas', 'duenas', 'echeverría', 'echeverria',
+    'fabre', 'ferrer', 'galan', 'galán', 'garrido', 'gil', 'gimeno', 'hidalgo', 'huertas',
+    'izquierdo', 'jurado', 'lamas', 'largo', 'llopis', 'manzano', 'maqueda', 'mateo',
+    'moya', 'naranjo', 'narváez', 'narvaez', 'oliva', 'orozco', 'pardo', 'pastor', 'pedraza',
+    'plaza', 'portillo', 'pozo', 'prada', 'quesada', 'roca', 'rubio', 'saenz', 'sainz',
+    'segura', 'sevilla', 'soler', 'tejada', 'toro', 'val', 'villar', 'vizoso', 'yáñez', 'yanez'
 ]);
 
 // ─── Spanish-speaking locations ──────────────────────────────────────────────
@@ -222,12 +239,24 @@ export function isLikelySpanishSpeaker(
         signals.push(...locTextResult.signals.filter(s => s.startsWith('text:')));
     }
 
+    // Signal 3: Also scan description for location keywords (fallback when location is null)
+    if (!locTextResult.locationMatch && description) {
+        const normDesc = normalize(description);
+        for (const loc of SPANISH_LOCATIONS) {
+            if (normDesc.includes(normalize(loc))) {
+                confidence += 35;
+                signals.push(`desc_location:${loc}`);
+                break;
+            }
+        }
+    }
+
     // Cap at 100
     confidence = Math.min(confidence, 100);
 
-    // Pass if ANY signal detected (confidence > 0)
+    // Pass if ANY signal detected — threshold lowered to catch more valid candidates
     return {
-        isSpanish: confidence >= 30,
+        isSpanish: confidence >= 20,
         confidence,
         signals,
     };

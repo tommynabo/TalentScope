@@ -145,7 +145,7 @@ export class LinkedInSearchEngine {
             onLog(`[DEDUP] ✅ ${existingEmails.size} emails y ${existingLinkedin.size} perfiles conocidos ignorados.`);
 
             const acceptedCandidates: Candidate[] = [];
-            const MAX_RETRIES = 10;
+            const MAX_RETRIES = 5;
             let attempt = 0;
             const seenProfileNames: string[] = [];
 
@@ -450,7 +450,7 @@ export class LinkedInSearchEngine {
         existingLinkedin: Set<string>
     ): Promise<Candidate[]> {
         const acceptedCandidates: Candidate[] = [];
-        const MAX_RETRIES = 10;
+        const MAX_RETRIES = 5;
         let attempt = 0;
         const seenProfileNames: string[] = [];
         const seenUrls = new Set<string>();
@@ -535,7 +535,10 @@ export class LinkedInSearchEngine {
 
                         // ═══ SPANISH LANGUAGE FILTER (pre-analysis) ═══
                         if (options.language === 'Spanish') {
-                            const langCheck = isLikelySpanishSpeaker(name, role, p.description || null, null);
+                            // Extract potential location from Google snippet (often contains LinkedIn location)
+                            const snippet = p.description || '';
+                            const extractedLocation = snippet.match(/(?:^|·|–|-)\s*([^·–-]+(?:Spain|España|Madrid|Barcelona|México|Colombia|Argentina|Chile|Perú|Valencia|Sevilla|Bogotá|Lima|Santiago|Buenos Aires)[^·–-]*)/i)?.[1]?.trim() || null;
+                            const langCheck = isLikelySpanishSpeaker(name, role, snippet, extractedLocation);
                             if (!langCheck.isSpanish) {
                                 processedCount++;
                                 onLog(`[LANG-FILTER] ❌ ${name} no parece hispanohablante (señales: ${langCheck.signals.length === 0 ? 'ninguna' : langCheck.signals.join(', ')})`);
@@ -555,7 +558,7 @@ export class LinkedInSearchEngine {
 
                         processedCount++;
 
-                        if (analysis.symmetry_score < 70) {
+                        if (analysis.symmetry_score < 50) {
                             onLog(`[FILTER] 📉 ${name} (Score: ${analysis.symmetry_score}) [${processedCount}/${newProfiles.length}]`);
                             return null;
                         }
@@ -648,7 +651,7 @@ export class LinkedInSearchEngine {
 
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 6000);
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
 
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
@@ -723,7 +726,7 @@ export class LinkedInSearchEngine {
                 followup_message: `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers. ¿Te interesa que te pase el brief técnico?`,
                 second_followup: `${context.name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`,
                 skills: context.skills || ['N/A'],
-                symmetry_score: 65
+                symmetry_score: 75
             };
         }
     }
