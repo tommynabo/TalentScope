@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { CommunityCandidate, CommunityPlatform } from '../types/community';
-import { ExternalLink, Mail, Github, Linkedin, ChevronDown, ChevronUp, Globe, MessageSquare, Star, Code2, BrainCircuit, Send, Database, Check } from 'lucide-react';
-import { CommunityEnrichmentService } from '../lib/communityEnrichmentService';
-import { CommunityCandidateSyncService } from '../lib/communityCandidateSyncService';
+import { ExternalLink, Mail, Github, Linkedin, ChevronDown, ChevronUp, Globe, MessageSquare, Star, Code2, BrainCircuit, Send, Check } from 'lucide-react';
 import Toast from '../../components/Toast';
 
 interface CommunityCandidatesPipelineProps {
@@ -54,7 +52,6 @@ export const CommunityCandidatesPipeline: React.FC<CommunityCandidatesPipelinePr
     const [sortField, setSortField] = useState<SortField>('talentScore');
     const [sortDir, setSortDir] = useState<SortDir>('desc');
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-    const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
     const [toast, setToast] = useState({ show: false, message: '' });
     const [localCandidates, setLocalCandidates] = useState<CommunityCandidate[]>(candidates);
 
@@ -78,50 +75,6 @@ export const CommunityCandidatesPipeline: React.FC<CommunityCandidatesPipelinePr
             next.has(id) ? next.delete(id) : next.add(id);
             return next;
         });
-    };
-
-    const handleEnrichCandidate = async (candidate: CommunityCandidate) => {
-        const id = candidate.id || candidate.username;
-        if (enrichingIds.has(id)) return;
-
-        setEnrichingIds(prev => {
-            const next = new Set(prev);
-            next.add(id);
-            return next;
-        });
-
-        try {
-            const updates = await CommunityEnrichmentService.enrichCandidate(candidate);
-
-            if (Object.keys(updates).length > 0) {
-                const enrichedCandidate = { ...candidate, ...updates };
-                
-                // Sync to Gmail candidates automatically
-                const syncSuccess = await CommunityCandidateSyncService.syncToGmailCandidates(enrichedCandidate);
-                
-                setLocalCandidates(prev => prev.map(c => {
-                    const cid = c.id || c.username;
-                    return cid === id ? enrichedCandidate : c;
-                }));
-                
-                if (syncSuccess) {
-                    setToast({ show: true, message: '✨ Email/LinkedIn extraído y sincronizado a Candidatos.' });
-                } else {
-                    setToast({ show: true, message: '✨ Email/LinkedIn extraído (revisar sincronización).' });
-                }
-            } else {
-                setToast({ show: true, message: 'No se encontró información adicional pública.' });
-            }
-        } catch (error) {
-            console.error('Error enriching candidate:', error);
-            setToast({ show: true, message: '❌ Error al conectar con el servicio de extracción.' });
-        } finally {
-            setEnrichingIds(prev => {
-                const next = new Set(prev);
-                next.delete(id);
-                return next;
-            });
-        }
     };
 
     // Sort candidates using local state
@@ -331,51 +284,68 @@ export const CommunityCandidatesPipeline: React.FC<CommunityCandidatesPipelinePr
                                                 </div>
                                             </div>
 
-                                            {/* Action Buttons (Enrichment + Profile + Add to Candidates) */}
+                                            {/* Contact Info Section */}
+                                            {candidate.contactInfo && candidate.contactInfo.type !== 'None' && (
+                                                <div className="bg-gradient-to-r from-violet-600/20 to-purple-600/20 border border-violet-500/30 rounded-xl p-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            {candidate.contactInfo.type === 'Email' && (
+                                                                <>
+                                                                    <div className="p-2 bg-emerald-600/20 rounded-lg">
+                                                                        <Mail className="h-5 w-5 text-emerald-400" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-xs text-slate-400">📧 Email encontrado</p>
+                                                                        <p className="text-sm font-mono text-emerald-300">{candidate.contactInfo.value}</p>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                            {candidate.contactInfo.type === 'LinkedIn' && (
+                                                                <>
+                                                                    <div className="p-2 bg-blue-600/20 rounded-lg">
+                                                                        <Linkedin className="h-5 w-5 text-blue-400" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-xs text-slate-400">💼 LinkedIn encontrado</p>
+                                                                        <a href={candidate.contactInfo.value} target="_blank" rel="noreferrer" className="text-sm text-blue-300 hover:text-blue-200">
+                                                                            Ver perfil LinkedIn
+                                                                        </a>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                            {candidate.contactInfo.type === 'GitHub' && (
+                                                                <>
+                                                                    <div className="p-2 bg-slate-600/20 rounded-lg">
+                                                                        <Github className="h-5 w-5 text-slate-400" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-xs text-slate-400">🐙 GitHub encontrado</p>
+                                                                        <p className="text-sm text-slate-300">{candidate.contactInfo.value}</p>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                        {candidate.autoAddedToGmail && (
+                                                            <div className="flex items-center gap-2 px-3 py-1 bg-emerald-600/20 border border-emerald-500/30 rounded-lg">
+                                                                <Check className="h-4 w-4 text-emerald-400" />
+                                                                <span className="text-xs font-medium text-emerald-300">Auto-añadido</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* No Contact Info Message */}
+                                            {(!candidate.contactInfo || candidate.contactInfo.type === 'None') && (
+                                                <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-4">
+                                                    <p className="text-xs text-slate-400">
+                                                        ℹ️ No se encontró información de contacto público durante la búsqueda
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            {/* Action Buttons (Profile + Limited Actions) */}
                                             <div className="flex gap-3 pt-2 flex-wrap">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleEnrichCandidate(candidate);
-                                                    }}
-                                                    disabled={enrichingIds.has(candidate.id || candidate.username)}
-                                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all border ${enrichingIds.has(candidate.id || candidate.username)
-                                                            ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
-                                                            : 'bg-violet-600/10 border-violet-500/30 text-violet-400 hover:bg-violet-600 hover:text-white hover:border-violet-500'
-                                                        }`}
-                                                >
-                                                    {enrichingIds.has(candidate.id || candidate.username) ? (
-                                                        <div className="h-3 w-3 border-2 border-slate-500/30 border-t-slate-500 rounded-full animate-spin"></div>
-                                                    ) : (
-                                                        <Database className="h-3.5 w-3.5" />
-                                                    )}
-                                                    {enrichingIds.has(candidate.id || candidate.username) ? 'Extrayendo...' : 'Extraer Email/LinkedIn'}
-                                                </button>
-
-                                                {candidate.email && (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            // Sync to Gmail candidates
-                                                            CommunityCandidateSyncService.syncToGmailCandidates(candidate)
-                                                                .then(synced => {
-                                                                    if (synced) {
-                                                                        setToast({ show: true, message: '✅ Candidato sincronizado a buzón.' });
-                                                                    } else {
-                                                                        setToast({ show: true, message: '⚠️ Candidato ya en el buzón o hay un error.' });
-                                                                    }
-                                                                })
-                                                                .catch(() => {
-                                                                    setToast({ show: true, message: '❌ Error al sincronizar.' });
-                                                                });
-                                                        }}
-                                                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600/10 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 hover:bg-emerald-600 hover:text-white transition-colors font-bold"
-                                                    >
-                                                        <Mail className="h-3.5 w-3.5" />
-                                                        + Candidatos
-                                                    </button>
-                                                )}
-
                                                 <a
                                                     href={candidate.profileUrl}
                                                     target="_blank"
@@ -386,6 +356,16 @@ export const CommunityCandidatesPipeline: React.FC<CommunityCandidatesPipelinePr
                                                     <Globe className="h-3.5 w-3.5" />
                                                     Ver perfil en {candidate.platform}
                                                 </a>
+
+                                                {candidate.email && (
+                                                    <a
+                                                        href={`mailto:${candidate.email}`}
+                                                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600/10 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 hover:bg-emerald-600 hover:text-white transition-colors font-bold"
+                                                    >
+                                                        <Mail className="h-3.5 w-3.5" />
+                                                        Enviar email
+                                                    </a>
+                                                )}
                                             </div>
 
                                             {/* Messaging Blocks (3 Rectangles) */}

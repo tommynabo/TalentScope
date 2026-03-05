@@ -1,8 +1,10 @@
-import { CommunityCandidate, CommunityFilterCriteria, CommunityPlatform, CommunitySearchProgress } from '../types/community';
+import { CommunityCandidate, CommunityFilterCriteria, CommunityPlatform, CommunitySearchProgress, ContactType, ContactInfo } from '../types/community';
 import { UnbreakableExecutor, initializeUnbreakableMarker } from '../../lib/UnbreakableExecution';
 import { CommunityScoringService } from './communityScoringService';
 import { communityDedupService } from './communityDeduplicationService';
 import { isLikelySpanishSpeaker } from './communityLanguageFilter';
+import { communityEnrichmentService } from './communityEnrichmentService';
+import { communityCandidateSyncService } from './communityCandidateSyncService';
 import { PRESET_DISCORD_FLUTTER_DEVS } from './communityPresets';
 
 export type LogCallback = (message: string) => void;
@@ -229,10 +231,17 @@ export class CommunitySearchEngine {
 
                 // Add new candidates to accepted list (buffer system)
                 const candidatesToAdd = finalCandidates.slice(0, Math.max(0, maxResults - acceptedCandidates.length));
-                acceptedCandidates.push(...candidatesToAdd);
+                
+                // ━━━ SEAMLESS ENRICHMENT: Extract email/LinkedIn during search ━━━
+                onLog(`\n🔗 Extrayendo email y LinkedIn para ${candidatesToAdd.length} candidatos...`);
+                const enrichedCandidates = await Promise.all(
+                    candidatesToAdd.map((candidate) => this.enrichCandidateDuringSearch(candidate, onLog))
+                );
+                
+                acceptedCandidates.push(...enrichedCandidates);
 
                 // Register them in dedup to avoid re-processing
-                candidatesToAdd.forEach(c => communityDedupService.registerCandidate(c));
+                enrichedCandidates.forEach(c => communityDedupService.registerCandidate(c));
 
                 onLog(`\n[PROGRESS] 📊 ${acceptedCandidates.length}/${maxResults} candidatos encontrados`);
 
@@ -271,6 +280,102 @@ export class CommunitySearchEngine {
             onComplete([]);
         } finally {
             this.isRunning = false;
+        }
+    }
+
+    /**
+     * Enrich a candidate with email and LinkedIn during search pipeline
+     * This is called immediately after discovery, not as a separate process
+     */
+    private async enrichCandidateDuringSearch(candidate: CommunityCandidate, onLog: LogCallback): Promise<CommunityCandidate> {
+        const enrichedCandidate = { ...candidate };
+        enrichedCandidate.enrichmentStartedAt = new Date().toISOString();
+        enrichedCandidate.enrichmentAttempts = (enrichedCandidate.enrichmentAttempts || 0) + 1;
+
+        try {
+            onLog(`  🔗 Enriqueciendo: ${candidate.username}...`);
+
+            // Call the OSINT enrichment service
+            const enrichmentResult = await communityEnrichmentService.enrichCandidate(
+                candidate.username,
+                candidate.platform,
+                candidate.profileUrl
+            );
+
+            // Extract email (priority 1 for Gmail enrollment)
+            if (enrichmentResult.emails && enrichmentResult.emails.length > 0) {
+                enrichedCandidate.email = enrichmentResult.emails[0];
+                enrichedCandidate.contactInfo = {
+                    type: ContactType.Email,
+                    value: enrichmentResult.emails[0],
+                    confidence: enrichmentResult.confidence,
+                    source: 'extracted',
+                    extractedAt: new Date().toISOString(),
+                };
+                onLog(`  ✅ Email encontrado: ${enrichedCandidate.email}`);
+
+                // Auto-enroll to Gmail > Buzones > Candidatos
+                try {
+                    const enrolled = await communityCandidateSyncService.syncToGmailCandidates(enrichedCandidate);
+                    enrichedCandidate.autoAddedToGmail = enrolled;
+                    if (enrolled) {
+                        onLog(`  📧 Auto-añadido a Gmail > Candidatos`);
+                    }
+                } catch (syncErr: any) {
+                    onLog(`  ⚠️ Error sincronizando a Gmail: ${syncErr.message}`);
+                    enrichedCandidate.autoAddedToGmail = false;
+                }
+            }
+            // Extract LinkedIn (fallback if no email)
+            else if (enrichmentResult.linkedInProfile) {
+                enrichedCandidate.linkedInUrl = enrichmentResult.linkedInProfile.url;
+                enrichedCandidate.contactInfo = {
+                    type: ContactType.LinkedIn,
+                    value: enrichmentResult.linkedInProfile.url,
+                    confidence: enrichmentResult.confidence,
+                    source: 'extracted',
+                    extractedAt: new Date().toISOString(),
+                };
+                onLog(`  ✅ LinkedIn encontrado: ${enrichedCandidate.linkedInUrl}`);
+            }
+            // Extract GitHub (last fallback)
+            else if (enrichmentResult.githubProfile) {
+                enrichedCandidate.githubUrl = enrichmentResult.githubProfile.url;
+                enrichedCandidate.githubUsername = enrichmentResult.githubProfile.username;
+                enrichedCandidate.contactInfo = {
+                    type: ContactType.GitHub,
+                    value: enrichmentResult.githubProfile.url,
+                    confidence: enrichmentResult.confidence,
+                    source: 'extracted',
+                    extractedAt: new Date().toISOString(),
+                };
+                onLog(`  ✅ GitHub encontrado: ${enrichedCandidate.githubUsername}`);
+            } else {
+                enrichedCandidate.contactInfo = {
+                    type: ContactType.None,
+                    value: '',
+                    confidence: 0,
+                    source: 'extracted',
+                    extractedAt: new Date().toISOString(),
+                };
+                onLog(`  ⚠️ No se encontró contacto para ${candidate.username}`);
+            }
+
+            enrichedCandidate.enrichmentCompletedAt = new Date().toISOString();
+            return enrichedCandidate;
+        } catch (error: any) {
+            // Enrichment failed but candidate is still valid for the search results
+            enrichedCandidate.enrichmentError = error.message;
+            enrichedCandidate.enrichmentCompletedAt = new Date().toISOString();
+            enrichedCandidate.contactInfo = {
+                type: ContactType.None,
+                value: '',
+                confidence: 0,
+                source: 'extracted',
+                extractedAt: new Date().toISOString(),
+            };
+            onLog(`  ⚠️ Error enriqueciendo ${candidate.username}: ${error.message}`);
+            return enrichedCandidate;
         }
     }
 

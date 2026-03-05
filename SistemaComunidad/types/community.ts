@@ -22,6 +22,23 @@ export enum CommunityMemberStatus {
     Replied = 'Replied',
 }
 
+// ─── Contact Info Types ──────────────────────────────────────────────────────
+
+export enum ContactType {
+    Email = 'Email',           // Direct email found
+    LinkedIn = 'LinkedIn',     // LinkedIn profile URL
+    GitHub = 'GitHub',         // GitHub profile (fallback)
+    None = 'None',            // No contact info found
+}
+
+export interface ContactInfo {
+    type: ContactType;
+    value: string;             // Email address or URL
+    confidence: number;        // 0-100: How confident is this contact info
+    source: 'gmail' | 'linkedin' | 'github' | 'osint' | 'extracted';  // Where it came from
+    extractedAt?: string;      // When it was extracted
+}
+
 // ─── Filter Criteria ─────────────────────────────────────────────────────────
 
 export interface CommunityFilterCriteria {
@@ -122,6 +139,16 @@ export interface CommunityCandidate {
     githubUrl?: string;
     githubUsername?: string;
     personalWebsite?: string;
+
+    // ─── SEAMLESS INTEGRATION FIELDS ────────────────────────────────────────
+    // Extracted during search, not post-search
+    contactInfo?: ContactInfo;     // Primary contact method (email, LinkedIn, GitHub)
+    autoAddedToGmail?: boolean;    // True if auto-enrolled to Gmail > Buzones > Candidatos
+    enrichmentAttempts?: number;   // Number of times enrichment was tried
+    enrichmentStartedAt?: string;  // When enrichment process started
+    enrichmentCompletedAt?: string;// When enrichment process finished
+    enrichmentError?: string;      // Error message if enrichment failed
+    // ───────────────────────────────────────────────────────────────────────────
 
     // Metadata
     scrapedAt: string;
