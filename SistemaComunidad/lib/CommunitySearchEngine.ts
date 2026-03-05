@@ -3,8 +3,8 @@ import { UnbreakableExecutor, initializeUnbreakableMarker } from '../../lib/Unbr
 import { CommunityScoringService } from './communityScoringService';
 import { communityDedupService } from './communityDeduplicationService';
 import { isLikelySpanishSpeaker } from './communityLanguageFilter';
-import { communityEnrichmentService } from './communityEnrichmentService';
-import { communityCandidateSyncService } from './communityCandidateSyncService';
+import { CommunityEnrichmentService } from './communityEnrichmentService';
+import { CommunityCandidateSyncService } from './communityCandidateSyncService';
 import { PRESET_DISCORD_FLUTTER_DEVS } from './communityPresets';
 
 export type LogCallback = (message: string) => void;
@@ -296,19 +296,15 @@ export class CommunitySearchEngine {
             onLog(`  🔗 Enriqueciendo: ${candidate.username}...`);
 
             // Call the OSINT enrichment service
-            const enrichmentResult = await communityEnrichmentService.enrichCandidate(
-                candidate.username,
-                candidate.platform,
-                candidate.profileUrl
-            );
+            const enrichmentResult = await CommunityEnrichmentService.enrichCandidate(candidate);
 
             // Extract email (priority 1 for Gmail enrollment)
-            if (enrichmentResult.emails && enrichmentResult.emails.length > 0) {
-                enrichedCandidate.email = enrichmentResult.emails[0];
+            if (enrichmentResult.email && !candidate.email) {
+                enrichedCandidate.email = enrichmentResult.email;
                 enrichedCandidate.contactInfo = {
                     type: ContactType.Email,
-                    value: enrichmentResult.emails[0],
-                    confidence: enrichmentResult.confidence,
+                    value: enrichmentResult.email,
+                    confidence: 95,
                     source: 'extracted',
                     extractedAt: new Date().toISOString(),
                 };
@@ -316,7 +312,7 @@ export class CommunitySearchEngine {
 
                 // Auto-enroll to Gmail > Buzones > Candidatos
                 try {
-                    const enrolled = await communityCandidateSyncService.syncToGmailCandidates(enrichedCandidate);
+                    const enrolled = await CommunityCandidateSyncService.syncToGmailCandidates(enrichedCandidate);
                     enrichedCandidate.autoAddedToGmail = enrolled;
                     if (enrolled) {
                         onLog(`  📧 Auto-añadido a Gmail > Candidatos`);
@@ -327,29 +323,28 @@ export class CommunitySearchEngine {
                 }
             }
             // Extract LinkedIn (fallback if no email)
-            else if (enrichmentResult.linkedInProfile) {
-                enrichedCandidate.linkedInUrl = enrichmentResult.linkedInProfile.url;
+            else if (enrichmentResult.linkedInUrl && !candidate.linkedInUrl) {
+                enrichedCandidate.linkedInUrl = enrichmentResult.linkedInUrl;
                 enrichedCandidate.contactInfo = {
                     type: ContactType.LinkedIn,
-                    value: enrichmentResult.linkedInProfile.url,
-                    confidence: enrichmentResult.confidence,
+                    value: enrichmentResult.linkedInUrl,
+                    confidence: 90,
                     source: 'extracted',
                     extractedAt: new Date().toISOString(),
                 };
                 onLog(`  ✅ LinkedIn encontrado: ${enrichedCandidate.linkedInUrl}`);
             }
             // Extract GitHub (last fallback)
-            else if (enrichmentResult.githubProfile) {
-                enrichedCandidate.githubUrl = enrichmentResult.githubProfile.url;
-                enrichedCandidate.githubUsername = enrichmentResult.githubProfile.username;
+            else if (enrichmentResult.githubUrl && !candidate.githubUrl) {
+                enrichedCandidate.githubUrl = enrichmentResult.githubUrl;
                 enrichedCandidate.contactInfo = {
                     type: ContactType.GitHub,
-                    value: enrichmentResult.githubProfile.url,
-                    confidence: enrichmentResult.confidence,
+                    value: enrichmentResult.githubUrl,
+                    confidence: 85,
                     source: 'extracted',
                     extractedAt: new Date().toISOString(),
                 };
-                onLog(`  ✅ GitHub encontrado: ${enrichedCandidate.githubUsername}`);
+                onLog(`  ✅ GitHub encontrado: ${enrichedCandidate.githubUrl}`);
             } else {
                 enrichedCandidate.contactInfo = {
                     type: ContactType.None,
