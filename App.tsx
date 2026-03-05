@@ -22,6 +22,7 @@ import { CampaignDashboard as MarketplaceCampaignDashboard } from './SistemaMark
 // Sistema Comunidad imports
 import { CommunityCampaignList } from './SistemaComunidad/components/CommunityCampaignList';
 import { CommunityScan } from './SistemaComunidad/components/CommunityScan';
+import AllCampaignsView from './components/AllCampaignsView';
 import { User, Campaign } from './types';
 import { supabase } from './lib/supabase';
 import { CampaignService } from './lib/services';
@@ -184,6 +185,12 @@ const App: React.FC = () => {
                     onOpenLinkedin={() => navigate('/tablero/linkedin')}
                     onLockedClick={handleLockedClick}
                   />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/tablero" element={
+                <ProtectedRoute user={user} loading={loading}>
+                  <AllCampaignsView />
                 </ProtectedRoute>
               } />
 

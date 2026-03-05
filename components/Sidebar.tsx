@@ -14,7 +14,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout }) => {
   const isActive = (path: string) => {
     if (path === '/dashboard' && (currentPath === '/dashboard' || currentPath === '/')) return true;
     if (path === '/tablero' && currentPath.includes('/tablero')) return true;
-    if (path === '/comunidades' && currentPath.includes('/comunidades')) return true;
     return currentPath.startsWith(path);
   };
 
@@ -45,20 +44,11 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout }) => {
         </button>
 
         <button
-          onClick={() => navigate('/tablero/linkedin')}
+          onClick={() => navigate('/tablero')}
           className={getButtonClass('/tablero')}
         >
           <LayoutDashboard className="h-5 w-5" />
-          {/* "Tablero" usually maps to Campaigns/Pipeline in this context */}
           <span className="hidden lg:block font-medium">Tablero</span>
-        </button>
-
-        <button
-          onClick={() => navigate('/comunidades')}
-          className={getButtonClass('/comunidades')}
-        >
-          <Users className="h-5 w-5" />
-          <span className="hidden lg:block font-medium">Comunidades</span>
         </button>
 
         <button
