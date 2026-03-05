@@ -47,18 +47,22 @@ async function handleReddit(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'Missing subreddit parameter' });
     }
 
-    const url = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(query)}&restrict_sr=1&limit=${limit}&sort=relevance&t=year`;
+    // Use old.reddit.com — www.reddit.com blocks datacenter IPs (403)
+    const url = `https://old.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(query)}&restrict_sr=1&limit=${limit}&sort=relevance&t=year`;
 
-    console.log(`[community-search] Reddit: fetching ${url}`);
+    console.log(`[community-search] Reddit: fetching r/${subreddit} q=${query}`);
 
     const response = await fetch(url, {
-        headers: { 'User-Agent': 'TalentScope/1.0 (Community Search Bot)' },
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+        },
     });
 
     if (!response.ok) {
         const text = await response.text();
-        console.error(`[community-search] Reddit error ${response.status}:`, text);
-        return res.status(response.status).json({ error: `Reddit API error: ${response.status}`, details: text });
+        console.error(`[community-search] Reddit error ${response.status}:`, text.slice(0, 300));
+        return res.status(response.status).json({ error: `Reddit API error: ${response.status}`, details: text.slice(0, 200) });
     }
 
     const data = await response.json();
@@ -87,7 +91,7 @@ async function handleGitHub(req: VercelRequest, res: VercelResponse) {
 
     const url = `https://api.github.com/repos/${repo}/issues?per_page=${limit}&state=all`;
 
-    console.log(`[community-search] GitHub: fetching ${url}`);
+    console.log(`[community-search] GitHub: fetching ${repo}`);
 
     const response = await fetch(url, {
         headers: { 'User-Agent': 'TalentScope/1.0' },
@@ -95,8 +99,8 @@ async function handleGitHub(req: VercelRequest, res: VercelResponse) {
 
     if (!response.ok) {
         const text = await response.text();
-        console.error(`[community-search] GitHub error ${response.status}:`, text);
-        return res.status(response.status).json({ error: `GitHub API error: ${response.status}`, details: text });
+        console.error(`[community-search] GitHub error ${response.status}:`, text.slice(0, 300));
+        return res.status(response.status).json({ error: `GitHub API error: ${response.status}`, details: text.slice(0, 200) });
     }
 
     const issues = await response.json();
