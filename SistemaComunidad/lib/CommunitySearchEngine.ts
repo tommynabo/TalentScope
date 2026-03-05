@@ -14,8 +14,8 @@ export type LogCallback = (message: string) => void;
  * and GitHub Discussions. Uses UnbreakableExecutor from shared lib
  * to survive tab switches and browser pauses.
  * 
- * Design: Same pattern as SistemaGithub/lib/GitHubSearchEngine.ts
- * but adapted for community platforms.
+ * All external API calls go through /api/community-search proxy
+ * to avoid browser CORS restrictions.
  */
 export class CommunitySearchEngine {
     private isRunning = false;
@@ -27,9 +27,6 @@ export class CommunitySearchEngine {
         initializeUnbreakableMarker();
     }
 
-    /**
-     * Stop the current search
-     */
     public stop() {
         this.userIntendedStop = true;
         this.isRunning = false;
@@ -42,16 +39,10 @@ export class CommunitySearchEngine {
         }
     }
 
-    /**
-     * Check if search is currently running
-     */
     public getIsRunning(): boolean {
         return this.isRunning;
     }
 
-    /**
-     * Start community search with provided filters
-     */
     public async startCommunitySearch(
         query: string,
         maxResults: number,
@@ -83,12 +74,12 @@ export class CommunitySearchEngine {
                 }
             ).catch((err) => {
                 if (!this.userIntendedStop) {
-                    onLog(`[ERROR] ❌ ${err.message}`);
+                    onLog(`[ERROR] ${err.message}`);
                 }
                 this.isRunning = false;
             });
         } catch (err: any) {
-            onLog(`[ERROR] ❌ ${err.message}`);
+            onLog(`[ERROR] ${err.message}`);
             this.isRunning = false;
         }
     }
@@ -147,13 +138,13 @@ export class CommunitySearchEngine {
             // Apply Spanish language filter if required
             if (filters.requireSpanishSpeaker) {
                 const minConfidence = filters.minSpanishConfidence || 25;
-                onLog(`\n🌍 Applying Spanish language filter (confidence ≥ ${minConfidence})...`);
+                onLog(`\n🌍 Applying Spanish language filter (confidence >= ${minConfidence})...`);
                 const beforeFilter = allCandidates.length;
                 allCandidates = allCandidates.filter(c => isLikelySpanishSpeaker({
                     displayName: c.displayName,
                     username: c.username,
                     bio: c.bio,
-                    location: null, // Community profiles rarely have location
+                    location: null,
                     detectedLanguage: c.detectedLanguage,
                 }, minConfidence));
                 onLog(`🌍 Language filter: ${beforeFilter} → ${allCandidates.length} candidates`);
@@ -168,7 +159,7 @@ export class CommunitySearchEngine {
             if (scoreThreshold > 0) {
                 const beforeScore = allCandidates.length;
                 allCandidates = allCandidates.filter(c => c.talentScore >= scoreThreshold);
-                onLog(`📊 Score filter (≥${scoreThreshold}): ${beforeScore} → ${allCandidates.length}`);
+                onLog(`📊 Score filter (>=${scoreThreshold}): ${beforeScore} → ${allCandidates.length}`);
             }
 
             // Limit results
@@ -185,11 +176,11 @@ export class CommunitySearchEngine {
             const avgScore = allCandidates.length > 0
                 ? Math.round(allCandidates.reduce((sum, c) => sum + c.talentScore, 0) / allCandidates.length)
                 : 0;
-            onLog(`📈 Calidad: ${excellent} excelentes (≥80), ${good} buenos (≥60), promedio: ${avgScore}`);
+            onLog(`📈 Calidad: ${excellent} excelentes (>=80), ${good} buenos (>=60), promedio: ${avgScore}`);
 
             onComplete(allCandidates);
         } catch (error: any) {
-            onLog(`[ERROR] ❌ ${error.message}`);
+            onLog(`[ERROR] ${error.message}`);
             onComplete([]);
         } finally {
             this.isRunning = false;
@@ -244,12 +235,6 @@ export class CommunitySearchEngine {
     ): Promise<CommunityCandidate[]> {
         onLog('🎮 Scanning Discord communities...');
 
-        // NOTE: Real implementation would use Discord API or Apify actor
-        // Structure is ready for integration with:
-        // - Discord Bot API (requires bot in server)
-        // - Apify Discord scraping actors
-        // - Direct REST API with token
-
         const serverIds = filters.discordServerIds || [];
         if (serverIds.length === 0) {
             onLog('⚠️ No Discord server IDs configured. Add server IDs in campaign filters.');
@@ -260,18 +245,9 @@ export class CommunitySearchEngine {
 
         for (const serverId of serverIds) {
             if (this.userIntendedStop) break;
-
             onLog(`📡 Scanning server: ${serverId}`);
-
-            // TODO: Integrate with Discord API
-            // Structure for when API is connected:
-            // const members = await discordApi.searchMessages(serverId, query, filters);
-            // Process members, extract signals, create CommunityCandidate objects
-
             progress.membersScanned += 0;
             onProgress(progress);
-
-            // Simulate scanning delay
             await this.delay(500);
         }
 
@@ -282,7 +258,7 @@ export class CommunitySearchEngine {
         return candidates;
     }
 
-    // ─── Reddit Search ──────────────────────────────────────────────────────
+    // ─── Reddit Search (via /api/community-search proxy) ────────────────────
 
     private async searchReddit(
         query: string,
@@ -309,20 +285,22 @@ export class CommunitySearchEngine {
             onLog(`📡 Scanning r/${subreddit}...`);
 
             try {
-                const url = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(query)}&restrict_sr=1&limit=100`;
-                const response = await fetch(url, { headers: { 'User-Agent': 'TalentScope/1.0' } });
+                // Use server-side proxy to avoid CORS
+                const proxyUrl = `/api/community-search?platform=reddit&subreddit=${encodeURIComponent(subreddit)}&query=${encodeURIComponent(query)}&limit=100`;
+                const response = await fetch(proxyUrl);
 
                 if (!response.ok) {
-                    onLog(`⚠️ Error fetching r/${subreddit}: ${response.status}`);
+                    const errBody = await response.text();
+                    onLog(`⚠️ Error r/${subreddit}: HTTP ${response.status} — ${errBody.slice(0, 200)}`);
                     continue;
                 }
 
                 const data = await response.json();
-                const posts = data.data?.children || [];
+                const posts = data.posts || [];
+                onLog(`📦 r/${subreddit}: ${posts.length} posts encontrados`);
 
                 for (const post of posts) {
-                    const postData = post.data;
-                    const author = postData.author;
+                    const author = post.author;
                     if (!author || author === '[deleted]' || author.toLowerCase().includes('bot') || author === 'AutoModerator') continue;
 
                     if (!candidatesMap.has(author)) {
@@ -335,23 +313,24 @@ export class CommunitySearchEngine {
                             avatarUrl: `https://ui-avatars.com/api/?name=${author}&background=EA580C&color=FFF`,
                             bio: `Active contributor in r/${subreddit}`,
                             messageCount: 1,
-                            helpfulnessScore: postData.score || 0,
-                            questionsAnswered: postData.num_comments || 0,
+                            helpfulnessScore: post.score || 0,
+                            questionsAnswered: post.num_comments || 0,
                             sharedCodeSnippets: 0,
                             projectLinks: [],
                             repoLinks: [],
                             skills: filters.keywords || [],
                             communityRoles: [],
-                            reputationScore: postData.score || 0,
+                            reputationScore: post.score || 0,
                             talentScore: 0,
-                            scrapedAt: new Date().toISOString()
+                            scrapedAt: new Date().toISOString(),
+                            communityName: `r/${subreddit}`,
                         });
                     } else {
                         const existing = candidatesMap.get(author)!;
                         existing.messageCount = (existing.messageCount || 0) + 1;
-                        existing.helpfulnessScore = (existing.helpfulnessScore || 0) + (postData.score || 0);
-                        existing.questionsAnswered = (existing.questionsAnswered || 0) + (postData.num_comments || 0);
-                        existing.reputationScore = (existing.reputationScore || 0) + (postData.score || 0);
+                        existing.helpfulnessScore = (existing.helpfulnessScore || 0) + (post.score || 0);
+                        existing.questionsAnswered = (existing.questionsAnswered || 0) + (post.num_comments || 0);
+                        existing.reputationScore = (existing.reputationScore || 0) + (post.score || 0);
                         if (!existing.bio?.includes(subreddit)) {
                             existing.bio += `, r/${subreddit}`;
                         }
@@ -360,13 +339,14 @@ export class CommunitySearchEngine {
                 }
 
                 onProgress(progress);
-                await this.delay(1000); // Respect rate limits
+                await this.delay(500);
             } catch (err: any) {
                 onLog(`⚠️ Error r/${subreddit}: ${err.message}`);
             }
         }
 
         const candidates = Array.from(candidatesMap.values());
+        onLog(`🔴 Reddit total: ${candidates.length} usuarios únicos`);
         progress.status = 'completed';
         progress.qualityFound = candidates.length;
         onProgress(progress);
@@ -386,12 +366,6 @@ export class CommunitySearchEngine {
     ): Promise<CommunityCandidate[]> {
         onLog('🎓 Scanning Skool communities...');
 
-        // NOTE: Skool has no public API — requires scraping
-        // Structure is ready for integration with:
-        // - Apify Skool scraping actors
-        // - Custom Playwright scraper
-        // - Manual CSV import
-
         const communityUrls = filters.skoolCommunityUrls || [];
         if (communityUrls.length === 0) {
             onLog('⚠️ No Skool community URLs configured.');
@@ -402,13 +376,9 @@ export class CommunitySearchEngine {
 
         for (const url of communityUrls) {
             if (this.userIntendedStop) break;
-
             onLog(`📡 Scanning: ${url}`);
-
-            // TODO: Integrate with Skool scraping
             progress.membersScanned += 0;
             onProgress(progress);
-
             await this.delay(500);
         }
 
@@ -419,7 +389,7 @@ export class CommunitySearchEngine {
         return candidates;
     }
 
-    // ─── GitHub Discussions Search ──────────────────────────────────────────
+    // ─── GitHub Discussions Search (via /api/community-search proxy) ────────
 
     private async searchGitHubDiscussions(
         query: string,
@@ -429,7 +399,7 @@ export class CommunitySearchEngine {
         progress: CommunitySearchProgress,
         onProgress: (p: CommunitySearchProgress) => void
     ): Promise<CommunityCandidate[]> {
-        onLog('💻 Scanning GitHub Discussions/Issues...');
+        onLog('💻 Scanning GitHub Issues/Discussions...');
 
         const repos = filters.githubRepos || [];
         if (repos.length === 0) {
@@ -446,20 +416,22 @@ export class CommunitySearchEngine {
             onLog(`📡 Scanning ${repo} activity...`);
 
             try {
-                // Fetch recent issues to find active community members
-                // Using Issues API as a proxy for repository community activity
-                const url = `https://api.github.com/repos/${repo}/issues?per_page=100&state=all`;
-                const response = await fetch(url, { headers: { 'User-Agent': 'TalentScope/1.0' } });
+                // Use server-side proxy to avoid CORS
+                const proxyUrl = `/api/community-search?platform=github&repo=${encodeURIComponent(repo)}&limit=100`;
+                const response = await fetch(proxyUrl);
 
                 if (!response.ok) {
-                    onLog(`⚠️ Error fetching ${repo}: ${response.status}`);
+                    const errBody = await response.text();
+                    onLog(`⚠️ Error ${repo}: HTTP ${response.status} — ${errBody.slice(0, 200)}`);
                     continue;
                 }
 
-                const issues = await response.json();
+                const data = await response.json();
+                const issues = data.issues || [];
+                onLog(`📦 ${repo}: ${issues.length} issues/discussions encontrados`);
 
                 for (const issue of issues) {
-                    const author = issue.user?.login;
+                    const author = issue.author;
                     if (!author || author.includes('[bot]') || author === 'dependabot[bot]') continue;
 
                     if (!candidatesMap.has(author)) {
@@ -468,29 +440,30 @@ export class CommunitySearchEngine {
                             platform: CommunityPlatform.GitHubDiscussions,
                             username: author,
                             displayName: author,
-                            profileUrl: issue.user.html_url || `https://github.com/${author}`,
-                            avatarUrl: issue.user.avatar_url || `https://ui-avatars.com/api/?name=${author}&background=0D1117&color=FFF`,
+                            profileUrl: issue.user_html_url || `https://github.com/${author}`,
+                            avatarUrl: issue.avatar_url || `https://ui-avatars.com/api/?name=${author}&background=0D1117&color=FFF`,
                             bio: `Active contributor in ${repo}`,
                             messageCount: 1,
-                            helpfulnessScore: issue.reactions?.total_count || 0,
+                            helpfulnessScore: issue.reactions_total || 0,
                             questionsAnswered: issue.comments || 0,
                             sharedCodeSnippets: 0,
                             projectLinks: [issue.html_url],
                             repoLinks: [`https://github.com/${repo}`],
                             skills: filters.keywords || [],
                             communityRoles: [],
-                            reputationScore: (issue.reactions?.total_count || 0) + (issue.comments || 0),
+                            reputationScore: (issue.reactions_total || 0) + (issue.comments || 0),
                             talentScore: 0,
-                            githubUrl: issue.user.html_url || `https://github.com/${author}`,
+                            githubUrl: issue.user_html_url || `https://github.com/${author}`,
                             githubUsername: author,
-                            scrapedAt: new Date().toISOString()
+                            scrapedAt: new Date().toISOString(),
+                            communityName: repo,
                         });
                     } else {
                         const existing = candidatesMap.get(author)!;
                         existing.messageCount = (existing.messageCount || 0) + 1;
-                        existing.helpfulnessScore = (existing.helpfulnessScore || 0) + (issue.reactions?.total_count || 0);
+                        existing.helpfulnessScore = (existing.helpfulnessScore || 0) + (issue.reactions_total || 0);
                         existing.questionsAnswered = (existing.questionsAnswered || 0) + (issue.comments || 0);
-                        existing.reputationScore = (existing.reputationScore || 0) + (issue.reactions?.total_count || 0) + (issue.comments || 0);
+                        existing.reputationScore = (existing.reputationScore || 0) + (issue.reactions_total || 0) + (issue.comments || 0);
                         if (!existing.bio?.includes(repo)) {
                             existing.bio += `, ${repo}`;
                             existing.repoLinks.push(`https://github.com/${repo}`);
@@ -500,13 +473,14 @@ export class CommunitySearchEngine {
                 }
 
                 onProgress(progress);
-                await this.delay(1000); // Respect rate limits
+                await this.delay(500);
             } catch (err: any) {
                 onLog(`⚠️ Error ${repo}: ${err.message}`);
             }
         }
 
         const candidates = Array.from(candidatesMap.values());
+        onLog(`💻 GitHub total: ${candidates.length} contributors únicos`);
         progress.status = 'completed';
         progress.qualityFound = candidates.length;
         onProgress(progress);
