@@ -22,14 +22,37 @@ export class CommunityDeduplicationService {
 
     /**
      * Initialize from previously discovered candidates in Supabase
+     * Loads existing candidates to avoid duplicates across searches
      */
     async initializeFromDatabase(campaignId: string): Promise<void> {
-        // TODO: Load from Supabase community_candidates table
-        // For now, clear and start fresh
-        this.existingUrls.clear();
-        this.existingUsernames.clear();
-        this.existingEmails.clear();
-        this.existingNames.clear();
+        try {
+            const { supabase } = await import('../../lib/supabase');
+            
+            // Load all community candidates from this campaign
+            const { data: existingCandidates, error } = await supabase
+                .from('community_candidates')
+                .select('id, username, email, profile_url, platform')
+                .eq('campaign_id', campaignId);
+
+            if (error) {
+                console.warn(`[DEDUP] Could not load existing candidates: ${error.message}`);
+                return;
+            }
+
+            if (existingCandidates && existingCandidates.length > 0) {
+                console.log(`[DEDUP] 🔍 Loading ${existingCandidates.length} existing candidates from campaign ${campaignId}...`);
+                
+                existingCandidates.forEach(c => {
+                    if (c.profile_url) this.existingUrls.add(this.normalizeUrl(c.profile_url));
+                    if (c.username) this.existingUsernames.add(`${c.platform}:${c.username.toLowerCase()}`);
+                    if (c.email) this.existingEmails.add(c.email.toLowerCase());
+                });
+                
+                console.log(`[DEDUP] ✅ ${existingCandidates.length} candidates loaded for deduplication`);
+            }
+        } catch (err: any) {
+            console.warn(`[DEDUP] Error initializing from database: ${err.message}`);
+        }
     }
 
     /**

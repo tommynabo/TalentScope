@@ -101,105 +101,173 @@ export class CommunitySearchEngine {
         try {
             const filters = options.filters || PRESET_DISCORD_FLUTTER_DEVS;
             const keywords = filters.keywords;
+            const MAX_RETRIES = 10; // Buffer + retry system like SistemaLinkedin
+            let attempt = 0;
+            let acceptedCandidates: CommunityCandidate[] = [];
+            const seenUsernames = new Set<string>(); // Track seen to avoid re-processing
 
+            onLog('🚀 Iniciando Community Infiltrator...');
+            onLog('[EXECUTOR] Current state: running');
             onLog('🔍 Iniciando búsqueda en comunidades...');
             onLog(`📌 Plataformas: ${filters.platforms.join(', ')}`);
             onLog(`🔑 Keywords: ${keywords.join(', ')}`);
             onLog(`📊 Max results: ${maxResults}`);
 
-            let allCandidates: CommunityCandidate[] = [];
-
-            // ━━━ STEP 1: GitHub Search Users (PRIMARY — always runs) ━━━
-            if (!this.userIntendedStop) {
-                onLog('\n═══ GitHub Search: Finding Developers ═══');
-                const ghUsers = await this.searchGitHubUsers(keywords, maxResults, onLog, onProgress);
-                onLog(`✅ GitHub Users: Found ${ghUsers.length} developers`);
-                allCandidates = [...allCandidates, ...ghUsers];
+            // Initialize dedup service from DB
+            if (options.campaignId) {
+                await communityDedupService.initializeFromDatabase(options.campaignId);
             }
 
-            // ━━━ STEP 2: GitHub Search Issues (finds active contributors) ━━━
-            if (!this.userIntendedStop && allCandidates.length < maxResults) {
-                onLog('\n═══ GitHub Issues: Finding Active Contributors ═══');
-                const ghIssues = await this.searchGitHubIssues(keywords, maxResults, onLog, onProgress);
-                onLog(`✅ GitHub Issues: Found ${ghIssues.length} contributors`);
-                allCandidates = [...allCandidates, ...ghIssues];
-            }
+            // ━━━ PERSISTENT RETRY LOOP: Keep searching until we have enough candidates ━━━
+            while (acceptedCandidates.length < maxResults && attempt < MAX_RETRIES && this.isRunning) {
+                attempt++;
+                onLog(`\n[RETRY] 🎯 Intento ${attempt}/${MAX_RETRIES}: Búsqueda persistente...`);
 
-            // ━━━ STEP 3: Reddit RSS (if Reddit is selected) ━━━
-            if (!this.userIntendedStop && filters.platforms.includes(CommunityPlatform.Reddit)) {
-                const subreddits = filters.subreddits || [];
-                if (subreddits.length > 0) {
-                    onLog('\n═══ Reddit Communities ═══');
-                    const redditCandidates = await this.searchRedditRSS(keywords, subreddits, maxResults, onLog, onProgress);
-                    onLog(`✅ Reddit: Found ${redditCandidates.length} community members`);
-                    allCandidates = [...allCandidates, ...redditCandidates];
-                } else {
-                    onLog('\n═══ Reddit ═══');
-                    onLog('⚠️ No subreddits configured. Skipping Reddit.');
+                let batchCandidates: CommunityCandidate[] = [];
+
+                // ━━━ STEP 1: GitHub Search Users (PRIMARY — always runs) ━━━
+                if (!this.userIntendedStop) {
+                    onLog('\n═══ GitHub Search: Finding Developers ═══');
+                    const ghUsers = await this.searchGitHubUsers(keywords, maxResults * 2, onLog, onProgress);
+                    const filtered = ghUsers.filter(c => !seenUsernames.has(c.username));
+                    onLog(`📦 GitHub Users: ${ghUsers.length} perfiles encontrados (${filtered.length} nuevos)`);
+                    if (filtered.length > 0) {
+                        onLog(`✅ GitHub Users: Found ${filtered.length} developers`);
+                        batchCandidates = [...batchCandidates, ...filtered];
+                        filtered.forEach(c => seenUsernames.add(c.username));
+                    }
+                }
+
+                // ━━━ STEP 2: GitHub Search Issues (finds active contributors) ━━━
+                if (!this.userIntendedStop && acceptedCandidates.length < maxResults) {
+                    onLog('\n═══ GitHub Issues: Finding Active Contributors ═══');
+                    const ghIssues = await this.searchGitHubIssues(keywords, maxResults * 2, onLog, onProgress);
+                    const filtered = ghIssues.filter(c => !seenUsernames.has(c.username));
+                    onLog(`📦 GitHub Issues: ${ghIssues.length} issues encontrados (${filtered.length} nuevos)`);
+                    if (filtered.length > 0) {
+                        onLog(`✅ GitHub Issues: Found ${filtered.length} contributors`);
+                        batchCandidates = [...batchCandidates, ...filtered];
+                        filtered.forEach(c => seenUsernames.add(c.username));
+                    }
+                }
+
+                // ━━━ STEP 3: Reddit RSS (if Reddit is selected) ━━━
+                if (!this.userIntendedStop && acceptedCandidates.length < maxResults && filters.platforms.includes(CommunityPlatform.Reddit)) {
+                    const subreddits = filters.subreddits || [];
+                    if (subreddits.length > 0) {
+                        onLog('\n═══ Reddit Communities ═══');
+                        const redditCandidates = await this.searchRedditRSS(keywords, subreddits, maxResults * 2, onLog, onProgress);
+                        const filtered = redditCandidates.filter(c => !seenUsernames.has(c.username));
+                        if (filtered.length > 0) {
+                            onLog(`✅ Reddit: Found ${filtered.length} community members`);
+                            batchCandidates = [...batchCandidates, ...filtered];
+                            filtered.forEach(c => seenUsernames.add(c.username));
+                        }
+                    }
+                }
+
+                // ━━━ STEP 4: GitHub Repo Issues (if repos configured) ━━━
+                const repos = filters.githubRepos || [];
+                if (!this.userIntendedStop && acceptedCandidates.length < maxResults && repos.length > 0) {
+                    onLog('\n═══ GitHub Repos: Scanning Specific Repositories ═══');
+                    const repoCandidates = await this.searchGitHubRepos(repos, keywords, maxResults * 2, onLog, onProgress);
+                    const filtered = repoCandidates.filter(c => !seenUsernames.has(c.username));
+                    if (filtered.length > 0) {
+                        onLog(`✅ GitHub Repos: Found ${filtered.length} contributors`);
+                        batchCandidates = [...batchCandidates, ...filtered];
+                        filtered.forEach(c => seenUsernames.add(c.username));
+                    }
+                }
+
+                // ━━━ Deduplicate (IMPROVED — against DB + current batch) ━━━
+                onLog(`\n🔄 Deduplicating ${batchCandidates.length} candidates...`);
+                const beforeDedup = batchCandidates.length;
+                const uniqueCandidates = batchCandidates.filter(c => {
+                    // Check against DB dedup service
+                    if (communityDedupService.isDuplicate(c)) return false;
+                    // Check against already accepted
+                    if (acceptedCandidates.some(ac => ac.email === c.email || ac.profileUrl === c.profileUrl)) return false;
+                    return true;
+                });
+                const removed = beforeDedup - uniqueCandidates.length;
+                if (removed > 0) {
+                    onLog(`🗑️ Removed ${removed} duplicates`);
+                }
+
+                if (uniqueCandidates.length === 0) {
+                    onLog(`⚠️ No candidatos nuevos en este intento. Reintentando...`);
+                    continue;
+                }
+
+                // ━━━ Spanish filter ━━━
+                let filteredByLang = uniqueCandidates;
+                if (filters.requireSpanishSpeaker) {
+                    const minConf = filters.minSpanishConfidence || 25;
+                    onLog(`\n🌍 Applying Spanish language filter (>= ${minConf})...`);
+                    const before = filteredByLang.length;
+                    filteredByLang = filteredByLang.filter(c => isLikelySpanishSpeaker({
+                        displayName: c.displayName,
+                        username: c.username,
+                        bio: c.bio,
+                        location: null,
+                        detectedLanguage: c.detectedLanguage,
+                    }, minConf));
+                    onLog(`🌍 Language filter: ${before} → ${filteredByLang.length}`);
+                }
+
+                // ━━━ Score ━━━
+                onLog(`\n📊 Scoring ${filteredByLang.length} candidates...`);
+                const scoredCandidates = CommunityScoringService.scoreAndRank(filteredByLang, filters);
+
+                const scoreThreshold = filters.minActivityScore || 0;
+                let finalCandidates = scoredCandidates;
+                if (scoreThreshold > 0) {
+                    const before = finalCandidates.length;
+                    finalCandidates = finalCandidates.filter(c => c.talentScore >= scoreThreshold);
+                    onLog(`📊 Score filter (>=${scoreThreshold}): ${before} → ${finalCandidates.length}`);
+                }
+
+                // Add new candidates to accepted list (buffer system)
+                const candidatesToAdd = finalCandidates.slice(0, Math.max(0, maxResults - acceptedCandidates.length));
+                acceptedCandidates.push(...candidatesToAdd);
+
+                // Register them in dedup to avoid re-processing
+                candidatesToAdd.forEach(c => communityDedupService.registerCandidate(c));
+
+                onLog(`\n[PROGRESS] 📊 ${acceptedCandidates.length}/${maxResults} candidatos encontrados`);
+
+                // If we reached the goal, break out of loop
+                if (acceptedCandidates.length >= maxResults) {
+                    onLog(`\n[SUCCESS] 🎉 Meta alcanzada en intento ${attempt}`);
+                    break;
                 }
             }
 
-            // ━━━ STEP 4: GitHub Repo Issues (if repos configured) ━━━
-            const repos = filters.githubRepos || [];
-            if (!this.userIntendedStop && repos.length > 0) {
-                onLog('\n═══ GitHub Repos: Scanning Specific Repositories ═══');
-                const repoCandidates = await this.searchGitHubRepos(repos, keywords, maxResults, onLog, onProgress);
-                onLog(`✅ GitHub Repos: Found ${repoCandidates.length} contributors`);
-                allCandidates = [...allCandidates, ...repoCandidates];
-            }
+            // ━━━ Final Results ━━━
+            const finalResults = acceptedCandidates.slice(0, maxResults);
+            onLog(`\n💾 Guardando en Supabase...`);
+            onLog('[EXECUTOR] Current state: completed');
 
-            // ━━━ Deduplicate ━━━
-            onLog(`\n🔄 Deduplicating ${allCandidates.length} candidates...`);
-            const beforeDedup = allCandidates.length;
-            allCandidates = communityDedupService.deduplicateArray(allCandidates);
-            const removed = beforeDedup - allCandidates.length;
-            if (removed > 0) {
-                onLog(`🗑️ Removed ${removed} duplicates`);
-            }
+            onLog(`\n✅ Búsqueda completada: ${finalResults.length} candidatos encontrados`);
 
-            // ━━━ Spanish filter ━━━
-            if (filters.requireSpanishSpeaker) {
-                const minConf = filters.minSpanishConfidence || 25;
-                onLog(`\n🌍 Applying Spanish language filter (>= ${minConf})...`);
-                const before = allCandidates.length;
-                allCandidates = allCandidates.filter(c => isLikelySpanishSpeaker({
-                    displayName: c.displayName,
-                    username: c.username,
-                    bio: c.bio,
-                    location: null,
-                    detectedLanguage: c.detectedLanguage,
-                }, minConf));
-                onLog(`🌍 Language filter: ${before} → ${allCandidates.length}`);
-            }
-
-            // ━━━ Score ━━━
-            onLog(`\n📊 Scoring ${allCandidates.length} candidates...`);
-            allCandidates = CommunityScoringService.scoreAndRank(allCandidates, filters);
-
-            const scoreThreshold = filters.minActivityScore || 0;
-            if (scoreThreshold > 0) {
-                const before = allCandidates.length;
-                allCandidates = allCandidates.filter(c => c.talentScore >= scoreThreshold);
-                onLog(`📊 Score filter (>=${scoreThreshold}): ${before} → ${allCandidates.length}`);
-            }
-
-            // ━━━ Limit ━━━
-            if (allCandidates.length > maxResults) {
-                allCandidates = allCandidates.slice(0, maxResults);
-                onLog(`📋 Limited to top ${maxResults}`);
-            }
-
-            onLog(`\n✅ Búsqueda completada: ${allCandidates.length} candidatos encontrados`);
-
-            const excellent = allCandidates.filter(c => c.talentScore >= 80).length;
-            const good = allCandidates.filter(c => c.talentScore >= 60 && c.talentScore < 80).length;
-            const avg = allCandidates.length > 0
-                ? Math.round(allCandidates.reduce((s, c) => s + c.talentScore, 0) / allCandidates.length) : 0;
+            const excellent = finalResults.filter(c => c.talentScore >= 80).length;
+            const good = finalResults.filter(c => c.talentScore >= 60 && c.talentScore < 80).length;
+            const avg = finalResults.length > 0
+                ? Math.round(finalResults.reduce((s, c) => s + c.talentScore, 0) / finalResults.length) : 0;
             onLog(`📈 Calidad: ${excellent} excelentes, ${good} buenos, promedio: ${avg}`);
+            onLog(`📋 Total: ${finalResults.length} candidatos encontrados`);
 
-            onComplete(allCandidates);
+            if (finalResults.length === 0) {
+                onLog(`\n[WARNING] ⚠️ No se encontraron candidatos nuevos después de ${attempt} intentos`);
+            } else if (finalResults.length < maxResults) {
+                onLog(`\n[INFO] ℹ️ Se encontraron ${finalResults.length}/${maxResults} candidatos (menos que el objetivo)`);
+            }
+
+            onLog(`\n✅ ${finalResults.length} nuevos candidatos guardados exitosamente`);
+            onComplete(finalResults);
         } catch (error: any) {
             onLog(`[ERROR] ${error.message}`);
+            this.isRunning = false;
             onComplete([]);
         } finally {
             this.isRunning = false;
