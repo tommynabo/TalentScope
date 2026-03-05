@@ -77,14 +77,20 @@ export const CommunityCandidatesPipeline: React.FC<CommunityCandidatesPipelinePr
         });
     };
 
-    // Sort candidates using local state
+    // Sort: primary by scrapedAt descending (newest first), secondary by talentScore
     const sorted = [...localCandidates].sort((a, b) => {
-        const aVal = (a as any)[sortField] || 0;
-        const bVal = (b as any)[sortField] || 0;
-        return sortDir === 'desc' ? bVal - aVal : aVal - bVal;
+        // Always sort by full timestamp first (most recent at top)
+        const aTime = new Date(a.scrapedAt).getTime() || 0;
+        const bTime = new Date(b.scrapedAt).getTime() || 0;
+        if (bTime !== aTime) return bTime - aTime;
+        // Secondary sort: by the selected sortField
+        const aVal = (a as any)[sortField] ?? 0;
+        const bVal = (b as any)[sortField] ?? 0;
+        if (sortField === 'scrapedAt') return sortDir === 'desc' ? bTime - aTime : aTime - bTime;
+        return sortDir === 'desc' ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
     });
 
-    // Group by date
+    // Group by date — within each group, order is already newest-first from sort above
     const grouped: Record<string, CommunityCandidate[]> = {};
     for (const c of sorted) {
         const key = toDateKey(c.scrapedAt);
@@ -92,6 +98,7 @@ export const CommunityCandidatesPipeline: React.FC<CommunityCandidatesPipelinePr
         grouped[key].push(c);
     }
 
+    // Date groups sorted newest first
     const dateKeys = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
 
     const SortButton = ({ field, label }: { field: SortField; label: string }) => (

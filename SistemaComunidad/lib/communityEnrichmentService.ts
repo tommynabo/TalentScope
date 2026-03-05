@@ -3,6 +3,54 @@ import { CommunityCandidate } from '../types/community';
 import { ContactResearchService } from '../../SistemaMarketplace/services/contactResearchService';
 import { ScrapedCandidate } from '../../SistemaMarketplace/types/marketplace';
 
+// ─── Email Validation ─────────────────────────────────────────────────────────
+// Reject placeholder, template, and obviously fake emails
+
+const FAKE_EMAIL_PATTERNS = [
+    /^your@/i,
+    /^(user|test|example|sample|demo|noreply|no-reply|info|admin|mail|email|contact|hello|hi|name|firstname|lastname)@/i,
+    /@(example|test|domain|email|placeholder|fake|dummy|sample|mailtest)\./i,
+    /\.(test|invalid|example|localhost)$/i,
+    /^[a-z]+@[a-z]+\.(com|net|org)$/i, // Too generic: abc@xyz.com with no real specificity
+];
+
+const FAKE_EMAIL_EXACT = new Set([
+    'your@email.com',
+    'user@example.com',
+    'test@test.com',
+    'email@example.com',
+    'name@domain.com',
+    'admin@admin.com',
+    'info@info.com',
+    'hello@hello.com',
+]);
+
+function isRealEmail(email: string): boolean {
+    if (!email || typeof email !== 'string') return false;
+    const normalized = email.trim().toLowerCase();
+    
+    // Must contain exactly one @ and have valid structure
+    const parts = normalized.split('@');
+    if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
+    
+    // Domain must have at least one dot
+    if (!parts[1].includes('.')) return false;
+    
+    // Reject known fakes
+    if (FAKE_EMAIL_EXACT.has(normalized)) return false;
+    
+    // Reject pattern-matched placeholders
+    if (FAKE_EMAIL_PATTERNS.some(rx => rx.test(normalized))) return false;
+    
+    // Local part must be at least 2 chars and not look like a template
+    if (parts[0].length < 2) return false;
+    
+    // Reject if looks like bracket placeholders: {email}, [email], <email>
+    if (/[{}\[\]<>]/.test(normalized)) return false;
+    
+    return true;
+}
+
 export const CommunityEnrichmentService = {
     /**
      * Enriches a community candidate by searching for their LinkedIn profile and email addresses
@@ -55,8 +103,10 @@ export const CommunityEnrichmentService = {
                 hasNewData = true;
             }
 
-            if (emailResult.emails.length > 0 && !candidate.email) {
-                updates.email = emailResult.emails[0]; // Take the highest confidence email
+            // Filter out placeholder / fake emails before accepting
+            const realEmails = emailResult.emails.filter(isRealEmail);
+            if (realEmails.length > 0 && !candidate.email) {
+                updates.email = realEmails[0]; // Take the highest confidence real email
                 hasNewData = true;
             }
 
