@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Square, Terminal, Users, TrendingUp, Download, ArrowLeft } from 'lucide-react';
+import { Play, Square, Terminal, Users, TrendingUp, Download, ArrowLeft, ChevronLeft, Globe, ChevronDown, ChevronUp, SlidersHorizontal, List } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CommunityCandidate, CommunityFilterCriteria, CommunityPlatform, CommunitySearchProgress, CommunityCampaign } from '../types/community';
 import { communitySearchEngine } from '../lib/CommunitySearchEngine';
 import { CommunityCandidatePersistence } from '../lib/communityCandidatePersistence';
 import { CommunityFilterConfig } from './CommunityFilterConfig';
-import { CommunityCampaignDashboard } from './CommunityCampaignDashboard';
+import { CommunityCandidatesPipeline } from './CommunityCandidatesPipeline';
 import { supabase } from '../../lib/supabase';
 
 const CAMPAIGNS_KEY = 'community_campaigns_v1';
@@ -23,7 +23,8 @@ export const CommunityScan: React.FC<CommunityScanProps> = ({ campaignId: propCa
     const [candidates, setCandidates] = useState<CommunityCandidate[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [logs, setLogs] = useState<string[]>([]);
-    const [activeView, setActiveView] = useState<'scan' | 'dashboard'>('scan');
+    const [showLogs, setShowLogs] = useState(false);
+    const [showFilters, setShowFilters] = useState(false);
     const [progress, setProgress] = useState<CommunitySearchProgress | null>(null);
     const [criteria, setCriteria] = useState<CommunityFilterCriteria>({
         platforms: [CommunityPlatform.Discord],
@@ -31,7 +32,7 @@ export const CommunityScan: React.FC<CommunityScanProps> = ({ campaignId: propCa
         maxResults: 100,
     });
 
-    const logEndRef = useRef<HTMLDivElement>(null);
+    const logsEndRef = useRef<HTMLDivElement>(null);
 
     // Load campaign from localStorage
     useEffect(() => {
@@ -54,8 +55,10 @@ export const CommunityScan: React.FC<CommunityScanProps> = ({ campaignId: propCa
 
     // Auto-scroll logs
     useEffect(() => {
-        logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [logs]);
+        if (showLogs) {
+            logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [logs, showLogs]);
 
     const addLog = (message: string) => {
         const timestamp = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -65,6 +68,8 @@ export const CommunityScan: React.FC<CommunityScanProps> = ({ campaignId: propCa
     const handleStart = async () => {
         setIsSearching(true);
         setLogs([]);
+        setShowLogs(true);
+        setShowFilters(false);
         addLog('🚀 Iniciando Community Infiltrator...');
 
         // Get user ID
@@ -86,29 +91,43 @@ export const CommunityScan: React.FC<CommunityScanProps> = ({ campaignId: propCa
             // onComplete
             async (results) => {
                 setIsSearching(false);
-                setCandidates(results);
                 addLog(`\n📋 Total: ${results.length} candidatos encontrados`);
+
+                // Append new results, but prevent duplicates locally by ID/Username+Platform
+                const newCandidates = [...candidates];
+                let addedCount = 0;
+                results.forEach(c => {
+                    const exists = newCandidates.some(existing => existing.username === c.username && existing.platform === c.platform);
+                    if (!exists) {
+                        newCandidates.push({
+                            ...c,
+                            kanbanLane: 'discovered' as const,
+                            addedAt: new Date().toISOString(),
+                        });
+                        addedCount++;
+                    }
+                });
+
+                if (addedCount > 0) {
+                    setCandidates(newCandidates);
+                }
 
                 // Save to campaign
                 if (campaign && campaignId) {
                     const updatedCampaign = {
                         ...campaign,
-                        candidates: results.map(c => ({
-                            ...c,
-                            kanbanLane: 'discovered' as const,
-                            addedAt: new Date().toISOString(),
-                        })),
+                        candidates: newCandidates,
                         stats: {
-                            total: results.length,
-                            excellentMatch: results.filter(c => c.talentScore >= 80).length,
-                            goodMatch: results.filter(c => c.talentScore >= 60).length,
-                            withEmail: results.filter(c => !!c.email).length,
-                            withLinkedIn: results.filter(c => !!c.linkedInUrl).length,
-                            withGitHub: results.filter(c => !!c.githubUrl).length,
-                            avgScore: results.length > 0
-                                ? Math.round(results.reduce((s, c) => s + c.talentScore, 0) / results.length)
+                            total: newCandidates.length,
+                            excellentMatch: newCandidates.filter(c => c.talentScore >= 80).length,
+                            goodMatch: newCandidates.filter(c => c.talentScore >= 60).length,
+                            withEmail: newCandidates.filter(c => !!c.email).length,
+                            withLinkedIn: newCandidates.filter(c => !!c.linkedInUrl).length,
+                            withGitHub: newCandidates.filter(c => !!c.githubUrl).length,
+                            avgScore: newCandidates.length > 0
+                                ? Math.round(newCandidates.reduce((s, c) => s + c.talentScore, 0) / newCandidates.length)
                                 : 0,
-                            maxScore: results.length > 0 ? Math.max(...results.map(c => c.talentScore)) : 0,
+                            maxScore: newCandidates.length > 0 ? Math.max(...newCandidates.map(c => c.talentScore)) : 0,
                             lastScannedAt: new Date().toISOString(),
                         },
                     };
@@ -130,7 +149,7 @@ export const CommunityScan: React.FC<CommunityScanProps> = ({ campaignId: propCa
                         const saved = await CommunityCandidatePersistence.saveCandidates(
                             campaignId, results, userId
                         );
-                        addLog(saved ? '✅ Guardado exitoso' : '⚠️ Error parcial al guardar');
+                        addLog(saved ? `✅ ${addedCount} nuevos candidatos guardados exitosamente` : '⚠️ Error parcial al guardar en DB');
                     }
                 }
             }
@@ -172,154 +191,148 @@ export const CommunityScan: React.FC<CommunityScanProps> = ({ campaignId: propCa
     };
 
     return (
-        <div className="p-6 md:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-7xl mx-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-4">
+        <div className="p-3 md:p-4 lg:p-6 animate-in fade-in slide-in-from-right-8 duration-500 h-full flex flex-col relative w-full overflow-y-auto">
+            {/* Header & Nav */}
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-2 lg:gap-3 mb-4">
+                <div className="flex items-center gap-1.5 lg:gap-3 flex-1 min-w-0">
                     <button
                         onClick={() => navigate('/comunidades')}
-                        className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
+                        className="p-1 lg:p-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-violet-500 hover:text-violet-400 text-slate-400 transition-all flex-shrink-0"
                     >
-                        <ArrowLeft className="h-4 w-4 text-slate-400" />
+                        <ChevronLeft className="h-4 lg:h-5 w-4 lg:w-5" />
                     </button>
-                    <div>
-                        <h1 className="text-2xl font-bold text-white">{campaign?.name || 'Community Scan'}</h1>
-                        <p className="text-sm text-slate-400">
-                            {criteria.platforms.join(', ')} · {criteria.keywords.join(', ')}
+                    <div className="min-w-0">
+                        <h2 className="text-lg lg:text-xl font-bold text-white flex items-center gap-1.5 lg:gap-2 truncate">
+                            <Users className="h-4 lg:h-5 w-4 lg:w-5 text-violet-500 flex-shrink-0" />
+                            <span className="truncate">{campaign?.name || 'Community Scan'}</span>
+                        </h2>
+                        <p className="text-slate-400 text-xs line-clamp-1">
+                            Plataformas: <span className="text-violet-400">{criteria.platforms.join(', ')}</span> •
+                            Keywords: <span className="text-slate-300">{criteria.keywords.join(', ')}</span>
                         </p>
                     </div>
                 </div>
 
-                {/* View Toggle */}
-                <div className="flex gap-1 p-1 bg-slate-900 rounded-lg border border-slate-800">
+                <div className="flex items-center gap-1.5 lg:gap-3 flex-shrink-0">
                     <button
-                        onClick={() => setActiveView('scan')}
-                        className={`px-4 py-2 rounded-md text-xs font-medium transition-colors ${activeView === 'scan' ? 'bg-violet-600/20 text-violet-300' : 'text-slate-400 hover:text-white'
-                            }`}
+                        onClick={() => setShowFilters(!showFilters)}
+                        className={`px-2.5 lg:px-4 py-1 lg:py-2 text-xs font-medium border rounded-lg transition-colors flex items-center gap-1.5 ${showFilters ? 'bg-violet-600/20 text-violet-300 border-violet-500/30' : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'}`}
                     >
-                        <Terminal className="h-4 w-4 inline mr-1" />
-                        Scan
+                        <SlidersHorizontal className="h-3 lg:h-4 w-3 lg:w-4" />
+                        <span className="hidden sm:inline">Filtros</span>
                     </button>
-                    <button
-                        onClick={() => setActiveView('dashboard')}
-                        className={`px-4 py-2 rounded-md text-xs font-medium transition-colors ${activeView === 'dashboard' ? 'bg-violet-600/20 text-violet-300' : 'text-slate-400 hover:text-white'
-                            }`}
-                    >
-                        <TrendingUp className="h-4 w-4 inline mr-1" />
-                        Dashboard
-                    </button>
-                </div>
-            </div>
 
-            {activeView === 'dashboard' && campaign ? (
-                <CommunityCampaignDashboard
-                    campaignId={campaignId}
-                    campaignTitle={campaign.name}
-                    candidates={candidates}
-                    onRefresh={() => setActiveView('scan')}
-                />
-            ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Left: Controls + Filters */}
-                    <div className="space-y-4">
-                        {/* Start/Stop */}
-                        <div className="flex gap-3">
-                            {!isSearching ? (
-                                <button
-                                    onClick={handleStart}
-                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 rounded-xl text-white font-bold transition-all shadow-lg shadow-violet-900/30 active:scale-95"
-                                >
-                                    <Play className="h-5 w-5" />
-                                    Iniciar Scan
-                                </button>
-                            ) : (
-                                <button
-                                    onClick={handleStop}
-                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-red-600 hover:bg-red-500 rounded-xl text-white font-bold transition-all active:scale-95"
-                                >
-                                    <Square className="h-5 w-5" />
-                                    Detener
-                                </button>
-                            )}
-
-                            {candidates.length > 0 && (
-                                <button
-                                    onClick={handleExportCSV}
-                                    className="px-4 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-slate-300 transition-colors"
-                                    title="Exportar CSV"
-                                >
-                                    <Download className="h-5 w-5" />
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Quick Stats */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 text-center">
-                                <p className="text-2xl font-bold text-white font-mono">{candidates.length}</p>
-                                <p className="text-[10px] text-slate-500 uppercase">Encontrados</p>
-                            </div>
-                            <div className="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 text-center">
-                                <p className="text-2xl font-bold text-emerald-400 font-mono">
-                                    {candidates.filter(c => c.talentScore >= 80).length}
-                                </p>
-                                <p className="text-[10px] text-slate-500 uppercase">Quality ≥80</p>
-                            </div>
-                        </div>
-
-                        {/* Filter Config */}
-                        <CommunityFilterConfig
-                            criteria={criteria}
-                            onChange={setCriteria}
+                    <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg px-2 lg:px-2.5 py-1 lg:py-1.5">
+                        <span className="text-slate-400 text-xs hidden sm:inline">Max:</span>
+                        <input
+                            type="number"
+                            min="10"
+                            max="500"
+                            value={criteria.maxResults || 100}
+                            onChange={(e) => setCriteria({ ...criteria, maxResults: Number(e.target.value) })}
+                            className="w-12 lg:w-16 bg-slate-800 border border-slate-700 rounded px-1 lg:px-1.5 py-0.5 text-white text-xs text-center focus:outline-none focus:border-violet-500"
                             disabled={isSearching}
                         />
                     </div>
 
-                    {/* Right: Log Console */}
-                    <div className="lg:col-span-2">
-                        <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden h-[600px] flex flex-col">
-                            {/* Console Header */}
-                            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-900/50">
-                                <div className="flex items-center gap-2">
-                                    <Terminal className="h-4 w-4 text-violet-400" />
-                                    <span className="text-sm font-medium text-white">Console</span>
-                                    {isSearching && (
-                                        <span className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-600/20 rounded-full text-xs text-emerald-400 border border-emerald-500/30">
-                                            <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                                            Scanning...
-                                        </span>
-                                    )}
-                                </div>
-                                <span className="text-xs text-slate-500">{logs.length} lines</span>
-                            </div>
+                    <button
+                        onClick={isSearching ? handleStop : handleStart}
+                        className={`px-2.5 lg:px-5 py-1 lg:py-2 ${isSearching ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500' : 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500'} text-white rounded-lg text-xs shadow-lg ${isSearching ? 'shadow-red-900/20' : 'shadow-violet-900/20'} transition-all flex items-center gap-1 flex-shrink-0 whitespace-nowrap`}
+                    >
+                        {isSearching ? <Square className="h-3 lg:h-4 w-3 lg:w-4" /> : <Play className="h-3 lg:h-4 w-3 lg:w-4" />}
+                        <span className="hidden sm:inline text-xs">{isSearching ? 'Detener' : 'Escanear Comunidades'}</span>
+                        <span className="sm:hidden">{isSearching ? '⏹' : '🔍'}</span>
+                    </button>
 
-                            {/* Log Content */}
-                            <div className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed">
-                                {logs.length === 0 ? (
-                                    <div className="text-slate-600 text-center mt-20">
-                                        <Terminal className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                                        <p>Presiona "Iniciar Scan" para comenzar...</p>
-                                        <p className="mt-1 text-slate-700">Los logs aparecerán aquí en tiempo real</p>
-                                    </div>
-                                ) : (
-                                    logs.map((log, i) => (
-                                        <div key={i} className={`py-0.5 ${log.includes('[ERROR]') ? 'text-red-400' :
-                                                log.includes('✅') ? 'text-emerald-400' :
-                                                    log.includes('⚠️') ? 'text-amber-400' :
-                                                        log.includes('═══') ? 'text-violet-400 font-bold' :
-                                                            log.includes('📊') || log.includes('📈') ? 'text-cyan-400' :
-                                                                'text-slate-400'
-                                            }`}>
-                                            {log}
-                                        </div>
-                                    ))
-                                )}
-                                <div ref={logEndRef} />
-                            </div>
-                        </div>
-                    </div>
+                    {candidates.length > 0 && (
+                        <button
+                            onClick={handleExportCSV}
+                            className="px-2.5 lg:px-3 py-1 lg:py-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-lg text-slate-300 transition-colors flex items-center justify-center p-2"
+                            title="Exportar CSV"
+                        >
+                            <Download className="h-3 lg:h-4 w-3 lg:w-4" />
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Filter Dropdown */}
+            {showFilters && (
+                <div className="mb-4">
+                    <CommunityFilterConfig
+                        criteria={criteria}
+                        onChange={setCriteria}
+                        disabled={isSearching}
+                    />
                 </div>
             )}
+
+            {/* Live Logs Section */}
+            {(isSearching || logs.length > 0) && (
+                <div className="mb-6 rounded-xl border border-slate-800 bg-slate-950 overflow-hidden flex-shrink-0">
+                    <button
+                        onClick={() => setShowLogs(!showLogs)}
+                        className="w-full flex items-center justify-between px-4 py-2 bg-slate-900/50 hover:bg-slate-900 transition-colors"
+                    >
+                        <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
+                            <Terminal className="h-4 w-4 text-violet-500" />
+                            Registro de Escaneo ({logs.length} líneas)
+                            {isSearching && (
+                                <span className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-600/20 rounded-full text-[10px] text-emerald-400 border border-emerald-500/30 ml-2">
+                                    <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                                    Scanning...
+                                </span>
+                            )}
+                        </div>
+                        {showLogs ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+                    </button>
+
+                    {showLogs && (
+                        <div className="p-4 h-48 overflow-y-auto font-mono text-xs text-slate-400 flex flex-col gap-1">
+                            {logs.map((log, i) => (
+                                <div key={i} className={`border-l-2 border-slate-800 pl-2 py-0.5 ${log.includes('[ERROR]') ? 'text-red-400' :
+                                        log.includes('✅') ? 'text-emerald-400' :
+                                            log.includes('⚠️') ? 'text-amber-400' :
+                                                log.includes('═══') ? 'text-violet-400 font-bold' :
+                                                    log.includes('📊') || log.includes('📈') ? 'text-cyan-400' :
+                                                        'text-slate-400'
+                                    }`}>
+                                    {log}
+                                </div>
+                            ))}
+                            <div ref={logsEndRef} />
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Main Content Area - Candidates Pipeline */}
+            <div className="flex-1 bg-slate-900/40 border border-slate-800 rounded-lg overflow-hidden flex flex-col overflow-y-auto">
+                {/* Header */}
+                <div className="px-3 py-3 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900/60 transition-all sticky top-0 z-10 backdrop-blur-md">
+                    <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
+                        <h3 className="font-semibold text-sm text-white whitespace-nowrap flex items-center gap-2">
+                            <List className="h-4 w-4 text-violet-400" />
+                            Pipeline de Candidatos ({candidates.length})
+                        </h3>
+                    </div>
+
+                    {campaign && candidates.length > 0 && (
+                        <div className="text-xs text-slate-400 flex gap-4">
+                            <span>Score Promedio: <strong className="text-white">{campaign.stats?.avgScore || 0}</strong></span>
+                            <span>Excelentes: <strong className="text-emerald-400">{campaign.stats?.excellentMatch || 0}</strong></span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Pipeline content */}
+                <div className="p-4">
+                    <CommunityCandidatesPipeline
+                        candidates={candidates}
+                        campaignId={campaignId}
+                    />
+                </div>
+            </div>
         </div>
     );
 };

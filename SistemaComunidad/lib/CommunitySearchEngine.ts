@@ -294,36 +294,79 @@ export class CommunitySearchEngine {
     ): Promise<CommunityCandidate[]> {
         onLog('🔴 Scanning Reddit communities...');
 
-        // NOTE: Real implementation would use Reddit API or Apify actor
-        // Structure is ready for integration with:
-        // - Reddit JSON API (append .json to any page)
-        // - Reddit OAuth API (for more data)
-        // - Apify Reddit scraping actors
-
         const subreddits = filters.subreddits || [];
         if (subreddits.length === 0) {
             onLog('⚠️ No subreddits configured. Add subreddits in campaign filters.');
             onLog('💡 Tip: Add subreddit names without r/ (e.g., "Flutter", "SaaS")');
+            return [];
         }
 
-        const candidates: CommunityCandidate[] = [];
+        const candidatesMap = new Map<string, CommunityCandidate>();
 
         for (const subreddit of subreddits) {
             if (this.userIntendedStop) break;
 
             onLog(`📡 Scanning r/${subreddit}...`);
 
-            // TODO: Integrate with Reddit API
-            // Structure:
-            // const posts = await fetch(`https://www.reddit.com/r/${subreddit}/search.json?q=${query}`);
-            // Extract active users, their post history, karma, etc.
+            try {
+                const url = `https://www.reddit.com/r/${subreddit}/search.json?q=${encodeURIComponent(query)}&restrict_sr=1&limit=100`;
+                const response = await fetch(url, { headers: { 'User-Agent': 'TalentScope/1.0' } });
 
-            progress.membersScanned += 0;
-            onProgress(progress);
+                if (!response.ok) {
+                    onLog(`⚠️ Error fetching r/${subreddit}: ${response.status}`);
+                    continue;
+                }
 
-            await this.delay(500);
+                const data = await response.json();
+                const posts = data.data?.children || [];
+
+                for (const post of posts) {
+                    const postData = post.data;
+                    const author = postData.author;
+                    if (!author || author === '[deleted]' || author.toLowerCase().includes('bot') || author === 'AutoModerator') continue;
+
+                    if (!candidatesMap.has(author)) {
+                        candidatesMap.set(author, {
+                            id: `reddit_${author}_${Date.now()}`,
+                            platform: CommunityPlatform.Reddit,
+                            username: author,
+                            displayName: author,
+                            profileUrl: `https://www.reddit.com/user/${author}`,
+                            avatarUrl: `https://ui-avatars.com/api/?name=${author}&background=EA580C&color=FFF`,
+                            bio: `Active contributor in r/${subreddit}`,
+                            messageCount: 1,
+                            helpfulnessScore: postData.score || 0,
+                            questionsAnswered: postData.num_comments || 0,
+                            sharedCodeSnippets: 0,
+                            projectLinks: [],
+                            repoLinks: [],
+                            skills: filters.keywords || [],
+                            communityRoles: [],
+                            reputationScore: postData.score || 0,
+                            talentScore: 0,
+                            scrapedAt: new Date().toISOString()
+                        });
+                    } else {
+                        const existing = candidatesMap.get(author)!;
+                        existing.messageCount = (existing.messageCount || 0) + 1;
+                        existing.helpfulnessScore = (existing.helpfulnessScore || 0) + (postData.score || 0);
+                        existing.questionsAnswered = (existing.questionsAnswered || 0) + (postData.num_comments || 0);
+                        existing.reputationScore = (existing.reputationScore || 0) + (postData.score || 0);
+                        if (!existing.bio?.includes(subreddit)) {
+                            existing.bio += `, r/${subreddit}`;
+                        }
+                    }
+                    progress.membersScanned++;
+                }
+
+                onProgress(progress);
+                await this.delay(1000); // Respect rate limits
+            } catch (err: any) {
+                onLog(`⚠️ Error r/${subreddit}: ${err.message}`);
+            }
         }
 
+        const candidates = Array.from(candidatesMap.values());
         progress.status = 'completed';
         progress.qualityFound = candidates.length;
         onProgress(progress);
@@ -386,40 +429,84 @@ export class CommunitySearchEngine {
         progress: CommunitySearchProgress,
         onProgress: (p: CommunitySearchProgress) => void
     ): Promise<CommunityCandidate[]> {
-        onLog('💻 Scanning GitHub Discussions...');
-
-        // NOTE: GitHub Discussions uses GraphQL API
-        // Structure is ready for integration with:
-        // - GitHub GraphQL API (Discussions endpoint)
-        // - GitHub REST API (for user profiles)
+        onLog('💻 Scanning GitHub Discussions/Issues...');
 
         const repos = filters.githubRepos || [];
         if (repos.length === 0) {
             onLog('⚠️ No GitHub repos configured for Discussions search.');
             onLog('💡 Tip: Add repo names (e.g., "flutter/flutter", "vercel/next.js")');
+            return [];
         }
 
-        const candidates: CommunityCandidate[] = [];
+        const candidatesMap = new Map<string, CommunityCandidate>();
 
         for (const repo of repos) {
             if (this.userIntendedStop) break;
 
-            onLog(`📡 Scanning ${repo} Discussions...`);
+            onLog(`📡 Scanning ${repo} activity...`);
 
-            // TODO: Integrate with GitHub GraphQL API
-            // Query example:
-            // query { repository(owner:"flutter", name:"flutter") {
-            //   discussions(first:100, orderBy:{field:CREATED_AT, direction:DESC}) {
-            //     nodes { author { login, avatarUrl }, bodyText, comments { totalCount } }
-            //   }
-            // }}
+            try {
+                // Fetch recent issues to find active community members
+                // Using Issues API as a proxy for repository community activity
+                const url = `https://api.github.com/repos/${repo}/issues?per_page=100&state=all`;
+                const response = await fetch(url, { headers: { 'User-Agent': 'TalentScope/1.0' } });
 
-            progress.membersScanned += 0;
-            onProgress(progress);
+                if (!response.ok) {
+                    onLog(`⚠️ Error fetching ${repo}: ${response.status}`);
+                    continue;
+                }
 
-            await this.delay(500);
+                const issues = await response.json();
+
+                for (const issue of issues) {
+                    const author = issue.user?.login;
+                    if (!author || author.includes('[bot]') || author === 'dependabot[bot]') continue;
+
+                    if (!candidatesMap.has(author)) {
+                        candidatesMap.set(author, {
+                            id: `github_${author}_${Date.now()}`,
+                            platform: CommunityPlatform.GitHubDiscussions,
+                            username: author,
+                            displayName: author,
+                            profileUrl: issue.user.html_url || `https://github.com/${author}`,
+                            avatarUrl: issue.user.avatar_url || `https://ui-avatars.com/api/?name=${author}&background=0D1117&color=FFF`,
+                            bio: `Active contributor in ${repo}`,
+                            messageCount: 1,
+                            helpfulnessScore: issue.reactions?.total_count || 0,
+                            questionsAnswered: issue.comments || 0,
+                            sharedCodeSnippets: 0,
+                            projectLinks: [issue.html_url],
+                            repoLinks: [`https://github.com/${repo}`],
+                            skills: filters.keywords || [],
+                            communityRoles: [],
+                            reputationScore: (issue.reactions?.total_count || 0) + (issue.comments || 0),
+                            talentScore: 0,
+                            githubUrl: issue.user.html_url || `https://github.com/${author}`,
+                            githubUsername: author,
+                            scrapedAt: new Date().toISOString()
+                        });
+                    } else {
+                        const existing = candidatesMap.get(author)!;
+                        existing.messageCount = (existing.messageCount || 0) + 1;
+                        existing.helpfulnessScore = (existing.helpfulnessScore || 0) + (issue.reactions?.total_count || 0);
+                        existing.questionsAnswered = (existing.questionsAnswered || 0) + (issue.comments || 0);
+                        existing.reputationScore = (existing.reputationScore || 0) + (issue.reactions?.total_count || 0) + (issue.comments || 0);
+                        if (!existing.bio?.includes(repo)) {
+                            existing.bio += `, ${repo}`;
+                            existing.repoLinks.push(`https://github.com/${repo}`);
+                        }
+                    }
+                    progress.membersScanned++;
+                }
+
+                onProgress(progress);
+                await this.delay(1000); // Respect rate limits
+            } catch (err: any) {
+                onLog(`⚠️ Error ${repo}: ${err.message}`);
+            }
         }
 
+        const candidates = Array.from(candidatesMap.values());
         progress.status = 'completed';
         progress.qualityFound = candidates.length;
         onProgress(progress);
