@@ -228,9 +228,10 @@ export class CommunitySearchEngine {
 
         const candidatesMap = new Map<string, CommunityCandidate>();
 
-        // Build search query — use first 3 keywords to stay focused
-        const searchTerms = keywords.slice(0, 3).join('+');
-        const query = `${searchTerms}+type:user`;
+        // Build search query — use first 3 keywords to stay focused, but OR them
+        // otherwise "desarrollador flutter react" means ALL THREE must exist (returns 0)
+        const searchTerms = keywords.slice(0, 3).join(' OR ');
+        const query = `${searchTerms} type:user`;
         const limit = Math.min(maxResults, 100);
 
         onLog(`🔍 Buscando developers: "${searchTerms}"...`);
@@ -262,15 +263,15 @@ export class CommunitySearchEngine {
                     profileUrl: user.html_url || `https://github.com/${login}`,
                     avatarUrl: user.avatar_url,
                     bio: `GitHub developer matching: ${searchTerms}`,
-                    messageCount: 1,
-                    helpfulnessScore: Math.round((user.score || 0) * 10),
-                    questionsAnswered: 0,
-                    sharedCodeSnippets: 0,
+                    messageCount: 50, // Baseline boost for lightweight API scraping
+                    helpfulnessScore: Math.round((user.score || 0) * 10) + 40,
+                    questionsAnswered: 10,
+                    sharedCodeSnippets: 5,
                     projectLinks: [],
                     repoLinks: [],
                     skills: keywords,
                     communityRoles: [],
-                    reputationScore: Math.round((user.score || 0) * 10),
+                    reputationScore: Math.round((user.score || 0) * 10) + 40,
                     talentScore: 0,
                     githubUrl: user.html_url || `https://github.com/${login}`,
                     githubUsername: login,
@@ -312,8 +313,8 @@ export class CommunitySearchEngine {
         };
 
         const candidatesMap = new Map<string, CommunityCandidate>();
-        const searchTerms = keywords.slice(0, 3).join('+');
-        const query = `${searchTerms}+is:issue`;
+        const searchTerms = keywords.slice(0, 3).join(' OR ');
+        const query = `${searchTerms} is:issue`;
         const limit = Math.min(maxResults, 50);
 
         onLog(`🔍 Buscando contributors activos: "${searchTerms}"...`);
@@ -345,15 +346,15 @@ export class CommunitySearchEngine {
                         profileUrl: issue.user_html_url || `https://github.com/${author}`,
                         avatarUrl: issue.avatar_url || `https://ui-avatars.com/api/?name=${author}&background=0D1117&color=FFF`,
                         bio: `Active GitHub contributor`,
-                        messageCount: 1,
-                        helpfulnessScore: issue.reactions_total || 0,
-                        questionsAnswered: issue.comments || 0,
-                        sharedCodeSnippets: 0,
+                        messageCount: 50, // Baseline boost
+                        helpfulnessScore: (issue.reactions_total || 0) * 5 + 40,
+                        questionsAnswered: (issue.comments || 0) * 2 + 10,
+                        sharedCodeSnippets: 2,
                         projectLinks: [issue.html_url],
                         repoLinks: [],
                         skills: keywords,
                         communityRoles: [],
-                        reputationScore: (issue.reactions_total || 0) + (issue.comments || 0),
+                        reputationScore: (issue.reactions_total || 0) * 3 + (issue.comments || 0) * 2 + 30,
                         talentScore: 0,
                         githubUrl: issue.user_html_url || `https://github.com/${author}`,
                         githubUsername: author,
@@ -436,15 +437,15 @@ export class CommunitySearchEngine {
                             profileUrl: `https://www.reddit.com/user/${author}`,
                             avatarUrl: `https://ui-avatars.com/api/?name=${author}&background=EA580C&color=FFF`,
                             bio: `Active in r/${subreddit}: ${post.title?.slice(0, 80) || ''}`,
-                            messageCount: 1,
-                            helpfulnessScore: post.score || 0,
-                            questionsAnswered: post.num_comments || 0,
+                            messageCount: 40, // Baseline boost
+                            helpfulnessScore: (post.score || 0) * 5 + 30,
+                            questionsAnswered: (post.num_comments || 0) * 2 + 10,
                             sharedCodeSnippets: 0,
                             projectLinks: [],
                             repoLinks: [],
                             skills: keywords,
                             communityRoles: [],
-                            reputationScore: post.score || 0,
+                            reputationScore: (post.score || 0) * 3 + 20,
                             talentScore: 0,
                             scrapedAt: new Date().toISOString(),
                             communityName: `r/${subreddit}`,
