@@ -19,6 +19,9 @@ import DetailView from './SistemaLinkedin/components/DetailView';
 // Sistema Marketplace imports
 import { MarketplaceRaidDashboard } from './SistemaMarketplace/components/MarketplaceRaidDashboard';
 import { CampaignDashboard as MarketplaceCampaignDashboard } from './SistemaMarketplace/components/CampaignDashboard';
+// Sistema Comunidad imports
+import { CommunityCampaignList } from './SistemaComunidad/components/CommunityCampaignList';
+import { CommunityScan } from './SistemaComunidad/components/CommunityScan';
 import { User, Campaign } from './types';
 import { supabase } from './lib/supabase';
 import { CampaignService } from './lib/services';
@@ -121,6 +124,14 @@ const App: React.FC = () => {
     if (moduleName === 'Mercados Freelance') {
       navigate('/marketplace-raid');
       setToastMessage('¡Marketplace Raid desbloqueado!');
+      setShowToast(true);
+      return;
+    }
+
+    // Allow Community Infiltrator to unlock
+    if (moduleName === 'Discord & Skool') {
+      navigate('/comunidades');
+      setToastMessage('¡Community Infiltrator activado!');
       setShowToast(true);
       return;
     }
@@ -232,6 +243,18 @@ const App: React.FC = () => {
               <Route path="/marketplace-raid/:campaignId" element={
                 <ProtectedRoute user={user} loading={loading}>
                   <MarketplaceCampaignWrapper />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/comunidades" element={
+                <ProtectedRoute user={user} loading={loading}>
+                  <CommunityCampaignList />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/comunidades/:campaignId" element={
+                <ProtectedRoute user={user} loading={loading}>
+                  <CommunityScan />
                 </ProtectedRoute>
               } />
 

@@ -211,28 +211,47 @@ const DashboardView: React.FC<DashboardViewProps> = ({ userName, onOpenLinkedin,
           </button>
         </div>
 
-        {/* LOCKED CARD: Communities */}
+        {/* ACTIVE CARD: Community Infiltrator */}
         <div
-          onClick={() => onLockedClick("Discord & Skool")}
-          className="group relative bg-slate-900/40 border border-slate-800 rounded-3xl p-6 cursor-pointer hover:bg-slate-800/60 transition-all duration-300 grayscale-[0.5] hover:grayscale-0"
+          onClick={() => navigate('/comunidades')}
+          className="group relative bg-gradient-to-b from-slate-800/80 to-slate-900/80 backdrop-blur-md border border-violet-500/30 rounded-3xl p-6 cursor-pointer hover:border-violet-400/60 hover:shadow-[0_0_40px_rgba(139,92,246,0.15)] transition-all duration-300 overflow-hidden transform hover:-translate-y-1"
         >
-          <div className="absolute top-5 right-5 text-slate-600 group-hover:text-slate-500 transition-colors">
-            <Lock className="h-6 w-6" />
+          {/* Background Tech Details */}
+          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-soft-light pointer-events-none"></div>
+
+          <div className="absolute top-0 right-0 p-4 flex gap-2 items-center">
+            <div className="flex items-center gap-2 bg-violet-950/40 border border-violet-500/20 px-3 py-1.5 rounded-full backdrop-blur-md shadow-lg shadow-violet-900/10">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-violet-500"></span>
+              </span>
+              <span className="text-xs font-semibold text-violet-300 tracking-wide">ACTIVE NODE</span>
+            </div>
           </div>
 
-          <div className="mb-6 p-4 bg-slate-800/40 w-fit rounded-2xl text-slate-500 group-hover:text-indigo-400 transition-all border border-slate-700/30">
+          <div className="mb-6 p-4 bg-violet-600/10 w-fit rounded-2xl text-violet-400 group-hover:text-violet-300 group-hover:scale-110 transition-all duration-300 border border-violet-500/10">
             <Users className="h-10 w-10" />
           </div>
 
-          <h3 className="text-xl font-bold text-slate-500 mb-2 group-hover:text-white transition-colors">Community Infiltrator</h3>
-          <p className="text-sm text-slate-500 mb-8 group-hover:text-slate-400 transition-colors">
-            Monitoreo y captación de miembros activos en servidores de Discord.
+          <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-violet-100 transition-colors">Community Infiltrator</h3>
+          <p className="text-sm text-slate-400 mb-8 leading-relaxed">
+            Captación de A-Players activos en Discord, Skool, Reddit y GitHub Discussions.
           </p>
-          <div className="absolute inset-x-0 bottom-6 px-6 flex justify-center">
-            <span className="text-xs font-bold font-mono text-cyan-600 bg-cyan-950/20 px-4 py-1.5 rounded-full border border-cyan-900/50 opacity-60 group-hover:opacity-100 transition-all">
-              PHASE 2 :: SOON
-            </span>
+
+          <div className="bg-slate-950/50 rounded-2xl p-4 mb-8 border border-slate-800/50 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-violet-500"></div>
+            <p className="text-xs text-slate-400 mb-1 uppercase tracking-wider">Estado</p>
+            <div className="flex items-baseline gap-2">
+              <p className="text-lg font-bold text-white">Sistema Listo</p>
+              <span className="text-xs font-medium text-emerald-400 flex items-center gap-1">
+                <Zap className="h-3 w-3" /> Ready
+              </span>
+            </div>
           </div>
+
+          <button className="w-full py-3 flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-violet-900/20 group-hover:shadow-violet-500/30 active:scale-95">
+            Infiltrar Comunidades <ArrowRight className="h-5 w-5" />
+          </button>
         </div>
       </div>
     </div>
