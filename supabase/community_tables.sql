@@ -198,11 +198,13 @@ ALTER TABLE community_campaigns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE community_candidates ENABLE ROW LEVEL SECURITY;
 
 -- Users can only access their own data
+DROP POLICY IF EXISTS "Users can manage own community campaigns" ON community_campaigns;
 CREATE POLICY "Users can manage own community campaigns"
   ON community_campaigns
   FOR ALL
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can manage own community candidates" ON community_candidates;
 CREATE POLICY "Users can manage own community candidates"
   ON community_candidates
   FOR ALL

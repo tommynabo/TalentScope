@@ -68,12 +68,12 @@ export const CommunityCandidatePersistence = {
                 p_data: record,
             });
             if (error) {
-                console.warn(`[RPC] Failed for ${candidate.username}:`, error.message);
+                console.error(`[RPC] Failed for ${candidate.username}:`, error);
                 return false;
             }
             return true;
         } catch (err: any) {
-            console.warn(`[RPC] Exception for ${candidate.username}:`, err.message);
+            console.error(`[RPC] Exception for ${candidate.username}:`, err);
             return false;
         }
     },
@@ -165,9 +165,9 @@ export const CommunityCandidatePersistence = {
                 console.log(`✅ [BULK] Saved ${candidates.length} candidates`);
                 return true;
             }
-            console.warn(`[BULK] Failed:`, error.message);
+            console.error(`[BULK] Failed:`, error);
         } catch (err: any) {
-            console.warn(`[BULK] Exception:`, err.message);
+            console.error(`[BULK] Exception:`, err);
         }
 
         // Strategy 3: Individual fallback

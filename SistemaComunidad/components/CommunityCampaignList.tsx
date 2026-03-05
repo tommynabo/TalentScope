@@ -36,7 +36,7 @@ export const CommunityCampaignList: React.FC = () => {
 
     const handleCreate = (name: string, criteria: CommunityFilterCriteria) => {
         const newCampaign: CommunityCampaign = {
-            id: `comm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            id: crypto.randomUUID(),
             name,
             platforms: criteria.platforms,
             status: 'active',
@@ -131,10 +131,10 @@ export const CommunityCampaignList: React.FC = () => {
                                     <Trash2 className="h-4 w-4 text-slate-500 hover:text-red-400" />
                                 </button>
                                 <span className={`text-xs font-semibold px-2 py-1 rounded-full ${campaign.status === 'active'
-                                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                        : campaign.status === 'paused'
-                                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                            : 'bg-slate-600/20 text-slate-400 border border-slate-600/30'
+                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                    : campaign.status === 'paused'
+                                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                        : 'bg-slate-600/20 text-slate-400 border border-slate-600/30'
                                     }`}>
                                     {campaign.status === 'active' ? '● Active' : campaign.status === 'paused' ? '⏸ Paused' : '✓ Done'}
                                 </span>
