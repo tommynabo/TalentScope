@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# SISTEMA COMUNIDAD - VERIFICACIÓN DE SETUP SQL
+# Este script verifica que todas las estructuras necesarias estén en Supabase
+
+echo "🔍 Verificando SistemaComunidad setup..."
+echo ""
+
+# Colores
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo "📋 PASOS A EJECUTAR EN SUPABASE:"
+echo ""
+echo "1️⃣  Ejecutar el SQL: update_global_email_view.sql"
+echo "   └─ Ubicación: supabase/update_global_email_view.sql"
+echo "   └─ Qué hace: Crea la vista 'global_email_candidates' que unifica todos los candidatos con email"
+echo "                de las 4 fuentes: LinkedIn, GitHub, Marketplace y Community"
+echo ""
+echo "2️⃣  Verificar que la tabla 'community_candidates' existe"
+echo "   └─ Estructura esperada:"
+echo "      - id (uuid) PRIMARY KEY"
+echo "      - campaign_id (uuid) FOREIGN KEY"
+echo "      - username (text) NOT NULL"
+echo "      - display_name (text)"
+echo "      - email (text) - SHOULD NOT NULL después de enriquecimiento"
+echo "      - linkedin_url (text)"
+echo "      - platform (text) - 'Discord', 'Reddit', 'Skool', 'GitHubDiscussions'"
+echo "      - profile_url (text)"
+echo "      - created_at (timestamp)"
+echo ""
+echo "3️⃣  Verificar RLS (Row Level Security) en supabase/"
+echo "   └─ Los candidatos deben ser visibles para users autenticados"
+echo ""
+echo "🔗 CONEXIÓN DEL FLUJO:"
+echo ""
+echo "   SistemaComunidad"
+echo "       ├─ CommunityCandidatesPipeline.tsx"
+echo "       │    └─ Click en 'Extraer Email/LinkedIn'"
+echo "       │"
+echo "       ├─ CommunityEnrichmentService"
+echo "       │    ├─ Usa ContactResearchService (OSINT con Apify)"
+echo "       │    └─ Actualiza: email + linkedin_url en community_candidates"
+echo "       │"
+echo "       └─ CommunityCandidateSyncService"
+echo "            ├─ Sincroniza automáticamente a global_email_candidates"
+echo "            └─ Aparecen en: Gmail Dashboard > Buzones > Candidatos"
+echo ""
+echo "📊 VERIFICACIÓN DE DATOS:"
+echo ""
+echo "   SELECT * FROM global_email_candidates"
+echo "   WHERE source_platform = 'Discord'"
+echo "   OR source_platform = 'Reddit'"
+echo "   OR source_platform = 'Skool'"
+echo "   OR source_platform = 'GitHubDiscussions';"
+echo ""
+echo "✅ CHECKLIST FINAL:"
+echo ""
+echo "   ☐ update_global_email_view.sql ejecutado"
+echo "   ☐ Tabla community_candidates tiene email NOT NULL"
+echo "   ☐ global_email_candidates_view existe"
+echo "   ☐ RLS configurado correctamente"
+echo "   ☐ Candidatos de SistemaComunidad visibles en global_email_candidates"
+echo ""

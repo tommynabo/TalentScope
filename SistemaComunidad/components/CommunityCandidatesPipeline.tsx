@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { CommunityCandidate, CommunityPlatform } from '../types/community';
-import { ExternalLink, Mail, Github, Linkedin, ChevronDown, ChevronUp, Globe, MessageSquare, Star, Code2, BrainCircuit, Send } from 'lucide-react';
+import { ExternalLink, Mail, Github, Linkedin, ChevronDown, ChevronUp, Globe, MessageSquare, Star, Code2, BrainCircuit, Send, Database, Check } from 'lucide-react';
+import { CommunityEnrichmentService } from '../lib/communityEnrichmentService';
+import { CommunityCandidateSyncService } from '../lib/communityCandidateSyncService';
+import Toast from '../../components/Toast';
 
 interface CommunityCandidatesPipelineProps {
     candidates: CommunityCandidate[];
@@ -51,6 +54,14 @@ export const CommunityCandidatesPipeline: React.FC<CommunityCandidatesPipelinePr
     const [sortField, setSortField] = useState<SortField>('talentScore');
     const [sortDir, setSortDir] = useState<SortDir>('desc');
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+    const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
+    const [toast, setToast] = useState({ show: false, message: '' });
+    const [localCandidates, setLocalCandidates] = useState<CommunityCandidate[]>(candidates);
+
+    // Sync local candidates when props change
+    React.useEffect(() => {
+        setLocalCandidates(candidates);
+    }, [candidates]);
 
     const toggleSort = (field: SortField) => {
         if (sortField === field) {
@@ -69,8 +80,52 @@ export const CommunityCandidatesPipeline: React.FC<CommunityCandidatesPipelinePr
         });
     };
 
-    // Sort candidates
-    const sorted = [...candidates].sort((a, b) => {
+    const handleEnrichCandidate = async (candidate: CommunityCandidate) => {
+        const id = candidate.id || candidate.username;
+        if (enrichingIds.has(id)) return;
+
+        setEnrichingIds(prev => {
+            const next = new Set(prev);
+            next.add(id);
+            return next;
+        });
+
+        try {
+            const updates = await CommunityEnrichmentService.enrichCandidate(candidate);
+
+            if (Object.keys(updates).length > 0) {
+                const enrichedCandidate = { ...candidate, ...updates };
+                
+                // Sync to Gmail candidates automatically
+                const syncSuccess = await CommunityCandidateSyncService.syncToGmailCandidates(enrichedCandidate);
+                
+                setLocalCandidates(prev => prev.map(c => {
+                    const cid = c.id || c.username;
+                    return cid === id ? enrichedCandidate : c;
+                }));
+                
+                if (syncSuccess) {
+                    setToast({ show: true, message: '✨ Email/LinkedIn extraído y sincronizado a Candidatos.' });
+                } else {
+                    setToast({ show: true, message: '✨ Email/LinkedIn extraído (revisar sincronización).' });
+                }
+            } else {
+                setToast({ show: true, message: 'No se encontró información adicional pública.' });
+            }
+        } catch (error) {
+            console.error('Error enriching candidate:', error);
+            setToast({ show: true, message: '❌ Error al conectar con el servicio de extracción.' });
+        } finally {
+            setEnrichingIds(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
+        }
+    };
+
+    // Sort candidates using local state
+    const sorted = [...localCandidates].sort((a, b) => {
         const aVal = (a as any)[sortField] || 0;
         const bVal = (b as any)[sortField] || 0;
         return sortDir === 'desc' ? bVal - aVal : aVal - bVal;
@@ -122,7 +177,7 @@ export const CommunityCandidatesPipeline: React.FC<CommunityCandidatesPipelinePr
                 <SortButton field="questionsAnswered" label="Q&A" />
                 <SortButton field="scrapedAt" label="Fecha" />
                 <span className="ml-auto text-xs text-slate-500">
-                    {candidates.length} candidato{candidates.length !== 1 ? 's' : ''}
+                    {localCandidates.length} candidato{localCandidates.length !== 1 ? 's' : ''}
                 </span>
             </div>
 
@@ -276,6 +331,63 @@ export const CommunityCandidatesPipeline: React.FC<CommunityCandidatesPipelinePr
                                                 </div>
                                             </div>
 
+                                            {/* Action Buttons (Enrichment + Profile + Add to Candidates) */}
+                                            <div className="flex gap-3 pt-2 flex-wrap">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleEnrichCandidate(candidate);
+                                                    }}
+                                                    disabled={enrichingIds.has(candidate.id || candidate.username)}
+                                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all border ${enrichingIds.has(candidate.id || candidate.username)
+                                                            ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed'
+                                                            : 'bg-violet-600/10 border-violet-500/30 text-violet-400 hover:bg-violet-600 hover:text-white hover:border-violet-500'
+                                                        }`}
+                                                >
+                                                    {enrichingIds.has(candidate.id || candidate.username) ? (
+                                                        <div className="h-3 w-3 border-2 border-slate-500/30 border-t-slate-500 rounded-full animate-spin"></div>
+                                                    ) : (
+                                                        <Database className="h-3.5 w-3.5" />
+                                                    )}
+                                                    {enrichingIds.has(candidate.id || candidate.username) ? 'Extrayendo...' : 'Extraer Email/LinkedIn'}
+                                                </button>
+
+                                                {candidate.email && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            // Sync to Gmail candidates
+                                                            CommunityCandidateSyncService.syncToGmailCandidates(candidate)
+                                                                .then(synced => {
+                                                                    if (synced) {
+                                                                        setToast({ show: true, message: '✅ Candidato sincronizado a buzón.' });
+                                                                    } else {
+                                                                        setToast({ show: true, message: '⚠️ Candidato ya en el buzón o hay un error.' });
+                                                                    }
+                                                                })
+                                                                .catch(() => {
+                                                                    setToast({ show: true, message: '❌ Error al sincronizar.' });
+                                                                });
+                                                        }}
+                                                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600/10 border border-emerald-500/30 rounded-lg text-xs text-emerald-400 hover:bg-emerald-600 hover:text-white transition-colors font-bold"
+                                                    >
+                                                        <Mail className="h-3.5 w-3.5" />
+                                                        + Candidatos
+                                                    </button>
+                                                )}
+
+                                                <a
+                                                    href={candidate.profileUrl}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    onClick={e => e.stopPropagation()}
+                                                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300 hover:bg-slate-700 transition-colors font-bold"
+                                                >
+                                                    <Globe className="h-3.5 w-3.5" />
+                                                    Ver perfil en {candidate.platform}
+                                                </a>
+                                            </div>
+
                                             {/* Messaging Blocks (3 Rectangles) */}
                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                                                 <div className="p-4 rounded-xl bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/30">
@@ -417,6 +529,8 @@ export const CommunityCandidatesPipeline: React.FC<CommunityCandidatesPipelinePr
                     </div>
                 </div>
             ))}
+
+            <Toast isVisible={toast.show} message={toast.message} onClose={() => setToast({ ...toast, show: false })} />
         </div>
     );
 };

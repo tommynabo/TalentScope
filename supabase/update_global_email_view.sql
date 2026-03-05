@@ -15,18 +15,17 @@ WHERE email IS NOT NULL AND email != ''
 
 UNION ALL
 
--- 2️⃣ GITHUB CANDIDATES: using github_search_results table
+-- 2️⃣ GITHUB CANDIDATES
 SELECT 
     id as candidate_id,
     'GitHub' as source_platform,
     COALESCE(github_metrics->>'name', github_username) as name,
-    COALESCE(email, github_metrics->>'mentioned_email') as email,
+    email,
     github_url as profile_url,
     'Developer' as current_role,
     created_at
-FROM public.github_search_results
-WHERE (email IS NOT NULL AND email != '') 
-   OR (github_metrics->>'mentioned_email' IS NOT NULL AND github_metrics->>'mentioned_email' != '')
+FROM public.github_candidates
+WHERE email IS NOT NULL AND email != ''
 
 UNION ALL
 
@@ -41,6 +40,20 @@ SELECT
     mc.added_at as created_at
 FROM public.marketplace_candidates mc
 JOIN public.marketplace_campaigns cmp ON mc.campaign_id = cmp.id
-WHERE mc.email IS NOT NULL AND mc.email != '';
+WHERE mc.email IS NOT NULL AND mc.email != ''
+
+UNION ALL
+
+-- 4️⃣ COMMUNITY CANDIDATES (Discord/Reddit/etc)
+SELECT 
+    cc.id as candidate_id,
+    cc.platform as source_platform,
+    COALESCE(cc.display_name, cc.username) as name,
+    cc.email,
+    cc.profile_url,
+    'Community Member' as current_role,
+    cc.created_at
+FROM public.community_candidates cc
+WHERE cc.email IS NOT NULL AND cc.email != '';
 
 GRANT SELECT ON public.global_email_candidates TO authenticated;

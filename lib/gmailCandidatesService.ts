@@ -112,6 +112,32 @@ export const GmailCandidatesService = {
             console.warn('[GmailCandidates] Could not query marketplace_candidates:', e);
         }
 
+        // Query Community candidates directly (Discord/Reddit/etc) - FALLBACK for Sistema Comunidad
+        try {
+            const { data: commData } = await supabase
+                .from('community_candidates')
+                .select('id, username, display_name, email, profile_url, platform, created_at')
+                .not('email', 'is', null)
+                .neq('email', '')
+                .order('created_at', { ascending: false });
+
+            if (commData) {
+                for (const row of commData) {
+                    results.push({
+                        candidate_id: row.id,
+                        source_platform: row.platform || 'Discord', // Platform = Discord/Reddit/Skool/GitHubDiscussions
+                        name: row.display_name || row.username || 'Unknown',
+                        email: row.email,
+                        profile_url: row.profile_url || null,
+                        current_role: 'Community Member',
+                        created_at: row.created_at
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('[GmailCandidates] Could not query community_candidates:', e);
+        }
+
         // Sort by created_at descending
         results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
