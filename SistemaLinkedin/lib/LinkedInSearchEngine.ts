@@ -145,7 +145,7 @@ export class LinkedInSearchEngine {
             onLog(`[DEDUP] ✅ ${existingEmails.size} emails y ${existingLinkedin.size} perfiles conocidos ignorados.`);
 
             const acceptedCandidates: Candidate[] = [];
-            const MAX_RETRIES = 5;
+            const MAX_RETRIES = 15;
             let attempt = 0;
             const seenProfileNames: string[] = [];
 
@@ -246,10 +246,12 @@ export class LinkedInSearchEngine {
 
     private getQueryVariation(baseQuery: string, attempt: number, seenNames: string[]): string {
         const coreTerms = baseQuery.replace(/[()]/g, ' ').split(/\s+/).filter(w => w.length > 2);
-        const core = coreTerms.slice(0, 3).join(' ');
+        // Usar los primeros 2 términos para asegurar contexto sin saturar la query
+        const core = coreTerms.slice(0, 2).join(' ') || baseQuery;
 
+        // Exclusiones por nombre (evitar repetir perfiles conocidos)
         const exclusions = seenNames
-            .slice(-12)
+            .slice(-15)
             .map(name => {
                 const parts = name.replace(/[^a-zA-ZÀ-ÿ\s]/g, '').trim().split(/\s+/);
                 return parts[0] && parts[0].length > 2 ? `-"${parts[0]}"` : '';
@@ -257,26 +259,35 @@ export class LinkedInSearchEngine {
             .filter(Boolean)
             .join(' ');
 
+        // RADICAL ROTATION: Diferentes combinaciones para forzar resultados frescos
         const variations = [
             baseQuery,
-            `"${core}" Spain OR España OR México OR Colombia OR Argentina`,
-            `${core} startup OR scaleup OR emprendimiento`,
-            `${core} freelance OR contractor OR autónomo OR independiente`,
-            `${core} remote OR remoto OR "trabajo remoto"`,
-            `"senior" ${core} español OR hispano`,
-            `"head" OR "lead" OR "principal" ${coreTerms[0] || core}`,
-            `"CTO" OR "VP" OR "director" ${coreTerms[0] || core}`,
-            `${coreTerms[0] || core} "full stack" OR "backend" OR "frontend"`,
-            `${core} Barcelona OR Madrid OR Valencia OR Sevilla`,
-            `${core} "Buenos Aires" OR Bogotá OR Lima OR Santiago OR Monterrey`,
-            `${core} "Ciudad de México" OR Medellín OR Quito OR Guadalajara`,
+            `"${core}" Spain OR España`,
+            `"${core}" México OR "Ciudad de México"`,
+            `"${core}" Colombia OR Bogotá OR Medellín`,
+            `"${core}" Argentina OR "Buenos Aires"`,
+            `"${core}" Chile OR Santiago`,
+            `"${core}" Perú OR Lima`,
+            `"Senior" "${core}" startup OR scaleup`,
+            `"Lead" "${core}" remoto OR remote`,
+            `"Principal" "${core}" independiente OR freelance`,
+            `"${core}" Barcelona OR Madrid OR Valencia`,
+            `"${core}" Monterrey OR Guadalajara OR Quito`,
+            `"${core}" (entorno OR equipo OR proyecto)`,
+            `"${core}" (desarrollo OR consultoría OR tech)`,
+            `"${core}" (especialista OR experto OR experto)`,
         ];
 
-        const variation = variations[Math.min(attempt - 1, variations.length - 1)];
+        // Usamos el intento para rotar radicalmente
+        let variation = variations[(attempt - 1) % variations.length];
 
+        // Si ya hemos pasado la primera rotación, añadimos exclusiones para mayor frescura
         if (attempt > 1 && exclusions) {
-            return `${variation} ${exclusions}`;
+            // Limitar longitud de query para evitar errores de motores de búsqueda
+            const finalQuery = `${variation} ${exclusions}`;
+            return finalQuery.length > 250 ? variation : finalQuery;
         }
+        
         return variation;
     }
 
@@ -450,7 +461,7 @@ export class LinkedInSearchEngine {
         existingLinkedin: Set<string>
     ): Promise<Candidate[]> {
         const acceptedCandidates: Candidate[] = [];
-        const MAX_RETRIES = 5;
+        const MAX_RETRIES = 15;
         let attempt = 0;
         const seenProfileNames: string[] = [];
         const seenUrls = new Set<string>();
@@ -470,15 +481,18 @@ export class LinkedInSearchEngine {
                     ? '(España OR México OR Colombia OR Argentina OR Chile OR Perú OR "habla española" OR Español)'
                     : '';
 
+                // DYNAMIC FETCH SCALE-UP: If target is high, request more results per attempt to handle duplicates
+                const resultsPerPage = Math.max(20, Math.min(100, maxResults * 3));
+                
                 const searchInput = {
                     queries: `${siteOperator} ${currentQuery} ${langKeywords}`,
                     maxPagesPerQuery: 1,
-                    resultsPerPage: 20,
+                    resultsPerPage: resultsPerPage,
                     languageCode: options.language === 'Spanish' ? 'es' : 'en',
                     countryCode: options.language === 'Spanish' ? 'es' : 'us',
                 };
 
-                onLog(`[LINKEDIN] 📊 1 página × 20 resultados (modo rápido ~8s)...`);
+                onLog(`[LINKEDIN] 📊 1 página × ${resultsPerPage} resultados (modo rápido ~8s)...`);
                 const results = await this.callApifyActor(GOOGLE_SEARCH_SCRAPER, searchInput, onLog);
 
                 let allResults: any[] = [];
