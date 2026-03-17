@@ -486,52 +486,58 @@ export class GitHubService {
     }
 
     /**
-     * Build GitHub search query from criteria
+     * Build GitHub search query from criteria with rotation
      */
     private buildRotatedQuery(criteria: GitHubFilterCriteria, attempt: number): string {
-        const baseQuery = this.buildSearchQuery(criteria);
-        if (attempt === 1) return baseQuery;
-
-        const variations = ['senior', 'expert', 'lead', 'principal', 'staff', 'freelance', 'remote', 'consultant', 'fullstack'];
-        const variation = variations[(attempt - 2) % variations.length];
-        return `${baseQuery} ${variation}`;
-    }
-
-    private buildSearchQuery(criteria: GitHubFilterCriteria): string {
         const parts: string[] = [];
 
+        // 1. Palabras clave y Rol (Capa de Texto)
         const textTerms: string[] = [];
         if (criteria.target_role) {
-            const safeRole = criteria.target_role.replace(/[^\w\s-]/gi, '').trim();
-            if (safeRole) textTerms.push(`"${safeRole}"`);
+            textTerms.push(`"${criteria.target_role.replace(/[^\w\s-]/gi, '').trim()}"`);
         }
+        
+        // Rotación de keywords (usamos solo una por intento para máxima precisión y ahorro de operadores)
         if (criteria.keywords && criteria.keywords.length > 0) {
-            criteria.keywords.forEach(kw => {
-                const safeKw = kw.replace(/[^\w\s-]/gi, '').trim();
-                if (safeKw) textTerms.push(`"${safeKw}"`);
-            });
+            const kw = criteria.keywords[(attempt - 1) % criteria.keywords.length];
+            textTerms.push(`"${kw.replace(/[^\w\s-]/gi, '').trim()}"`);
         }
+        
         if (textTerms.length > 0) parts.push(textTerms.join(' '));
 
-        if (criteria.languages.length > 0) parts.push(`language:${criteria.languages[0].toLowerCase()}`);
+        // 2. Lenguaje (Capa Técnica)
+        if (criteria.languages.length > 0) {
+            // Rotamos lenguajes si hay varios, o usamos el primero
+            const lang = criteria.languages[(attempt - 1) % criteria.languages.length];
+            parts.push(`language:${lang.toLowerCase()}`);
+        }
 
         parts.push('type:user');
         if (criteria.min_followers > 0) parts.push(`followers:>=${criteria.min_followers}`);
 
+        // 3. Ubicación (Capa Geográfica - CRITICAL PREFILTER)
+        // Regla: 1 solo país por intento para evitar error 422 (max 5 operadores)
+        const spanishCountries = ['Spain', 'Mexico', 'Colombia', 'Argentina', 'Chile', 'Peru', 'Uruguay', 'Ecuador', 'Venezuela'];
+        
         if (criteria.require_spanish_speaker) {
-            const spanishCountries = ['Spain', 'España', 'Mexico', 'México', 'Colombia', 'Argentina', 'Chile', 'Peru', 'Perú', 'Venezuela', 'Ecuador', 'Uruguay'];
-            const locQuery = `(${spanishCountries.map(c => `location:"${c}"`).join(' OR ')})`;
-            parts.push(locQuery);
-
-            const negativeCountries = ['India', 'Pakistan', 'USA', 'US', 'China', 'Vietnam', 'Russia'];
-            const negativeQuery = negativeCountries.map(c => `-location:"${c}"`).join(' ');
-            parts.push(negativeQuery);
+            const country = spanishCountries[(attempt - 1) % spanishCountries.length];
+            parts.push(`location:"${country}"`);
         } else if (criteria.locations && criteria.locations.length > 0) {
-            const locationParts = criteria.locations.map(loc => `location:"${loc}"`);
-            parts.push(`(${locationParts.join(' OR ')})`);
+            const country = criteria.locations[(attempt - 1) % criteria.locations.length];
+            parts.push(`location:"${country}"`);
         }
 
-        return parts.length > 0 ? parts.join(' ') : 'language:typescript type:user';
+        // Variaciones dinámicas para cada intento (evita duplicados de caché)
+        const variations = ['', 'senior', 'expert', 'lead', 'principal', 'staff', 'freelance', 'remote', 'consultant', 'fullstack'];
+        const variation = variations[(attempt - 1) % variations.length];
+        if (variation) parts.push(variation);
+
+        return parts.join(' ');
+    }
+
+    private buildSearchQuery(criteria: GitHubFilterCriteria): string {
+        // Mantenemos esta función para compatibilidad pero llamamos a la lógica de rotación
+        return this.buildRotatedQuery(criteria, 1);
     }
 
     /**

@@ -135,7 +135,7 @@ export class CommunitySearchEngine {
                 if (!this.userIntendedStop) {
                     onLog('\n═══ GitHub Search: Finding Developers ═══');
                     // Inyectar negative keywords en la capa 1 (aquí)
-                    const ghUsers = await this.searchGitHubUsers(rotatedKeywords, maxResults * 2, onLog, onProgress);
+                    const ghUsers = await this.searchGitHubUsers(rotatedKeywords, maxResults * 2, onLog, onProgress, attempt);
                     const filtered = ghUsers.filter(c => !seenUsernames.has(c.username));
                     if (filtered.length > 0) {
                         batchCandidates = [...batchCandidates, ...filtered];
@@ -146,7 +146,7 @@ export class CommunitySearchEngine {
                 // ━━━ STEP 2: Reddit X-RAY (Reemplaza RSS básico) ━━━
                 if (!this.userIntendedStop && acceptedCandidates.length < maxResults && filters.platforms.includes(CommunityPlatform.Reddit)) {
                     onLog('\n═══ Reddit X-Ray Search ═══');
-                    const redditUsers = await this.searchRedditXRay(rotatedKeywords, maxResults, onLog);
+                    const redditUsers = await this.searchRedditXRay(rotatedKeywords, maxResults, onLog, attempt);
                     const filtered = redditUsers.filter(c => !seenUsernames.has(c.username));
                     if (filtered.length > 0) {
                         batchCandidates = [...batchCandidates, ...filtered];
@@ -366,30 +366,28 @@ export class CommunitySearchEngine {
     // ═══════════════════════════════════════════════════════════════════════
 
     private getRotatedKeywords(keywords: string[], attempt: number): string[] {
-        const base = keywords[0] || 'developer';
-        if (attempt === 1) return keywords;
+        if (!keywords || keywords.length === 0) return ['developer'];
         
-        const variations = [
-            [base, 'experto'],
-            [base, 'senior'],
-            [base, 'freelance'],
-            [base, 'programador'],
-            [base, 'desarrollador'],
-            [base, 'madrid'],
-            [base, 'mexico'],
-            [base, 'argentina'],
-            [base, 'español'],
-            [base, 'disponible']
-        ];
-        
-        return variations[(attempt - 2) % variations.length];
+        // Regla Estricta: Seleccionamos UNA sola keyword por intento para GitHub
+        // pero para Reddit/X-Ray usaremos el array completo formateado correctamente.
+        // Aquí devolvemos el array para que el consumidor decida.
+        return keywords;
     }
 
-    private async searchRedditXRay(keywords: string[], maxResults: number, onLog: LogCallback): Promise<CommunityCandidate[]> {
-        const query = keywords.join(' ');
-        const locs = '(Spain OR Mexico OR Argentina OR Colombia OR Chile OR "en español")';
-        const dork = `site:reddit.com/user ("${query}" OR "desarrollador" OR "programador" OR "portfolio") ${locs}`;
-        onLog(`🔍 X-Raying Reddit: "${dork}"...`);
+    private async searchRedditXRay(keywords: string[], maxResults: number, onLog: LogCallback, attempt: number): Promise<CommunityCandidate[]> {
+        // PASO 2: Arreglar formato de keywords (saas OR startup OR mvp)
+        const keywordQuery = keywords.length > 0 
+            ? `(${keywords.map(k => k.trim()).join(' OR ')})`
+            : '"developer"';
+        
+        // Limitar países a 2-3 por intento para no confundir a Google
+        const allLocs = ['Spain', 'Mexico', 'Argentina', 'Colombia', 'Chile', 'Peru', 'Ecuador'];
+        const startIdx = ((attempt - 1) * 2) % allLocs.length;
+        const selectedLocs = allLocs.slice(startIdx, startIdx + 2);
+        const locsQuery = `(${selectedLocs.join(' OR ')})`;
+        
+        const dork = `site:reddit.com/user ${keywordQuery} ${locsQuery}`;
+        onLog(`🔍 X-Raying Reddit: ${dork}...`);
 
         try {
             const proxyUrl = `/api/community-search?platform=reddit&query=${encodeURIComponent(dork)}`;
@@ -397,13 +395,15 @@ export class CommunitySearchEngine {
             if (!response.ok) return [];
             
             const results = await response.json();
-            return (results.items || []).map((item: any, idx: number) => ({
+            const items = results.items || [];
+            
+            return items.map((item: any, idx: number) => ({
                 id: `reddit-${idx}-${Date.now()}`,
                 platform: CommunityPlatform.Reddit,
-                username: item.author || 'RedditUser',
-                displayName: item.author || 'Reddit User',
+                username: item.author || item.title || 'RedditUser',
+                displayName: item.author || item.title || 'Reddit User',
                 profileUrl: item.url,
-                bio: item.snippet || item.text,
+                bio: item.snippet || item.text || '',
                 scrapedAt: new Date().toISOString(),
                 talentScore: 0
             }));
@@ -416,7 +416,8 @@ export class CommunitySearchEngine {
         keywords: string[],
         maxResults: number,
         onLog: LogCallback,
-        onProgress: (p: CommunitySearchProgress) => void
+        onProgress: (p: CommunitySearchProgress) => void,
+        attempt: number
     ): Promise<CommunityCandidate[]> {
         const progress: CommunitySearchProgress = {
             platform: CommunityPlatform.GitHubDiscussions,
@@ -427,81 +428,78 @@ export class CommunitySearchEngine {
             status: 'scanning',
         };
 
-        const candidatesMap = new Map<string, CommunityCandidate>();
-
-        // Build search query — use first 3 keywords to stay focused, but OR them
-        // otherwise "desarrollador flutter react" means ALL THREE must exist (returns 0)
-        let searchTerms = keywords.slice(0, 3).join(' OR ');
+        // PASO 1: Arreglar límite de operadores (Max 5)
+        // Regla: UNA sola keyword y UN solo país por intento.
+        const singleKeyword = keywords[(attempt - 1) % keywords.length] || 'developer';
         
-        // 🛡️ CAPA 1: FILTRO HISPANO PRE-API
-        // Inject location OR's and negative keywords
         const spanishCountries = [
-            'Spain', 'España', 'Mexico', 'México', 'Colombia', 'Argentina', 
-            'Chile', 'Peru', 'Perú', 'Venezuela', 'Ecuador', 'Uruguay'
+            'Spain', 'Mexico', 'Colombia', 'Argentina', 'Chile', 'Peru', 
+            'Venezuela', 'Ecuador', 'Uruguay', 'España'
         ];
-        const locQuery = `(${spanishCountries.map(c => `location:"${c}"`).join(' OR ')})`;
-        const negativeQuery = '-location:India -location:Pakistan -location:USA -location:US';
+        const singleCountry = spanishCountries[(attempt - 1) % spanishCountries.length];
         
-        const query = `${searchTerms} type:user ${locQuery} ${negativeQuery}`;
+        // Query ultra-limpia: "keyword location:country type:user"
+        // Total operadores: 0 (es solo coincidencia y filtros de campo). 100% Seguro.
+        const query = `"${singleKeyword}" location:${singleCountry} type:user`;
         const limit = Math.min(maxResults, 100);
 
-        onLog(`🔍 Buscando developers (X-Raying GitHub): "${searchTerms}" en países hispanos...`);
+        onLog(`🔍 GitHub Search (Attempt ${attempt}): "${singleKeyword}" in ${singleCountry}...`);
 
         try {
             const proxyUrl = `/api/community-search?platform=github-users&query=${encodeURIComponent(query)}&limit=${limit}`;
             const response = await fetch(proxyUrl);
 
             if (!response.ok) {
-                const err = await response.text();
-                onLog(`⚠️ GitHub Users error: ${response.status} — ${err.slice(0, 150)}`);
+                const errText = await response.text();
+                onLog(`⚠️ GitHub API Error ${response.status}: ${errText.slice(0, 100)}`);
                 return [];
             }
 
             const data = await response.json();
             const users = data.users || [];
-            onLog(`📦 GitHub Users: ${users.length} perfiles encontrados (${data.total || 0} total disponibles)`);
+            
+            return this.mapGitHubUsers(users, [singleKeyword], progress, onProgress);
 
-            for (const user of users) {
-                if (this.userIntendedStop) break;
-                const login = user.login;
-                if (!login || login.includes('[bot]')) continue;
-
-                candidatesMap.set(login, {
-                    id: `ghu_${login}_${Date.now()}`,
-                    platform: CommunityPlatform.GitHubDiscussions,
-                    username: login,
-                    displayName: login,
-                    profileUrl: user.html_url || `https://github.com/${login}`,
-                    avatarUrl: user.avatar_url,
-                    bio: `GitHub developer matching: ${searchTerms}`,
-                    messageCount: 50, // Baseline boost for lightweight API scraping
-                    helpfulnessScore: Math.round((user.score || 0) * 10) + 40,
-                    questionsAnswered: 10,
-                    sharedCodeSnippets: 5,
-                    projectLinks: [],
-                    repoLinks: [],
-                    skills: keywords,
-                    communityRoles: [],
-                    reputationScore: Math.round((user.score || 0) * 10) + 40,
-                    talentScore: 0,
-                    githubUrl: user.html_url || `https://github.com/${login}`,
-                    githubUsername: login,
-                    scrapedAt: new Date().toISOString(),
-                    communityName: 'GitHub',
-                });
-                progress.membersScanned++;
-            }
-
-            onProgress(progress);
         } catch (err: any) {
             onLog(`⚠️ GitHub Users error: ${err.message}`);
         }
 
-        const candidates = Array.from(candidatesMap.values());
-        progress.status = 'completed';
-        progress.qualityFound = candidates.length;
-        onProgress(progress);
-        return candidates;
+        return [];
+    }
+
+    private mapGitHubUsers(users: any[], keywords: string[], progress: CommunitySearchProgress, onProgress: (p: any) => void): CommunityCandidate[] {
+        const candidates: CommunityCandidate[] = [];
+        for (const user of users) {
+             const login = user.login;
+             if (!login || login.includes('[bot]')) continue;
+
+             candidates.push({
+                 id: `ghu_${login}_${Date.now()}`,
+                 platform: CommunityPlatform.GitHubDiscussions,
+                 username: login,
+                 displayName: login,
+                 profileUrl: user.html_url || `https://github.com/${login}`,
+                 avatarUrl: user.avatar_url,
+                 bio: `GitHub developer matching: ${keywords.join(', ')}`,
+                 messageCount: 50,
+                 helpfulnessScore: 50,
+                 questionsAnswered: 5,
+                 sharedCodeSnippets: 2,
+                 projectLinks: [],
+                 repoLinks: [],
+                 skills: keywords,
+                 communityRoles: [],
+                 reputationScore: 50,
+                 talentScore: 0,
+                 githubUrl: user.html_url || `https://github.com/${login}`,
+                 githubUsername: login,
+                 scrapedAt: new Date().toISOString(),
+                 communityName: 'GitHub',
+             });
+             progress.membersScanned++;
+         }
+         onProgress(progress);
+         return candidates;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
