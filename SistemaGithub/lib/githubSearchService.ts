@@ -99,6 +99,56 @@ export const GitHubSearchService = {
             return null;
         }
     },
+    /**
+     * Build an optimized GitHub search query with native location filters and rotation
+     * This implements the "Acotar el Top-of-Funnel" strategy.
+     */
+    buildOptimizedQuery(criteria: any, attempt: number): string {
+        const parts: string[] = [];
+
+        // 1. Textual Search (Role/Keywords)
+        const textTerms: string[] = [];
+        if (criteria.target_role) {
+            textTerms.push(`"${criteria.target_role.replace(/[^\w\s-]/gi, '').trim()}"`);
+        }
+        
+        // Use only one rotating keyword per attempt to maximize specificity
+        if (criteria.keywords && criteria.keywords.length > 0) {
+            const kw = criteria.keywords[(attempt - 1) % criteria.keywords.length];
+            textTerms.push(`"${kw.replace(/[^\w\s-]/gi, '').trim()}"`);
+        }
+        
+        if (textTerms.length > 0) parts.push(textTerms.join(' '));
+
+        // 2. Technical Filters (Language)
+        if (criteria.languages && criteria.languages.length > 0) {
+            // Rotate languages if multiple are provided
+            const lang = criteria.languages[(attempt - 1) % criteria.languages.length];
+            parts.push(`language:${lang.toLowerCase()}`);
+        }
+
+        parts.push('type:user');
+        if (criteria.min_followers > 0) parts.push(`followers:>=${criteria.min_followers}`);
+
+        // 3. Native Location Filters (CRITICAL PREFILTER)
+        // Rotating between Spanish-speaking countries to keep logical operators < 5 (Error 422 avoidance)
+        const spanishCountries = ['Spain', 'Mexico', 'Colombia', 'Argentina', 'Chile', 'Peru', 'Uruguay', 'Ecuador', 'Venezuela'];
+        
+        if (criteria.require_spanish_speaker) {
+            const country = spanishCountries[(attempt - 1) % spanishCountries.length];
+            parts.push(`location:"${country}"`);
+        } else if (criteria.locations && criteria.locations.length > 0) {
+            const country = criteria.locations[(attempt - 1) % criteria.locations.length];
+            parts.push(`location:"${country}"`);
+        }
+
+        // 4. Activity Boosters
+        const variations = ['', 'senior', 'expert', 'lead', 'principal', 'staff', 'freelance', 'remote', 'consultant', 'fullstack'];
+        const variation = variations[(attempt - 1) % variations.length];
+        if (variation) parts.push(variation);
+
+        return parts.join(' ');
+    },
 
     /**
      * Limpiar resultados de búsqueda
