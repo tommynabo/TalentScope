@@ -109,97 +109,83 @@ export class GitHubService {
             onLog(`📝 Search query: ${query}`);
             onLog(`🎯 Target: ${maxResults} qualified developers`);
 
-            // === LOOP PAGINADO ===
-            const candidates: GitHubMetrics[] = [];
-            let page = 1;
-            const maxPages = 10; // Límite para evitar demasiadas llamadas API
+            // ━━━ PERSISTENT RETRY LOOP: Keep searching until we have enough candidates ━━━
+            const MAX_RETRIES = 10;
+            let attempt = 0;
+            const finalizedCandidates: GitHubMetrics[] = [];
             let totalUsersAnalyzed = 0;
             let totalUsersSkipped = 0;
 
-            while (candidates.length < maxResults && page <= maxPages) {
-                onLog(`\n📄 Fetching page ${page}...`);
+            while (finalizedCandidates.length < maxResults && attempt < MAX_RETRIES) {
+                attempt++;
+                onLog(`\n[RETRY] 🎯 Intento ${attempt}/${MAX_RETRIES}: Búsqueda GitHub persistente...`);
 
-                let response;
-                try {
-                    response = await this.octokit.rest.search.users({
-                        q: query,
-                        per_page: 30, // Max results per page
-                        page: page,
-                        sort: 'followers',
-                        order: 'desc'
-                    });
-                } catch (apiError: any) {
-                    onLog(`❌ API Error on page ${page}: ${apiError.message}`);
-                    if (apiError.status === 403) {
-                        onLog('⚠️ 403: Rate limited. Stopping search.');
-                    }
-                    break;
-                }
+                const rotatedQuery = this.buildRotatedQuery(criteria, attempt);
+                onLog(`📝 Search query: ${rotatedQuery}`);
 
-                if (!response.data.items || response.data.items.length === 0) {
-                    onLog(`✅ No more results available (searched ${page - 1} pages)`);
-                    break;
-                }
+                // === LOOP PAGINADO (Interno por intento) ===
+                let page = 1;
+                const maxPagesPerAttempt = 3; 
+                let foundInAttempt = 0;
 
-                onLog(`✅ Page ${page}: Found ${response.data.items.length} users`);
+                while (foundInAttempt < 20 && page <= maxPagesPerAttempt && finalizedCandidates.length < maxResults) {
+                    onLog(`📄 Fetching page ${page} of attempt ${attempt}...`);
 
-                // Analyze each user on this page
-                for (const user of response.data.items) {
-                    if (candidates.length >= maxResults) {
-                        onLog(`✅ Reached target of ${maxResults} candidates. Stopping search.`);
+                    let response;
+                    try {
+                        response = await this.octokit!.rest.search.users({
+                            q: rotatedQuery,
+                            per_page: 30,
+                            page: page,
+                            sort: attempt % 2 === 0 ? 'joined' : 'followers',
+                            order: 'desc'
+                        });
+                    } catch (apiError: any) {
+                        onLog(`❌ API Error: ${apiError.message}`);
+                        if (apiError.status === 403) break;
                         break;
                     }
 
-                    totalUsersAnalyzed++;
+                    if (!response.data.items || response.data.items.length === 0) break;
 
-                    // ⚡ FAST PRE-CHECK: Skip known duplicates BEFORE any API calls
-                    const lowerLogin = user.login.toLowerCase();
-                    if (existingUsernames.has(lowerLogin) || currentBatchUsernames.has(lowerLogin)) {
-                        onLog(`  ⏭️ @${user.login} → duplicate (skipped instantly)`);
-                        totalUsersSkipped++;
-                        continue;
-                    }
+                    for (const user of response.data.items) {
+                        if (finalizedCandidates.length >= maxResults) break;
+                        
+                        totalUsersAnalyzed++;
 
-                    try {
-                        onLog(`  📊 [${candidates.length + 1}/${maxResults}] Analyzing @${user.login}...`);
-                        const metrics = await this.analyzeUser(user.login, criteria, onLog);
-
-                        if (metrics) {
-                            // Final dedup check (email/linkedin)
-                            if (githubDeduplicationService.isDuplicate(
-                                metrics,
-                                existingUsernames,
-                                existingEmails,
-                                existingLinkedin,
-                                currentBatchUsernames
-                            )) {
-                                onLog(`    ⏭️ Skipped - duplicate (email/linkedin match)`);
-                                totalUsersSkipped++;
-                            } else {
-                                candidates.push(metrics);
-                                currentBatchUsernames.add(lowerLogin);
-                                existingUsernames.add(lowerLogin);
-                                onLog(`    ✅ Added @${user.login} (Score: ${metrics.github_score})`);
-                            }
-                        } else {
-                            onLog(`    ⏭️ Skipped - doesn't match quality criteria`);
+                        const lowerLogin = user.login.toLowerCase();
+                        if (existingUsernames.has(lowerLogin) || currentBatchUsernames.has(lowerLogin)) {
                             totalUsersSkipped++;
+                            continue;
                         }
-                    } catch (err: any) {
-                        onLog(`    ⚠️ Error analyzing @${user.login}: ${err.message}`);
-                        totalUsersSkipped++;
+
+                        try {
+                            onLog(`  📊 [${finalizedCandidates.length + 1}/${maxResults}] Analyzing @${user.login}...`);
+                            const metrics = await this.analyzeUser(user.login, criteria, onLog);
+
+                            if (metrics) {
+                                if (githubDeduplicationService.isDuplicate(metrics, existingUsernames, existingEmails, existingLinkedin, currentBatchUsernames)) {
+                                    totalUsersSkipped++;
+                                } else {
+                                    finalizedCandidates.push(metrics);
+                                    currentBatchUsernames.add(lowerLogin);
+                                    foundInAttempt++;
+                                }
+                            } else {
+                                totalUsersSkipped++;
+                            }
+                        } catch (err: any) {
+                            onLog(`    ⚠️ Error: ${err.message}`);
+                        }
                     }
+                    page++;
                 }
 
-                // Check if we need more results
-                if (candidates.length < maxResults) {
-                    const needed = maxResults - candidates.length;
-                    onLog(`\n📊 Progress: ${candidates.length}/${maxResults} (need ${needed} more)`);
-                    page++;
-                } else {
-                    break;
-                }
+                if (finalizedCandidates.length >= maxResults) break;
+                onLog(`📊 Progress: ${finalizedCandidates.length}/${maxResults}. Rotando query para siguiente intento...`);
             }
+
+            const candidates = finalizedCandidates;
 
             // POST-SEARCH SAFETY NET: If Spanish speaker required, run final batch filter
             if (criteria.require_spanish_speaker && candidates.length > 0) {
@@ -585,6 +571,20 @@ export class GitHubService {
      * Instead, we search by primary language only for better results
      * Now injects location filters for Spanish-speaking countries when require_spanish_speaker is true
      */
+    private buildRotatedQuery(criteria: GitHubFilterCriteria, attempt: number): string {
+        const baseQuery = this.buildSearchQuery(criteria);
+        if (attempt === 1) return baseQuery;
+
+        // Rotate terms or add variations
+        const variations = [
+            'senior', 'expert', 'lead', 'principal', 'staff', 
+            'freelance', 'remote', 'consultant', 'fullstack'
+        ];
+        
+        const variation = variations[(attempt - 2) % variations.length];
+        return `${baseQuery} ${variation}`;
+    }
+
     private buildSearchQuery(criteria: GitHubFilterCriteria): string {
         const parts: string[] = [];
 
@@ -617,26 +617,28 @@ export class GitHubService {
             parts.push(`followers:>=${criteria.min_followers}`);
         }
 
-        // Locations handling
+        // 🛡️ CAPA 1: FILTRO HISPANO PRE-API
+        // Inyectar locaciones y NEGATIVE KEYWORDS para evitar India/USA/etc.
         if (criteria.require_spanish_speaker) {
-            const spanishLocations = [
-                'Spain', 'Mexico', 'Argentina', 'Colombia', 'Chile',
-                'Peru', 'Venezuela', 'Ecuador', 'Bolivia', 'Uruguay',
-                'Paraguay', 'Guatemala', 'Costa Rica', 'Panama',
-                'Dominican Republic', 'Honduras', 'El Salvador',
-                'Nicaragua', 'Cuba', 'Puerto Rico'
+            // 1. Locaciones (OR)
+            const spanishCountries = [
+                'Spain', 'España', 'Mexico', 'México', 'Colombia', 'Argentina', 
+                'Chile', 'Peru', 'Perú', 'Venezuela', 'Ecuador', 'Uruguay', 
+                'Boliviana', 'Paraguay', 'Guatemala', 'Costa Rica', 'Panama', 'Panamá'
             ];
-            // Merge with user-provided locations to avoid duplicates
-            const allLocs = Array.from(new Set([...spanishLocations, ...(criteria.locations || [])]));
-            const locationParts = allLocs.map(loc => `location:"${loc}"`);
-            // GitHub API uses space for implicit AND, but since a user has only 1 location, we SHOULD use OR or keep existing logic.
-            // Existing logic separated with space, but we'll use OR 
-            parts.push(`(${locationParts.join(' OR ')})`);
+            const locQuery = `(${spanishCountries.map(c => `location:"${c}"`).join(' OR ')})`;
+            parts.push(locQuery);
+
+            // 2. Negative Keywords (Excluir países ruidosos)
+            const negativeCountries = ['India', 'Pakistan', 'USA', 'US', 'China', 'Vietnam', 'Russia'];
+            const negativeQuery = negativeCountries.map(c => `-location:"${c}"`).join(' ');
+            parts.push(negativeQuery);
         } else if (criteria.locations && criteria.locations.length > 0) {
             const locationParts = criteria.locations.map(loc => `location:"${loc}"`);
             parts.push(`(${locationParts.join(' OR ')})`);
         }
 
+        // Default query if empty
         const query = parts.length > 0 ? parts.join(' ') : 'language:typescript type:user';
         return query;
     }

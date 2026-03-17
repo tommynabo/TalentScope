@@ -392,19 +392,20 @@ export class MarketplaceRaidService {
   private getUpworkQueryVariation(baseKeyword: string, attempt: number, language?: string): string {
     const isSpanish = language === 'es' || language === 'español';
     
-    // Spanish-focused variations - include language keywords
+    // Spanish-focused variations - include language keywords + NEGATIVE FILTERS
     if (isSpanish) {
+      const negativeDork = '-location:India -location:Pakistan -location:USA -location:US';
       const spanishVariations = [
-        `${baseKeyword} "Spanish" OR "Español"`,
-        `${baseKeyword} "Spanish speaker" OR "habla español"`,
-        `${baseKeyword} "Top Rated" "Spanish"`,
-        `${baseKeyword} "100% Job Success" "Español"`,
-        `${baseKeyword} expert "Spanish language"`,
-        `${baseKeyword} remote "habla español"`,
-        `${baseKeyword} specialist "Spanish"`,
-        `${baseKeyword} portfolio "Español"`,
-        `${baseKeyword} "available" "Spanish speaker"`,
-        `${baseKeyword} "native spanish" OR "spanish native"`,
+        `${baseKeyword} ("Spanish" OR "Español") ${negativeDork}`,
+        `${baseKeyword} ("Spanish speaker" OR "habla español") ${negativeDork}`,
+        `${baseKeyword} "Top Rated" ("Spanish" OR "Español") ${negativeDork}`,
+        `${baseKeyword} (Spain OR Mexico OR Colombia OR Argentina OR "America Latina") ${negativeDork}`,
+        `${baseKeyword} expert ("Spanish language" OR "native") ${negativeDork}`,
+        `${baseKeyword} remote ("habla español") ${negativeDork}`,
+        `${baseKeyword} specialist ("Spanish") ${negativeDork}`,
+        `${baseKeyword} portfolio ("Español") ${negativeDork}`,
+        `${baseKeyword} "available" ("Spanish speaker") ${negativeDork}`,
+        `${baseKeyword} ("Madrid" OR "CDMX" OR "Bogota" OR "Buenos Aires") ${negativeDork}`,
       ];
       return spanishVariations[Math.min(attempt - 1, spanishVariations.length - 1)];
     }
@@ -430,17 +431,18 @@ export class MarketplaceRaidService {
     
     // Spanish-focused variations
     if (isSpanish) {
+      const negativeDork = '-"India" -"Pakistan" -"USA" -"US" -"Vietnam" -"Russia" -"China" -"Ukraine"';
       const spanishVariations = [
-        `${baseKeyword} "Spanish" OR "Español"`,
-        `${baseKeyword} "Spanish speaker" OR "habla español"`,
-        `${baseKeyword} pro "Spanish"`,
-        `${baseKeyword} certified "Español"`,
-        `${baseKeyword} "Spanish language"`,
-        `${baseKeyword} "top rated" "Spanish"`,
-        `${baseKeyword} "fast delivery" "Español"`,
-        `${baseKeyword} "rating 5" "Spanish"`,
-        `${baseKeyword} portfolio "habla español"`,
-        `${baseKeyword} "native spanish" OR "spanish native"`,
+        `${baseKeyword} ("Spanish" OR "Español") ${negativeDork}`,
+        `${baseKeyword} ("Spanish speaker" OR "habla español") ${negativeDork}`,
+        `${baseKeyword} pro ("Spanish" OR "Español") ${negativeDork}`,
+        `${baseKeyword} native ("Español" OR "Spanish") ${negativeDork}`,
+        `${baseKeyword} "Spanish language" ${negativeDork}`,
+        `${baseKeyword} "top rated" "Spanish" ${negativeDork}`,
+        `${baseKeyword} "fast delivery" "Español" ${negativeDork}`,
+        `${baseKeyword} (Spain OR Mexico OR Colombia OR Argentina OR Chile) ${negativeDork}`,
+        `${baseKeyword} portfolio "habla español" ${negativeDork}`,
+        `${baseKeyword} "native spanish" ${negativeDork}`,
       ];
       return spanishVariations[Math.min(attempt - 1, spanishVariations.length - 1)];
     }

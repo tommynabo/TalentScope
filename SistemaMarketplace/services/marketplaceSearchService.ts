@@ -799,25 +799,27 @@ export class MarketplaceSearchService {
     return false;
   }
 
-  private getUpworkQueryVariation(base: string, attempt: number): string {
+  private getUpworkQueryVariation(base: string, attempt: number, language: string = 'es'): string {
     const sitePrefix = 'site:upwork.com/freelancers OR site:upwork.com/o/profiles';
-    // Siempre incluir "Español" o variaciones para asegurar candidatos de habla hispana
+    const locQuery = '(Spain OR Mexico OR Argentina OR Colombia OR Chile OR Peru OR "Costa Rica" OR Uruguay)';
+    
     const variations = [
-      `${sitePrefix} "${base}" "Spanish"`,
-      `${sitePrefix} "${base}" "top rated" "Spanish"`,
-      `${sitePrefix} ${base} "100% Job Success" Español`,
-      `${sitePrefix} ${base} freelance remote Spanish`,
-      `${sitePrefix} ${base} expert OR senior Español`,
+      `${sitePrefix} "${base}" (${locQuery})`,
+      `${sitePrefix} "${base}" "Spanish" (${locQuery})`,
+      `${sitePrefix} ${base} "top rated" Español`,
+      `${sitePrefix} ${base} "100% Job Success" Spanish`,
+      `${sitePrefix} ${base} freelance remote (${locQuery})`,
     ];
     return variations[Math.min(attempt - 1, variations.length - 1)];
   }
 
   private getFiverrQueryVariation(base: string, attempt: number): string {
     const sitePrefix = 'site:fiverr.com';
+    const locQuery = '(Spain OR Mexico OR Argentina OR Colombia OR Chile OR Peru)';
     const variations = [
-      `${sitePrefix} "${base}" "Spanish"`,
-      `${sitePrefix} "${base}" "top rated" "Spanish"`,
-      `${sitePrefix} "${base}" seller Español`,
+      `${sitePrefix} "${base}" (${locQuery})`,
+      `${sitePrefix} "${base}" "Spanish" (${locQuery})`,
+      `${sitePrefix} "${base}" seller "Habla Español"`,
       `${sitePrefix} "${base}" portfolio Spanish`,
       `${sitePrefix} "${base}" studio Español`,
     ];

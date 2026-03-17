@@ -268,6 +268,16 @@ export class GitHubContactService {
         if (topRepos && topRepos.length > 0) {
             for (const repo of topRepos.slice(0, 5)) {
                 const repoOwner = repo.owner?.login || username;
+                
+                // ⚡ TRUCO DEL PATCH: Intentar extraer email del raw patch del último commit
+                // Muchas veces la API oculta el email pero el .patch lo mantiene
+                email = await this.extractEmailFromCommitPatch(repoOwner, repo.name, username);
+                if (email) {
+                    this.emailCache.set(username, email);
+                    return email;
+                }
+
+                // Fallback a listCommits normal
                 email = await this.extractEmailFromCommits(repoOwner, repo.name, username);
                 if (email) {
                     this.emailCache.set(username, email);
@@ -322,6 +332,61 @@ export class GitHubContactService {
         }
 
         return null;
+    }
+
+    /**
+     * ⚡ THE COMMIT PATCH TRICK (Advanced OSINT)
+     * Fetches the raw patch file of a commit and parses the "From:" field.
+     * This often reveals the real email even when the API masks it.
+     */
+    private async extractEmailFromCommitPatch(
+        owner: string,
+        repo: string,
+        username: string
+    ): Promise<string | null> {
+        try {
+            if (!this.octokit) this.octokit = new Octokit();
+
+            // 1. Get the last 3 commit hashes for this user in this repo
+            const commitList = await this.octokit.rest.repos.listCommits({
+                owner,
+                repo,
+                author: username,
+                per_page: 3
+            });
+
+            if (!commitList.data || commitList.data.length === 0) return null;
+
+            for (const commitData of commitList.data) {
+                const sha = commitData.sha;
+                
+                // 2. Fetch the .patch version of the commit
+                // We use fetch since Octokit doesn't have a direct helper for .patch files
+                const patchUrl = `https://github.com/${owner}/${repo}/commit/${sha}.patch`;
+                
+                try {
+                    const response = await fetch(patchUrl);
+                    if (!response.ok) continue;
+
+                    const patchText = await response.text();
+                    
+                    // 3. Extract email from "From: Name <email>" line
+                    const fromMatch = patchText.match(/^From:.*<([^>]+)>/m);
+                    if (fromMatch && fromMatch[1]) {
+                        const email = fromMatch[1].trim();
+                        if (this.isValidEmail(email)) {
+                            return email;
+                        }
+                    }
+                } catch (err) {
+                    continue;
+                }
+            }
+
+            return null;
+        } catch (error) {
+            return null;
+        }
     }
 
     /**

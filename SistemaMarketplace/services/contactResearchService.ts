@@ -115,6 +115,19 @@ export class ContactResearchService {
         emails.push(...companyEmails);
       }
 
+      // 💥 Strategy 4: GitHub TRIANGULATION (The "Commit Patch Trick")
+      // If we found a GitHub URL in portfolios or search, extract email from commits
+      const githubUrl = emails.find(u => u && u.includes('github.com/')) || 
+                        (await this.findGithubProfile(candidate.name));
+      
+      if (githubUrl) {
+          const ghEmail = await this.extractEmailFromGithubPatch(githubUrl);
+          if (ghEmail) {
+              console.log(`   🎯 Triangulación GitHub exitosa: ${ghEmail}`);
+              emails.unshift(ghEmail); // Priority
+          }
+      }
+
       // Remove duplicates and invalid emails
       const uniqueEmails = [...new Set(emails)]
         .filter(e => this.isValidEmail(e))
@@ -373,6 +386,74 @@ export class ContactResearchService {
     } catch (error) {
       console.error('Portfolio analysis error:', error);
       return `Portfolios encontrados: ${urls.join(', ')}`;
+    }
+  }
+
+  /**
+   * 🔍 Find GitHub profile by name using Google dorks
+   */
+  private async findGithubProfile(name: string): Promise<string | null> {
+    const dork = `site:github.com "${name}" -inurl:org -inurl:repo`;
+    const results = await this.searchGoogle(dork);
+    if (results && results.length > 0) {
+      const url = results[0].url;
+      if (url.includes('github.com/') && !url.includes('/status/') && !url.includes('/search')) {
+        return url;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * ⚡ GitHub OSINT: Extract email from commit patch
+   */
+  private async extractEmailFromGithubPatch(githubUrl: string): Promise<string | null> {
+    try {
+      // Extract owner and repo from URL
+      // Handles: https://github.com/owner or https://github.com/owner/repo
+      const parts = githubUrl.split('github.com/')[1]?.split('/');
+      if (!parts || parts.length === 0) return null;
+      
+      const owner = parts[0];
+      
+      // We need to find a repository for this owner
+      const repoDork = `site:github.com/${owner} -tab:repositories`;
+      const results = await this.searchGoogle(repoDork);
+      
+      let repo = parts[1];
+      if (!repo && results.length > 0) {
+          const match = results[0].url.match(new RegExp(`github\\.com/${owner}/([^/]+)`));
+          if (match) repo = match[1];
+      }
+      
+      if (!owner || !repo) return null;
+
+      // 1. Get commit list (we don't have Octokit here, we use raw fetch or scraping)
+      // Since we are in an independent module, we'll use a scraper or direct fetch if public
+      const commitsUrl = `https://github.com/${owner}/${repo}/commits`;
+      const commitsPage = await fetch(commitsUrl).then(res => res.text()).catch(() => '');
+      
+      // Find a commit hash
+      const hashMatch = commitsPage.match(/commit\/([a-f0-9]{40})/);
+      if (!hashMatch) return null;
+      
+      const sha = hashMatch[1];
+      
+      // 2. FETCH THE PATCH
+      const patchUrl = `https://github.com/${owner}/${repo}/commit/${sha}.patch`;
+      const patchResponse = await fetch(patchUrl);
+      if (!patchResponse.ok) return null;
+      
+      const patchText = await patchResponse.text();
+      const fromMatch = patchText.match(/^From:.*<([^>]+)>/m);
+      
+      if (fromMatch && fromMatch[1]) {
+          return fromMatch[1].trim();
+      }
+      
+      return null;
+    } catch (error) {
+      return null;
     }
   }
 

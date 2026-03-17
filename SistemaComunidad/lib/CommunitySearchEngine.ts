@@ -125,46 +125,32 @@ export class CommunitySearchEngine {
                 attempt++;
                 onLog(`\n[RETRY] 🎯 Intento ${attempt}/${MAX_RETRIES}: Búsqueda persistente...`);
 
+                // 🔄 QUERY ROTATION: Modify keywords per attempt to bypass cache and find new people
+                const rotatedKeywords = this.getRotatedKeywords(keywords, attempt);
+                onLog(`🔍 Usando variación de búsqueda: [${rotatedKeywords.join(', ')}]`);
+
                 let batchCandidates: CommunityCandidate[] = [];
 
-                // ━━━ STEP 1: GitHub Search Users (PRIMARY — always runs) ━━━
+                // ━━━ STEP 1: GitHub Search Users (PRIMARY) ━━━
                 if (!this.userIntendedStop) {
                     onLog('\n═══ GitHub Search: Finding Developers ═══');
-                    const ghUsers = await this.searchGitHubUsers(keywords, maxResults * 2, onLog, onProgress);
+                    // Inyectar negative keywords en la capa 1 (aquí)
+                    const ghUsers = await this.searchGitHubUsers(rotatedKeywords, maxResults * 2, onLog, onProgress);
                     const filtered = ghUsers.filter(c => !seenUsernames.has(c.username));
-                    onLog(`📦 GitHub Users: ${ghUsers.length} perfiles encontrados (${filtered.length} nuevos)`);
                     if (filtered.length > 0) {
-                        onLog(`✅ GitHub Users: Found ${filtered.length} developers`);
                         batchCandidates = [...batchCandidates, ...filtered];
                         filtered.forEach(c => seenUsernames.add(c.username));
                     }
                 }
 
-                // ━━━ STEP 2: GitHub Search Issues (finds active contributors) ━━━
-                if (!this.userIntendedStop && acceptedCandidates.length < maxResults) {
-                    onLog('\n═══ GitHub Issues: Finding Active Contributors ═══');
-                    const ghIssues = await this.searchGitHubIssues(keywords, maxResults * 2, onLog, onProgress);
-                    const filtered = ghIssues.filter(c => !seenUsernames.has(c.username));
-                    onLog(`📦 GitHub Issues: ${ghIssues.length} issues encontrados (${filtered.length} nuevos)`);
-                    if (filtered.length > 0) {
-                        onLog(`✅ GitHub Issues: Found ${filtered.length} contributors`);
-                        batchCandidates = [...batchCandidates, ...filtered];
-                        filtered.forEach(c => seenUsernames.add(c.username));
-                    }
-                }
-
-                // ━━━ STEP 3: Reddit RSS (if Reddit is selected) ━━━
+                // ━━━ STEP 2: Reddit X-RAY (Reemplaza RSS básico) ━━━
                 if (!this.userIntendedStop && acceptedCandidates.length < maxResults && filters.platforms.includes(CommunityPlatform.Reddit)) {
-                    const subreddits = filters.subreddits || [];
-                    if (subreddits.length > 0) {
-                        onLog('\n═══ Reddit Communities ═══');
-                        const redditCandidates = await this.searchRedditRSS(keywords, subreddits, maxResults * 2, onLog, onProgress);
-                        const filtered = redditCandidates.filter(c => !seenUsernames.has(c.username));
-                        if (filtered.length > 0) {
-                            onLog(`✅ Reddit: Found ${filtered.length} community members`);
-                            batchCandidates = [...batchCandidates, ...filtered];
-                            filtered.forEach(c => seenUsernames.add(c.username));
-                        }
+                    onLog('\n═══ Reddit X-Ray Search ═══');
+                    const redditUsers = await this.searchRedditXRay(rotatedKeywords, maxResults, onLog);
+                    const filtered = redditUsers.filter(c => !seenUsernames.has(c.username));
+                    if (filtered.length > 0) {
+                        batchCandidates = [...batchCandidates, ...filtered];
+                        filtered.forEach(c => seenUsernames.add(c.username));
                     }
                 }
 
@@ -379,6 +365,53 @@ export class CommunitySearchEngine {
     // Uses /search/users API to find developers by keywords + location
     // ═══════════════════════════════════════════════════════════════════════
 
+    private getRotatedKeywords(keywords: string[], attempt: number): string[] {
+        const base = keywords[0] || 'developer';
+        if (attempt === 1) return keywords;
+        
+        const variations = [
+            [base, 'experto'],
+            [base, 'senior'],
+            [base, 'freelance'],
+            [base, 'programador'],
+            [base, 'desarrollador'],
+            [base, 'madrid'],
+            [base, 'mexico'],
+            [base, 'argentina'],
+            [base, 'español'],
+            [base, 'disponible']
+        ];
+        
+        return variations[(attempt - 2) % variations.length];
+    }
+
+    private async searchRedditXRay(keywords: string[], maxResults: number, onLog: LogCallback): Promise<CommunityCandidate[]> {
+        const query = keywords.join(' ');
+        const locs = '(Spain OR Mexico OR Argentina OR Colombia OR Chile OR "en español")';
+        const dork = `site:reddit.com/user ("${query}" OR "desarrollador" OR "programador" OR "portfolio") ${locs}`;
+        onLog(`🔍 X-Raying Reddit: "${dork}"...`);
+
+        try {
+            const proxyUrl = `/api/community-search?platform=reddit&query=${encodeURIComponent(dork)}`;
+            const response = await fetch(proxyUrl);
+            if (!response.ok) return [];
+            
+            const results = await response.json();
+            return (results.items || []).map((item: any, idx: number) => ({
+                id: `reddit-${idx}-${Date.now()}`,
+                platform: CommunityPlatform.Reddit,
+                username: item.author || 'RedditUser',
+                displayName: item.author || 'Reddit User',
+                profileUrl: item.url,
+                bio: item.snippet || item.text,
+                scrapedAt: new Date().toISOString(),
+                talentScore: 0
+            }));
+        } catch (error) {
+            return [];
+        }
+    }
+
     private async searchGitHubUsers(
         keywords: string[],
         maxResults: number,
@@ -398,11 +431,21 @@ export class CommunitySearchEngine {
 
         // Build search query — use first 3 keywords to stay focused, but OR them
         // otherwise "desarrollador flutter react" means ALL THREE must exist (returns 0)
-        const searchTerms = keywords.slice(0, 3).join(' OR ');
-        const query = `${searchTerms} type:user`;
+        let searchTerms = keywords.slice(0, 3).join(' OR ');
+        
+        // 🛡️ CAPA 1: FILTRO HISPANO PRE-API
+        // Inject location OR's and negative keywords
+        const spanishCountries = [
+            'Spain', 'España', 'Mexico', 'México', 'Colombia', 'Argentina', 
+            'Chile', 'Peru', 'Perú', 'Venezuela', 'Ecuador', 'Uruguay'
+        ];
+        const locQuery = `(${spanishCountries.map(c => `location:"${c}"`).join(' OR ')})`;
+        const negativeQuery = '-location:India -location:Pakistan -location:USA -location:US';
+        
+        const query = `${searchTerms} type:user ${locQuery} ${negativeQuery}`;
         const limit = Math.min(maxResults, 100);
 
-        onLog(`🔍 Buscando developers: "${searchTerms}"...`);
+        onLog(`🔍 Buscando developers (X-Raying GitHub): "${searchTerms}" en países hispanos...`);
 
         try {
             const proxyUrl = `/api/community-search?platform=github-users&query=${encodeURIComponent(query)}&limit=${limit}`;
@@ -544,97 +587,6 @@ export class CommunitySearchEngine {
         }
 
         const candidates = Array.from(candidatesMap.values());
-        progress.status = 'completed';
-        progress.qualityFound = candidates.length;
-        onProgress(progress);
-        return candidates;
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════  
-    // REDDIT RSS — Reddit blocks JSON API from datacenters, RSS works
-    // ═══════════════════════════════════════════════════════════════════════
-
-    private async searchRedditRSS(
-        keywords: string[],
-        subreddits: string[],
-        maxResults: number,
-        onLog: LogCallback,
-        onProgress: (p: CommunitySearchProgress) => void
-    ): Promise<CommunityCandidate[]> {
-        const progress: CommunitySearchProgress = {
-            platform: CommunityPlatform.Reddit,
-            communityName: 'Reddit',
-            membersScanned: 0,
-            qualityFound: 0,
-            duplicatesSkipped: 0,
-            status: 'scanning',
-        };
-
-        const candidatesMap = new Map<string, CommunityCandidate>();
-        const query = keywords.slice(0, 5).join(' ');
-
-        for (const subreddit of subreddits) {
-            if (this.userIntendedStop) break;
-
-            onLog(`📡 Scanning r/${subreddit} (via RSS)...`);
-
-            try {
-                const proxyUrl = `/api/community-search?platform=reddit&subreddit=${encodeURIComponent(subreddit)}&query=${encodeURIComponent(query)}&limit=25`;
-                const response = await fetch(proxyUrl);
-
-                if (!response.ok) {
-                    const errBody = await response.text();
-                    onLog(`⚠️ r/${subreddit}: HTTP ${response.status} — ${errBody.slice(0, 100)}`);
-                    continue;
-                }
-
-                const data = await response.json();
-                const posts = data.posts || [];
-                onLog(`📦 r/${subreddit}: ${posts.length} posts encontrados`);
-
-                for (const post of posts) {
-                    const author = post.author;
-                    if (!author || author === '[deleted]' || author === 'unknown' || author.toLowerCase().includes('bot') || author === 'AutoModerator') continue;
-
-                    if (!candidatesMap.has(author)) {
-                        candidatesMap.set(author, {
-                            id: `reddit_${author}_${Date.now()}`,
-                            platform: CommunityPlatform.Reddit,
-                            username: author,
-                            displayName: author,
-                            profileUrl: `https://www.reddit.com/user/${author}`,
-                            avatarUrl: `https://ui-avatars.com/api/?name=${author}&background=EA580C&color=FFF`,
-                            bio: `Active in r/${subreddit}: ${post.title?.slice(0, 80) || ''}`,
-                            messageCount: 40, // Baseline boost
-                            helpfulnessScore: (post.score || 0) * 5 + 30,
-                            questionsAnswered: (post.num_comments || 0) * 2 + 10,
-                            sharedCodeSnippets: 0,
-                            projectLinks: [],
-                            repoLinks: [],
-                            skills: keywords,
-                            communityRoles: [],
-                            reputationScore: (post.score || 0) * 3 + 20,
-                            talentScore: 0,
-                            scrapedAt: new Date().toISOString(),
-                            communityName: `r/${subreddit}`,
-                        });
-                    } else {
-                        const existing = candidatesMap.get(author)!;
-                        existing.messageCount++;
-                        existing.helpfulnessScore = (existing.helpfulnessScore || 0) + (post.score || 0);
-                    }
-                    progress.membersScanned++;
-                }
-
-                onProgress(progress);
-                await this.delay(500);
-            } catch (err: any) {
-                onLog(`⚠️ r/${subreddit}: ${err.message}`);
-            }
-        }
-
-        const candidates = Array.from(candidatesMap.values());
-        onLog(`🔴 Reddit total: ${candidates.length} usuarios únicos`);
         progress.status = 'completed';
         progress.qualityFound = candidates.length;
         onProgress(progress);
