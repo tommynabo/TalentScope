@@ -4,8 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { githubContactService } from '../../SistemaGithub/lib/githubContactService';
 import { githubDeduplicationService } from '../../SistemaGithub/lib/githubDeduplication';
 import { GitHubCandidatePersistence } from '../../SistemaGithub/lib/githubCandidatePersistence';
-import { analyzeSpanishLanguageProficiency, filterBySpanishLanguage } from '../../SistemaGithub/lib/githubSpanishLanguageFilter';
+import { analyzeSpanishLanguageProficiency } from '../../SistemaGithub/lib/githubSpanishLanguageFilter';
 import { GitHubSearchService } from './githubSearchService';
+import { calculateSymmetryScore, generateCandidateAnalysis } from '../../lib/openai';
 
 export type GitHubLogCallback = (message: string) => void;
 
@@ -13,16 +14,6 @@ const GENERIC_REPO_KEYWORDS = [
     'todo', 'calculator', 'weather', 'clone', 'tutorial', 'test',
     'demo', 'sample', 'example', 'hello', 'app-example',
     'hello-world', 'learning', 'practice', 'course'
-];
-
-const APP_STORE_KEYWORDS = [
-    'play.google.com',
-    'apps.apple.com',
-    'play store',
-    'app store',
-    'google play',
-    'itunes',
-    'appstore'
 ];
 
 export class GitHubService {
@@ -37,7 +28,7 @@ export class GitHubService {
 
     /**
      * Main search function - Busca usuarios de GitHub con criterios específicos
-     * Optimizada con procesamiento paralelo y GraphQL
+     * Optimizada con procesamiento paralelo por lotes (Chunks de 5)
      */
     async searchDevelopers(
         criteria: GitHubFilterCriteria,
@@ -47,44 +38,38 @@ export class GitHubService {
         userId?: string
     ): Promise<GitHubMetrics[]> {
         try {
-            onLog('🚀 Starting GitHub Turbo Search Engine...');
-            onLog(`📋 Token configured: ${this.octokit ? 'YES ✅' : 'NO (public API)'}`);
+            onLog('🚀 Iniciando GitHub Performance Search Engine (Principal Engineer Mode)...');
 
             if (!this.octokit) {
-                onLog('⚠️ No GitHub token. Using public API (60 req/hour limit). Results may be limited.');
                 this.octokit = new Octokit();
             }
 
-            // Load existing candidates for deduplication
-            onLog('🔄 Loading duplicate filter...');
-            let existingUsernames: Set<string> = new Set();
-            let existingEmails: Set<string> = new Set();
-            let existingLinkedin: Set<string> = new Set();
+            // Cargar candidatos existentes para deduplicación
+            let existingUsernames = new Set<string>();
+            let existingEmails = new Set<string>();
+            let existingLinkedin = new Set<string>();
 
             if (campaignId && userId) {
                 const dedupeData = await githubDeduplicationService.fetchExistingGitHubCandidates(campaignId, userId);
                 existingUsernames = dedupeData.existingUsernames;
                 existingEmails = dedupeData.existingEmails;
                 existingLinkedin = dedupeData.existingLinkedin;
-                onLog(`✅ Loaded ${existingUsernames.size} existing candidates from database.`);
+                onLog(`✅ Dedup: Cargados ${existingUsernames.size} candidatos previos.`);
             }
 
             const currentBatchUsernames = new Set<string>();
             const finalizedCandidates: GitHubMetrics[] = [];
-            let totalUsersAnalyzed = 0;
-            let totalUsersSkipped = 0;
-
-            const MAX_RETRIES = 12; // Un poco más para cubrir más países en la rotación
+            
+            const MAX_RETRIES = 12; 
             let attempt = 0;
 
-            // ⚡ GLOBAL SHORT-CIRCUIT: Monitor finalizedCandidates.length in all conditions
             while (finalizedCandidates.length < maxResults && attempt < MAX_RETRIES) {
                 attempt++;
                 const rotatedQuery = GitHubSearchService.buildOptimizedQuery(criteria, attempt);
                 onLog(`\n═══ [Intento ${attempt}/${MAX_RETRIES}] 🔍 Query: ${rotatedQuery} ═══`);
 
                 let page = 1;
-                const maxPagesPerAttempt = 1; // ⚡ Ultra-fast rotation: change country quickly
+                const maxPagesPerAttempt = 1;
 
                 while (page <= maxPagesPerAttempt && finalizedCandidates.length < maxResults) {
                     onLog(`📄 Fetching page ${page}...`);
@@ -106,7 +91,7 @@ export class GitHubService {
                     const users = response.data.items || [];
                     if (users.length === 0) break;
 
-                    // ⚡ PARALLEL PROCESSING: Chunks of 5 for speed + safety
+                    // ⚡ PASO 3: Paralelización por Lotes (Chunking de 5)
                     const CONCURRENCY_LIMIT = 5;
                     const chunks = [];
                     for (let i = 0; i < users.length; i += CONCURRENCY_LIMIT) {
@@ -114,37 +99,33 @@ export class GitHubService {
                     }
 
                     for (const chunk of chunks) {
-                        // ⚡ Short-circuit before starting a new chunk
+                        // ⚡ PASO 4: Salida Temprana (Early Return)
                         if (finalizedCandidates.length >= maxResults) break;
 
                         const chunkPromises = chunk.map(async (user) => {
-                            // ⚡ Early exit if we already met the goal during chunk execution (rare but good)
-                            if (finalizedCandidates.length >= maxResults) return { skip: true };
+                            if (finalizedCandidates.length >= maxResults) return null;
 
                             const lowerLogin = user.login.toLowerCase();
                             if (existingUsernames.has(lowerLogin) || currentBatchUsernames.has(lowerLogin)) {
-                                return { skip: true, user: user.login };
+                                return null;
                             }
 
                             try {
-                                const metrics = await this.analyzeUser(user.login, criteria, onLog);
-                                if (metrics) return { skip: false, metrics };
-                            } catch (err) { /* ignore */ }
-                            return { skip: true };
+                                return await this.analyzeUser(user.login, criteria, onLog);
+                            } catch (err) { 
+                                return null; 
+                            }
                         });
 
                         const chunkResults = await Promise.all(chunkPromises);
                         
-                        for (const result of chunkResults) {
-                            if (!result.skip && result.metrics) {
-                                totalUsersAnalyzed++;
-                                const m = result.metrics;
-                                if (!githubDeduplicationService.isDuplicate(m, existingUsernames, existingEmails, existingLinkedin, currentBatchUsernames)) {
-                                    finalizedCandidates.push(m);
-                                    currentBatchUsernames.add(m.github_username.toLowerCase());
+                        for (const metrics of chunkResults) {
+                            if (metrics) {
+                                if (!githubDeduplicationService.isDuplicate(metrics, existingUsernames, existingEmails, existingLinkedin, currentBatchUsernames)) {
+                                    finalizedCandidates.push(metrics);
+                                    currentBatchUsernames.add(metrics.github_username.toLowerCase());
                                 }
                             }
-                            // ⚡ Short-circuit as soon as possible
                             if (finalizedCandidates.length >= maxResults) break;
                         }
                     }
@@ -154,13 +135,12 @@ export class GitHubService {
                 if (finalizedCandidates.length >= maxResults) break;
             }
 
-            // POST-SEARCH: Persist and Return
+            // Persistencia
             if (campaignId && userId && finalizedCandidates.length > 0) {
-                onLog(`\n💾 Persisting ${finalizedCandidates.length} results...`);
                 await GitHubCandidatePersistence.saveCandidates(campaignId, finalizedCandidates, userId);
             }
 
-            onLog(`\n🎉 Success! Found ${finalizedCandidates.length} qualified developers.`);
+            onLog(`\n🎉 Finalizado! Encontrados ${finalizedCandidates.length} candidatos de alto valor.`);
             return finalizedCandidates.slice(0, maxResults);
 
         } catch (error: any) {
@@ -170,7 +150,7 @@ export class GitHubService {
     }
 
     /**
-     * Optimized Analysis - "Fail-Fast" Pipeline implementation
+     * ⚡ PASO 2: Desacoplar IA y Contacto (Pipeline Fail-Fast Estricto)
      */
     private async analyzeUser(
         username: string,
@@ -180,107 +160,77 @@ export class GitHubService {
         const uLog = (msg: string) => onLog(`  [@${username}] ${msg}`);
 
         try {
-            // ── PASO 1: GRAPHQL (MEGA-QUERY) ──────────────────────────────────
+            // ── FETCH INICIAL (GraphQL para ahorrar llamadas) ──────────────────
             let data: any = null;
-            const hasToken = !!(this.octokit as any)?.auth;
-
-            if (hasToken) {
-                try {
-                    const query = `
-                        query($username: String!) {
-                          user(login: $username) {
-                            name bio location company followers { totalCount } following { totalCount } url databaseId login publicRepos: repositories { totalCount }
-                            repositories(first: 20, orderBy: {field: STARGAZERS, direction: DESC}) {
-                              nodes {
-                                name description stargazerCount forkCount isFork language: primaryLanguage { name }
-                                object(expression: "HEAD:README.md") { ... on Blob { text } }
-                              }
-                            }
-                            profileReadme: repository(name: $username) {
-                              object(expression: "HEAD:README.md") { ... on Blob { text } }
-                            }
+            try {
+                const query = `
+                    query($username: String!) {
+                      user(login: $username) {
+                        name bio location company followers { totalCount } following { totalCount } url databaseId login publicRepos: repositories { totalCount }
+                        repositories(first: 20, orderBy: {field: STARGAZERS, direction: DESC}) {
+                          nodes {
+                            name description stargazerCount forkCount isFork language: primaryLanguage { name }
+                            object(expression: "HEAD:README.md") { ... on Blob { text } }
                           }
                         }
-                    `;
-                    const gqlResponse: any = await this.octokit!.graphql(query, { username });
-                    data = gqlResponse.user;
-                } catch (gqlErr) { /* fallback */ }
-            }
-
-            // ── PASO 2: NORMALIZACIÓN ───────────────────────
-            let profile: any, repos: any[], profileReadmeText: string | undefined;
-
-            if (data) {
-                profile = {
-                    name: data.name,
-                    bio: data.bio,
-                    location: data.location,
-                    company: data.company,
-                    followers: data.followers.totalCount,
-                    following: data.following.totalCount,
-                    html_url: data.url,
-                    id: data.databaseId,
-                    public_repos: data.publicRepos.totalCount
-                };
-                repos = data.repositories.nodes.map((r: any) => ({
-                    ...r,
-                    language: r.language?.name,
-                    stargazers_count: r.stargazerCount
-                }));
-                profileReadmeText = data.profileReadme?.object?.text;
-            } else {
+                        profileReadme: repository(name: $username) {
+                          object(expression: "HEAD:README.md") { ... on Blob { text } }
+                        }
+                      }
+                    }
+                `;
+                const gqlResponse: any = await this.octokit!.graphql(query, { username });
+                data = gqlResponse.user;
+            } catch (err) {
                 const userRes = await this.octokit!.rest.users.getByUsername({ username });
-                profile = userRes.data;
-                const reposRes = await this.octokit!.rest.repos.listForUser({ username, per_page: 50, type: 'all', sort: 'updated' });
-                repos = reposRes.data;
+                data = { ...userRes.data, followers: { totalCount: userRes.data.followers }, repositories: { nodes: [] } };
             }
 
-            // ── PASO 3: EARLY EXITS (CORTOCIRCUITOS) ────────────────────────
-            // Pre-filtro seguidores (0 ms)
-            if (profile.followers < criteria.min_followers) return null;
+            const profile = {
+                name: data.name,
+                bio: data.bio || '',
+                location: data.location || '',
+                company: data.company || '',
+                followers: data.followers?.totalCount || 0,
+                html_url: data.url || data.html_url,
+                id: data.databaseId || data.id,
+                public_repos: data.publicRepos?.totalCount || data.public_repos
+            };
+            const repos = data.repositories?.nodes || [];
 
-            // Pre-filtro lenguajes (0 ms ya que repos vienen en GraphQL)
-            const languages = this.detectLanguages(repos);
-            if (criteria.languages.length > 0) {
-                const hasLang = languages.some(l => criteria.languages.some(cl => cl.toLowerCase().includes(l.toLowerCase())));
-                if (!hasLang) return null;
-            }
-
-            // Spanish Filter
+            // ── FLOW STEP 1: checkLanguage (0 ms) ──────────────────────────
             if (criteria.require_spanish_speaker) {
-                const res = analyzeSpanishLanguageProficiency(profile.bio, profile.location, profile.name || username, profile.company, repos.map(r => r.description).filter(Boolean).slice(0, 10), profileReadmeText);
+                const res = analyzeSpanishLanguageProficiency(profile.bio, profile.location, profile.name || username, profile.company, repos.map((r: any) => r.description).filter(Boolean), data.profileReadme?.object?.text);
                 if (!res.isSpanishSpeaker) return null;
             }
 
-            // ── PASO 4: ANÁLISIS DE CALIDAD RÁPIDO ────────────────────────────
-            const originalRepos = repos.filter(r => !r.isFork && !r.fork);
+            // ── FLOW STEP 2: getRepos (Originality check) ─────────────────────
+            const originalRepos = repos.filter((r: any) => !r.isFork && !r.fork);
             const originality = repos.length > 0 ? (originalRepos.length / repos.length) * 100 : 0;
-            if (this.isBootcampProfile(repos, criteria)) return null;
+            if (originality < 40) return null; // Early exit if mostly forks
 
-            const topStars = repos.slice(0, 10).reduce((s, r) => s + (r.stargazers_count || 0), 0);
+            // ── FLOW STEP 3: calculateAIScore (API OpenAI Call) ───────────────
+            const profileText = `Name: ${profile.name}, Bio: ${profile.bio}, Loc: ${profile.location}, Repos: ${repos.slice(0, 5).map((r: any) => r.name + " (" + r.description + ")").join("; ")}`;
+            const aiScore = await calculateSymmetryScore(profileText);
             
-            // ── PASO 5: EVALUACIÓN DE IA (SCORE) ──────────────────────────────
-            // Recalcula score de forma ligera antes de Deep Research
-            const score = this.calculateGitHubScore({
-                repos: repos.slice(0, 10),
-                totalStars: topStars,
-                avgStars: repos.length > 0 ? topStars / Math.min(repos.length, 10) : 0,
-                originality,
-                hasAppStoreLink: false, // will update deep check only if score passes
-                followers: profile.followers,
-                totalCommits: profile.public_repos * 2,
-                contributionStreak: 0,
-                lastCommitDate: new Date().toISOString()
-            }, criteria);
+            // ── FLOW STEP 4: CORTOCIRCUIT AI SCORE ──────────────────────────
+            if (aiScore.score < (criteria.score_threshold || 60)) {
+                return null;
+            }
 
-            // ⚡ CONTROL DE FLUJO: Check Threshold before slow Deep Research
-            if (score.normalized < (criteria.score_threshold || 60)) return null;
-
-            // ── PASO 6: DEEP RESEARCH (EXTREMELY LATE) ────────────────────────
-            // Solo llegamos aquí si el score es prometedor
+            // ── FLOW STEP 5: findContactInfo (Deep Research SOLO SI PASA IA) ──
             const contact = await githubContactService.findContactInfoFast(username, repos.slice(0, 5), profile);
             
-            uLog(`✅ Pass! Score: ${score.normalized} | Email: ${contact.email || 'No'}`);
+            // Si llega aquí, es un ganador. Analizamos en profundidad para el dashboard.
+            const aiAnalysis = await generateCandidateAnalysis({
+                name: profile.name,
+                username: username,
+                bio: profile.bio,
+                languages: this.detectLanguages(repos),
+                topRepos: repos.slice(0, 5)
+            });
+
+            uLog(`✅ APROBADO: Score ${aiScore.score} | Email: ${contact.email || 'N/A'}`);
 
             return {
                 github_username: username,
@@ -288,39 +238,41 @@ export class GitHubService {
                 github_id: profile.id,
                 public_repos: profile.public_repos,
                 followers: profile.followers,
-                following: profile.following,
+                following: data.following?.totalCount || 0,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
-                total_commits: profile.public_repos * 5,
+                total_commits: profile.public_repos * 10,
                 contribution_streak: 5,
                 last_commit_date: new Date().toISOString(),
-                most_used_language: languages[0] || 'Unknown',
-                total_stars_received: topStars,
-                average_repo_stars: topStars / 10,
+                most_used_language: this.detectLanguages(repos)[0] || 'Unknown',
+                total_stars_received: repos.reduce((s: number, r: any) => s + (r.stargazerCount || r.stargazers_count || 0), 0),
+                average_repo_stars: 0,
                 original_repos_count: originalRepos.length,
                 fork_repos_count: repos.length - originalRepos.length,
                 originality_ratio: originality,
                 has_app_store_link: false,
                 app_store_url: null,
                 pinned_repos_count: 0,
-                open_source_contributions: repos.length,
+                open_source_contributions: 0,
                 mentioned_email: contact.email,
-                personal_website: contact.website || profile.blog || null,
+                personal_website: contact.website || null,
                 linkedin_url: contact.linkedin || null,
-                github_score: score.normalized,
-                score_breakdown: score
+                github_score: aiScore.score,
+                score_breakdown: {
+                    total: aiScore.score,
+                    normalized: aiScore.score,
+                    repository_quality: 0,
+                    code_activity: 0,
+                    community_presence: 0,
+                    app_shipping: 0,
+                    originality: originality
+                },
+                ...aiAnalysis
             };
 
         } catch (error) {
             return null;
         }
-    }
-
-    private isBootcampProfile(repos: any[], criteria: GitHubFilterCriteria): boolean {
-        if (repos.length < 5) return false;
-        const forkRatio = (repos.filter(r => r.fork || r.isFork).length / repos.length) * 100;
-        const genericRepos = repos.filter(r => GENERIC_REPO_KEYWORDS.some(kw => r.name.toLowerCase().includes(kw)));
-        return (forkRatio > 80 && genericRepos.length / repos.length > 0.5);
     }
 
     private detectLanguages(repos: any[]): string[] {
@@ -330,57 +282,6 @@ export class GitHubService {
             if (lang) languages.set(lang, (languages.get(lang) || 0) + 1);
         });
         return Array.from(languages.entries()).sort((a, b) => b[1] - a[1]).map(([lang]) => lang);
-    }
-
-    private calculateGitHubScore(
-        metrics: {
-            repos: any[];
-            totalStars: number;
-            avgStars: number;
-            originality: number;
-            hasAppStoreLink: boolean;
-            followers: number;
-            totalCommits: number;
-            contributionStreak: number;
-            lastCommitDate: string | null;
-        },
-        criteria: GitHubFilterCriteria
-    ): GitHubScoreBreakdown {
-        let repositoryQuality = 0, codeActivity = 0, communityPresence = 0, appShipping = 0, originality = 0;
-        if (metrics.avgStars >= 50) repositoryQuality = 25;
-        else if (metrics.avgStars >= 20) repositoryQuality = 20;
-        else if (metrics.avgStars >= 10) repositoryQuality = 15;
-        else if (metrics.avgStars >= 5) repositoryQuality = 10;
-        else repositoryQuality = 5;
-
-        const daysAgo = metrics.lastCommitDate ? Math.floor((Date.now() - new Date(metrics.lastCommitDate).getTime()) / (1000 * 60 * 60 * 24)) : 1000;
-        if (daysAgo < 30) codeActivity = 20;
-        else if (daysAgo < 90) codeActivity = 15;
-        else if (daysAgo < 180) codeActivity = 10;
-        else if (daysAgo < 365) codeActivity = 5;
-
-        if (metrics.followers >= 1000) communityPresence = 20;
-        else if (metrics.followers >= 500) communityPresence = 15;
-        else if (metrics.followers >= 100) communityPresence = 10;
-        else if (metrics.followers >= 50) communityPresence = 7;
-        else communityPresence = 3;
-
-        appShipping = metrics.hasAppStoreLink ? 20 : 5;
-        if (metrics.originality >= 90) originality = 15;
-        else if (metrics.originality >= 70) originality = 12;
-        else if (metrics.originality >= 50) originality = 8;
-        else originality = 0;
-
-        const total = repositoryQuality + codeActivity + communityPresence + appShipping + originality;
-        return {
-            repository_quality: repositoryQuality,
-            code_activity: codeActivity,
-            community_presence: communityPresence,
-            app_shipping: appShipping,
-            originality: originality,
-            total,
-            normalized: Math.round(Math.min(100, total))
-        };
     }
 
     getRateLimit(): { remaining: number; reset: number; resetTime: string } {

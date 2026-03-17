@@ -1,6 +1,6 @@
 
 import { GitHubFilterCriteria, GitHubCandidate } from '../../types/database';
-import { githubService } from '../../lib/githubService';
+import { githubService } from './githubService';
 import { ApifyCrossSearchService, performCrossSearch, CrossLinkedCandidate } from '../../lib/apifyCrossSearchService';
 import { UnbreakableExecutor, initializeUnbreakableMarker } from '../../lib/UnbreakableExecution';
 import { PRESET_PRODUCT_ENGINEERS } from '../../lib/githubPresets';
