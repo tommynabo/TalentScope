@@ -390,8 +390,11 @@ export class CommunitySearchEngine {
         onLog(`🔍 X-Raying Reddit: ${dork}...`);
 
         try {
-            const proxyUrl = `/api/community-search?platform=reddit&query=${encodeURIComponent(dork)}`;
-            const response = await fetch(proxyUrl);
+            const response = await fetch('/api/community-search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ platform: 'reddit', query: dork }),
+            });
             if (!response.ok) return [];
             
             const results = await response.json();
@@ -446,8 +449,11 @@ export class CommunitySearchEngine {
         onLog(`🔍 GitHub Search (Attempt ${attempt}): "${singleKeyword}" in ${singleCountry}...`);
 
         try {
-            const proxyUrl = `/api/community-search?platform=github-users&query=${encodeURIComponent(query)}&limit=${limit}`;
-            const response = await fetch(proxyUrl);
+            const response = await fetch('/api/community-search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ platform: 'github-users', query, limit: String(limit) }),
+            });
 
             if (!response.ok) {
                 const errText = await response.text();
@@ -529,8 +535,11 @@ export class CommunitySearchEngine {
         onLog(`🔍 Buscando contributors activos: "${searchTerms}"...`);
 
         try {
-            const proxyUrl = `/api/community-search?platform=github-issues&query=${encodeURIComponent(query)}&limit=${limit}`;
-            const response = await fetch(proxyUrl);
+            const response = await fetch('/api/community-search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ platform: 'github-issues', query, limit: String(limit) }),
+            });
 
             if (!response.ok) {
                 onLog(`⚠️ GitHub Issues error: ${response.status}`);
@@ -610,8 +619,11 @@ export class CommunitySearchEngine {
             onLog(`📡 Scanning ${repo}...`);
 
             try {
-                const proxyUrl = `/api/community-search?platform=github&repo=${encodeURIComponent(repo)}&limit=100`;
-                const response = await fetch(proxyUrl);
+                const response = await fetch('/api/community-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ platform: 'github', repo, limit: '100' }),
+                });
 
                 if (!response.ok) {
                     onLog(`⚠️ ${repo}: HTTP ${response.status}`);

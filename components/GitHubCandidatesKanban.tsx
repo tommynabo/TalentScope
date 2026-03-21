@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GitHubMetrics } from '../types/database';
-import { Plus, GripVertical } from 'lucide-react';
+import { Plus, GripVertical, BrainCircuit, X } from 'lucide-react';
 
 interface GitHubCandidatesKanbanProps {
     candidates: GitHubMetrics[];
@@ -31,6 +31,10 @@ export const GitHubCandidatesKanban: React.FC<GitHubCandidatesKanbanProps> = ({
         ...c,
         status: (c as any).status || 'Pool' as ContactStatus
     })));
+    const [analysisCandidate, setAnalysisCandidate] = useState<CandidateInBoard | null>(null);
+
+    const hasAnalysis = (c: CandidateInBoard) =>
+        !!(c.analysis_psychological || c.analysis_business || c.analysis_sales_angle || c.analysis_bottleneck || (c.ai_summary && c.ai_summary.length > 0));
 
     useEffect(() => {
         setBoardState(candidates.map(c => ({
@@ -145,12 +149,21 @@ export const GitHubCandidatesKanban: React.FC<GitHubCandidatesKanbanProps> = ({
                                                 <p className="text-xs text-slate-400 line-clamp-2 mb-2">{candidate.bio}</p>
                                             )}
 
-                                            {/* Score + Language */}
+                                            {/* Score + Language + Analysis */}
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-1.5">
                                                     <span className="text-xs font-bold text-orange-400">
                                                         {Math.round(candidate.github_score)}
                                                     </span>
+                                                    {hasAnalysis(candidate) && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setAnalysisCandidate(candidate); }}
+                                                            className="p-0.5 text-slate-500 hover:text-purple-400 transition-colors"
+                                                            title="Ver Análisis IA"
+                                                        >
+                                                            <BrainCircuit className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                                 {candidate.most_used_language && (
                                                     <span className="text-xs px-2 py-0.5 bg-orange-500/20 text-orange-300 rounded-full border border-orange-500/30">
@@ -166,6 +179,58 @@ export const GitHubCandidatesKanban: React.FC<GitHubCandidatesKanbanProps> = ({
                     );
                 })}
             </div>
+
+            {/* AI Analysis Modal */}
+            {analysisCandidate && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setAnalysisCandidate(null)}>
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <BrainCircuit className="h-5 w-5 text-purple-400" /> AI Analysis — @{analysisCandidate.github_username}
+                            </h3>
+                            <button onClick={() => setAnalysisCandidate(null)} className="p-1 hover:bg-slate-800 rounded-lg text-slate-400"><X className="h-5 w-5" /></button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {analysisCandidate.analysis_psychological && (
+                                <div className="bg-orange-500/10 p-3 rounded-lg border border-orange-500/20">
+                                    <h4 className="font-semibold text-orange-400 text-xs mb-1">🧠 Perfil Psicológico</h4>
+                                    <p className="text-slate-300 text-sm">{analysisCandidate.analysis_psychological}</p>
+                                </div>
+                            )}
+                            {analysisCandidate.analysis_business && (
+                                <div className="bg-blue-500/10 p-3 rounded-lg border border-blue-500/20">
+                                    <h4 className="font-semibold text-blue-400 text-xs mb-1">📊 Momento de Negocio</h4>
+                                    <p className="text-slate-300 text-sm">{analysisCandidate.analysis_business}</p>
+                                </div>
+                            )}
+                            {analysisCandidate.analysis_sales_angle && (
+                                <div className="bg-purple-500/10 p-3 rounded-lg border border-purple-500/20">
+                                    <h4 className="font-semibold text-purple-400 text-xs mb-1">🎯 Ángulo de Venta</h4>
+                                    <p className="text-slate-300 text-sm">{analysisCandidate.analysis_sales_angle}</p>
+                                </div>
+                            )}
+                            {analysisCandidate.analysis_bottleneck && (
+                                <div className="bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
+                                    <h4 className="font-semibold text-emerald-400 text-xs mb-1">⚡ Cuello de Botella</h4>
+                                    <p className="text-slate-300 text-sm">{analysisCandidate.analysis_bottleneck}</p>
+                                </div>
+                            )}
+                        </div>
+                        {analysisCandidate.ai_summary && analysisCandidate.ai_summary.length > 0 && (
+                            <div className="mt-3 bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+                                <h4 className="font-semibold text-slate-300 text-xs mb-2">📋 Resumen IA</h4>
+                                <ul className="space-y-1">
+                                    {analysisCandidate.ai_summary.map((point, i) => (
+                                        <li key={i} className="text-sm text-slate-400 flex items-start gap-2">
+                                            <span className="text-orange-400 mt-0.5">•</span> {point}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -148,6 +148,7 @@ export class LinkedInSearchEngine {
             const MAX_RETRIES = 30;
             let attempt = 0;
             const seenProfileNames: string[] = [];
+            let consecutiveDupAttempts = 0; // EARLY EXIT: 3 consecutivos = abortar
 
             while (acceptedCandidates.length < maxResults && attempt < MAX_RETRIES && this.isRunning) {
                 attempt++;
@@ -168,9 +169,17 @@ export class LinkedInSearchEngine {
                 });
 
                 if (uniqueCandidates.length === 0) {
-                    onLog(`[DEDUP] ⚠️ No candidatos nuevos en este intento. Reintentando...`);
+                    consecutiveDupAttempts++;
+                    if (consecutiveDupAttempts >= 3) {
+                        onLog(`[EARLY-EXIT] 🛑 3 intentos consecutivos con 100% duplicados. El nicho actual está agotado.`);
+                        break;
+                    }
+                    onLog(`[DEDUP] ⚠️ No candidatos nuevos (${consecutiveDupAttempts}/3 consecutivos). Reintentando...`);
                     continue;
                 }
+
+                // Reset del contador al encontrar candidatos nuevos
+                consecutiveDupAttempts = 0;
 
                 // ═══ SPANISH LANGUAGE FILTER (Fast Search path) ═══
                 let languageFiltered = uniqueCandidates;
@@ -245,8 +254,8 @@ export class LinkedInSearchEngine {
     }
 
     private getQueryVariation(baseQuery: string, attempt: number, seenNames: string[]): string {
-        const coreTerms = baseQuery.replace(/[()]/g, ' ').split(/\s+/).filter(w => w.length > 2);
-        const core = coreTerms.slice(0, 2).join(' ') || baseQuery;
+        // ═══ SNIPER MICRO-QUERIES: 1 rol × 1 tech × 1 ciudad por intento ═══
+        // Elimina las queries genéricas con OR que devolvían siempre los mismos resultados.
 
         // Exclusiones por nombre (evitar repetir perfiles conocidos)
         const exclusions = seenNames
@@ -258,61 +267,38 @@ export class LinkedInSearchEngine {
             .filter(Boolean)
             .join(' ');
 
-        // Rol sinónimos radicales — si hay saturación de duplicados forzamos un cambio de rol
-        const roleSynonyms = [
-            `"Product Engineer"`,
-            `"Full Stack Engineer"`,
-            `"Software Engineer"`,
-            `"Mobile Tech Lead"`,
-            `"Frontend Engineer"`,
-            `"Backend Engineer"`,
-            `"Full Stack Developer"`,
-            `"Senior Developer"`,
-        ];
-        const roleIdx = Math.floor((attempt - 1) / 4) % roleSynonyms.length;
-        const roleAlt = roleSynonyms[roleIdx];
+        // Primer intento: query original del usuario tal cual
+        if (attempt === 1) return baseQuery;
 
-        // RADICAL ROTATION: Ciudad cambia cada 2 intentos para forzar páginas de resultados totalmente distintas
-        const variations = [
-            baseQuery,
-            `"${core}" Spain OR España`,
-            `"${core}" México OR "Ciudad de México"`,
-            `"${core}" Colombia OR Bogotá OR Medellín`,
-            `"${core}" Argentina OR "Buenos Aires"`,
-            `"${core}" Chile OR Santiago`,
-            `"${core}" Perú OR Lima`,
-            `${roleAlt} "React" OR "Node.js" Spain OR México OR Colombia`,
-            `${roleAlt} "Next.js" OR "TypeScript" Bogotá OR "Buenos Aires" OR Santiago`,
-            `${roleAlt} startup OR scaleup España OR LATAM`,
-            `"${core}" Barcelona OR Madrid OR Valencia`,
-            `"${core}" Monterrey OR Guadalajara OR Quito`,
-            `${roleAlt} "React Native" OR "Node" Lima OR Medellín OR Montevideo`,
-            `${roleAlt} freelance OR remoto España OR México`,
-            `"${core}" "startup" OR "SaaS" OR "scaleup" Colombia OR Perú OR Ecuador`,
-            `${roleAlt} "TypeScript" OR "REST API" Chile OR Uruguay OR Paraguay`,
-            `"${core}" "full-stack" OR "fullstack" España OR Argentina`,
-            `${roleAlt} "product" OR "feature" Bogotá OR "Ciudad de México" OR Lima`,
-            `"${core}" "React" "Madrid" OR "Barcelona" OR "Sevilla"`,
-            `${roleAlt} "agile" OR "scrum" México OR Colombia OR Venezuela`,
-            `"${core}" "Node.js" OR "Express" "Buenos Aires" OR "Córdoba" OR Rosario`,
-            `${roleAlt} "aws" OR "gcp" España OR LATAM remoto`,
-            `"${core}" "Next.js" OR "Vercel" Chile OR Perú OR Ecuador OR Bolivia`,
-            `${roleAlt} "independiente" OR "freelance" "Ciudad de México" OR Monterrey`,
-            `"${core}" "cloud" OR "microservices" Colombia OR Venezuela OR Panamá`,
-            `${roleAlt} "tech lead" OR "engineering" Argentina OR Chile OR Uruguay`,
-            `"${core}" "producto" OR "impacto" España OR México OR Colombia`,
-            `${roleAlt} "supabase" OR "firebase" LATAM OR "Latinoamérica"`,
-            `"${core}" "senior" OR "principal" Lima OR Quito OR Asunción`,
-            `${roleAlt} "React" startup remoto España OR México OR Argentina`,
+        const roles = [
+            '"Product Engineer"', '"Full Stack Engineer"', '"Software Engineer"',
+            '"Mobile Tech Lead"', '"Frontend Engineer"', '"Backend Engineer"',
+            '"Full Stack Developer"', '"Senior Developer"',
+        ];
+        const techs = [
+            '"Flutter"', '"React"', '"Node.js"', '"TypeScript"',
+            '"Next.js"', '"React Native"', '"AWS"', '"Python"',
+        ];
+        const cities = [
+            '"Madrid"', '"Barcelona"', '"Valencia"', '"Sevilla"',
+            '"Ciudad de México"', '"Monterrey"', '"Guadalajara"',
+            '"Bogotá"', '"Medellín"', '"Buenos Aires"', '"Córdoba"',
+            '"Santiago"', '"Lima"', '"Quito"', '"Montevideo"',
         ];
 
-        let variation = variations[(attempt - 1) % variations.length];
+        // Rotación con velocidades coprimas para máxima diversidad entre intentos
+        const idx = attempt - 2; // offset porque attempt 1 ya se usó
+        const role = roles[idx % roles.length];
+        const tech = techs[(idx * 3) % techs.length];   // ×3 = coprime con 8
+        const city = cities[idx % cities.length];
 
-        if (attempt > 1 && exclusions) {
+        let variation = `${role} ${tech} ${city}`;
+
+        if (exclusions) {
             const finalQuery = `${variation} ${exclusions}`;
             return finalQuery.length > 250 ? variation : finalQuery;
         }
-        
+
         return variation;
     }
 
@@ -490,6 +476,7 @@ export class LinkedInSearchEngine {
         let attempt = 0;
         const seenProfileNames: string[] = [];
         const seenUrls = new Set<string>();
+        let consecutiveDupAttempts = 0; // EARLY EXIT: cuenta intentos consecutivos 100% duplicados
 
         const startTime = performance.now();
 
@@ -553,9 +540,17 @@ export class LinkedInSearchEngine {
                 onLog(`[LINKEDIN] 📋 ${profiles.length} perfiles → ${newProfiles.length} nuevos (${profiles.length - newProfiles.length} duplicados descartados sin API)`);
 
                 if (newProfiles.length === 0) {
-                    onLog(`[LINKEDIN] ⚠️ Todos duplicados. Reintentando con query diferente...`);
+                    consecutiveDupAttempts++;
+                    if (consecutiveDupAttempts >= 3) {
+                        onLog(`[EARLY-EXIT] 🛑 3 intentos consecutivos con 100% duplicados. El nicho actual está agotado.`);
+                        break;
+                    }
+                    onLog(`[LINKEDIN] ⚠️ Todos duplicados (${consecutiveDupAttempts}/3 consecutivos). Reintentando...`);
                     continue;
                 }
+
+                // Reset del contador al encontrar perfiles nuevos
+                consecutiveDupAttempts = 0;
 
                 const BATCH_SIZE = 8;
                 let processedCount = 0;

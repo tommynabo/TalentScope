@@ -15,14 +15,25 @@ export const config = { maxDuration: 30 };
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
 
-    const platform = req.query.platform as string;
+    // Accept both GET (query params) and POST (JSON body) for backward compat
+    const isPost = req.method === 'POST';
+    const platform = isPost ? (req.body?.platform as string) : (req.query.platform as string);
+
+    // Merge body params into query so handlers work transparently
+    if (isPost && req.body) {
+        for (const [key, value] of Object.entries(req.body)) {
+            if (key !== 'platform' && typeof value === 'string') {
+                req.query[key] = value;
+            }
+        }
+    }
 
     try {
         switch (platform) {

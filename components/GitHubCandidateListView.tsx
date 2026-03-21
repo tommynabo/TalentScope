@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { GitHubMetrics } from '../types/database';
-import { ChevronLeft, Calendar, ChevronDown, ChevronUp, Download, X, Loader2, ExternalLink } from 'lucide-react';
+import { ChevronLeft, Calendar, ChevronDown, ChevronUp, Download, X, Loader2, ExternalLink, BrainCircuit } from 'lucide-react';
 import Toast from './Toast';
 
 interface GitHubCandidateListProps {
@@ -24,6 +24,7 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
     const [toast, setToast] = useState({ show: false, message: '' });
     const [sortConfig, setSortConfig] = useState<{ field: SortField; direction: SortDirection }>({ field: 'added_at', direction: 'desc' });
     const [showExportOptions, setShowExportOptions] = useState(false);
+    const [analysisCandidate, setAnalysisCandidate] = useState<CandidateWithMeta | null>(null);
     const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
         start: getLocalDateStr(),
         end: getLocalDateStr()
@@ -344,14 +345,25 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
                                                 <span className="text-xs font-bold text-slate-300">{candidate.public_repos}</span>
                                             </td>
                                             <td className="px-4 py-2 text-right">
-                                                <a
-                                                    href={candidate.github_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-orange-400 hover:bg-slate-700 px-2 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
-                                                >
-                                                    <ExternalLink className="h-3 w-3" />
-                                                </a>
+                                                <div className="inline-flex items-center gap-1">
+                                                    {!!(candidate.analysis_psychological || candidate.analysis_business || candidate.analysis_sales_angle || candidate.analysis_bottleneck || (candidate.ai_summary && candidate.ai_summary.length > 0)) && (
+                                                        <button
+                                                            onClick={() => setAnalysisCandidate(candidate)}
+                                                            className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-purple-400 hover:bg-slate-700 px-2 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                                                            title="Ver Análisis IA"
+                                                        >
+                                                            <BrainCircuit className="h-3 w-3" />
+                                                        </button>
+                                                    )}
+                                                    <a
+                                                        href={candidate.github_url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-orange-400 hover:bg-slate-700 px-2 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
+                                                    >
+                                                        <ExternalLink className="h-3 w-3" />
+                                                    </a>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -361,6 +373,58 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
                     </table>
                 )}
             </div>
+
+            {/* AI Analysis Modal */}
+            {analysisCandidate && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setAnalysisCandidate(null)}>
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <BrainCircuit className="h-5 w-5 text-purple-400" /> AI Analysis — @{analysisCandidate.github_username}
+                            </h3>
+                            <button onClick={() => setAnalysisCandidate(null)} className="p-1 hover:bg-slate-800 rounded-lg text-slate-400"><X className="h-5 w-5" /></button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {analysisCandidate.analysis_psychological && (
+                                <div className="bg-orange-500/10 p-3 rounded-lg border border-orange-500/20">
+                                    <h4 className="font-semibold text-orange-400 text-xs mb-1">🧠 Perfil Psicológico</h4>
+                                    <p className="text-slate-300 text-sm">{analysisCandidate.analysis_psychological}</p>
+                                </div>
+                            )}
+                            {analysisCandidate.analysis_business && (
+                                <div className="bg-blue-500/10 p-3 rounded-lg border border-blue-500/20">
+                                    <h4 className="font-semibold text-blue-400 text-xs mb-1">📊 Momento de Negocio</h4>
+                                    <p className="text-slate-300 text-sm">{analysisCandidate.analysis_business}</p>
+                                </div>
+                            )}
+                            {analysisCandidate.analysis_sales_angle && (
+                                <div className="bg-purple-500/10 p-3 rounded-lg border border-purple-500/20">
+                                    <h4 className="font-semibold text-purple-400 text-xs mb-1">🎯 Ángulo de Venta</h4>
+                                    <p className="text-slate-300 text-sm">{analysisCandidate.analysis_sales_angle}</p>
+                                </div>
+                            )}
+                            {analysisCandidate.analysis_bottleneck && (
+                                <div className="bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
+                                    <h4 className="font-semibold text-emerald-400 text-xs mb-1">⚡ Cuello de Botella</h4>
+                                    <p className="text-slate-300 text-sm">{analysisCandidate.analysis_bottleneck}</p>
+                                </div>
+                            )}
+                        </div>
+                        {analysisCandidate.ai_summary && analysisCandidate.ai_summary.length > 0 && (
+                            <div className="mt-3 bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+                                <h4 className="font-semibold text-slate-300 text-xs mb-2">📋 Resumen IA</h4>
+                                <ul className="space-y-1">
+                                    {analysisCandidate.ai_summary.map((point, i) => (
+                                        <li key={i} className="text-sm text-slate-400 flex items-start gap-2">
+                                            <span className="text-orange-400 mt-0.5">•</span> {point}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             <Toast isVisible={toast.show} message={toast.message} onClose={() => setToast({ ...toast, show: false })} />
         </div>
