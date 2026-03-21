@@ -170,7 +170,7 @@ export const PRESET_PRODUCT_ENGINEERS: GitHubFilterCriteria = {
     min_stars: 1,          // Accept ANY repo with at least 1 star
     max_stars: 20000,
     min_forks: 1,          
-    languages: ['dart', 'typescript', 'kotlin', 'swift'],
+    languages: ['typescript', 'javascript', 'python', 'go'],
     
     // Developer Signals - VERY PERMISSIVE for testing  
     min_public_repos: 1,   // Accept ANY public repo
@@ -190,7 +190,7 @@ export const PRESET_PRODUCT_ENGINEERS: GitHubFilterCriteria = {
     locations: [], // GitHub API does NOT support location: filter in search. Use post-processing if needed.
     available_for_hire: false,
     
-    score_threshold: 0  // Accept ALL scores (no minimum)
+    score_threshold: 80  // Quality-first: 80/100 minimum (PDF Lead Ideal standard)
 };
 
 // ===========================

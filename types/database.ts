@@ -93,8 +93,8 @@ export interface SearchFilterCriteria {
     has_published_apps: boolean;
     published_apps_match: CriterionMatch;
 
-    has_flutter_dart_exp: boolean;
-    flutter_dart_match: CriterionMatch;
+    has_core_stack_exp: boolean;
+    core_stack_match: CriterionMatch;
 
     has_portfolio_online: boolean;
     portfolio_match: CriterionMatch;
@@ -124,7 +124,7 @@ export interface ScoreBreakdown {
     age: number;
     education: number;
     published_apps: number;
-    flutter_dart: number;
+    core_stack: number;
     portfolio: number;
     open_source: number;
     startup: number;

@@ -572,7 +572,7 @@ export class LinkedInSearchEngine {
 
                         processedCount++;
 
-                        if (analysis.symmetry_score < 50) {
+                        if (analysis.symmetry_score < 80) {
                             onLog(`[FILTER] 📉 ${name} (Score: ${analysis.symmetry_score}) [${processedCount}/${newProfiles.length}]`);
                             return null;
                         }
@@ -678,7 +678,28 @@ export class LinkedInSearchEngine {
                     messages: [
                         {
                             role: 'system',
-                            content: `Eres un experto reclutador specializado en talento tech. Analiza el perfil y devuelve UNICAMENTE JSON con este formato:
+                            content: `Eres un Tech Recruiter de ÉLITE para Symmetry (•400k descargas/mes). Tu misión: CALIDAD SOBRE VOLUMEN. Solo apruebas "Product Engineers" — no meros ejecutores de tareas técnicas.
+
+                            === PERFIL OBJETIVO (extraído del documento Lead Ideal) ===
+                            Experiencia: 3-8 años en producción. Stack core: React/Next.js, Node.js, TypeScript, APIs REST.
+                            Full-stack end-to-end. Entienden producto, usuario Y negocio.
+
+                            ✅ GREEN FLAGS (suman al symmetry_score):
+                            - Ownership de features/productos + menciona métricas o impacto de negocio
+                            - Stack: React/Next.js, Node.js, TypeScript, integraciones REST
+                            - Construyó aplicaciones COMPLETAS (frontend + backend + deploy)
+                            - Experiencia en startups, entornos ágiles o freelance
+                            - Usa herramientas IA (ChatGPT, Claude, Cursor) en su flujo de trabajo
+                            - Mobile (React Native o Flutter) o infra cloud (AWS/GCP/CI-CD) como bonus
+
+                            🚫 RED FLAGS — AUTO-FAIL (symmetry_score DEBE ser < 40 si aplica alguno):
+                            - Solo formación teórica o bootcamp SIN proyectos en producción
+                            - Experiencia limitada a tareas muy específicas SIN contexto global de producto
+                            - No demuestra comprensión del negocio ni del impacto de lo que construye
+                            - Actitud pasiva: solo ejecuta, no tiene iniciativa ni ownership
+                            - Sin apps funcionales usadas por usuarios reales
+
+                            Analiza el perfil y devuelve UNICAMENTE JSON con este formato:
                             {
                                 "psychological_profile": "Perfil psicológico en 1 frase",
                                 "business_moment": "Momento actual en 1 frase",
@@ -687,7 +708,7 @@ export class LinkedInSearchEngine {
                                 "summary": "Resumen ejecutivo en 1 frase",
                                 "outreach_message": "Mensaje personalizado (<280 chars) directo y creativo para primer contacto",
                                 "icebreaker": "ICEBREAKER: Mensaje de invitación LINKEDIN máximo 200 caracteres, super personalizado, menciona algo específico del perfil",
-                                "followup_message": "FOLLOWUP: Mensaje EXACTO que diga: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers en [stack específico extraído del perfil, ej: Flutter y Node.js]. ¿Te interesa que te pase el brief técnico?'",
+                                "followup_message": "FOLLOWUP: Mensaje EXACTO que diga: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers en [stack específico extraído del perfil, ej: React/Node.js o Next.js/TypeScript]. ¿Te interesa que te pase el brief técnico?'",
                                 "second_followup": "SEGUNDO FOLLOWUP: Mensaje de seguimiento (300-500 chars) si no hay respuesta inicial. Proporciona más valor e información",
                                 "skills": ["Habilidad 1", "Habilidad 2"],
                                 "symmetry_score": 75

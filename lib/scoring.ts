@@ -1,16 +1,16 @@
 import { Candidate, SearchFilterCriteria, ScoreBreakdown } from '../types/database';
 
 /**
- * FLUTTER DEVELOPER SCORING SYSTEM
+ * PRODUCT ENGINEER SCORING SYSTEM
  * 
  * Max Score: 15 points
- * Threshold: 8 points (normalized to 70/100)
+ * Threshold: 12 points (normalized to 80/100) — Quality-first standard
  * 
  * Criteria breakdown:
  * - Age (18-30): 1pt
  * - Engineering Degree: 1pt
  * - Published Apps: 2pts (XX)
- * - Flutter/Dart Experience: 2pts (XX)
+ * - Core Stack (React/Next.js, Node.js, TypeScript): 2pts (XX)
  * - Online Portfolio: 2pts (XX)
  * - Open Source: 2pts (XX)
  * - Startup Early Stage: 2pts (XX)
@@ -29,7 +29,7 @@ export function calculateFlutterDeveloperScore(
     age: 0,
     education: 0,
     published_apps: 0,
-    flutter_dart: 0,
+    core_stack: 0,
     portfolio: 0,
     open_source: 0,
     startup: 0,
@@ -58,9 +58,9 @@ export function calculateFlutterDeveloperScore(
     breakdown.published_apps = 2;
   }
 
-  // 4. Flutter/Dart Experience (0-2pts)
-  if (criteria.has_flutter_dart_exp && hasFlutterDartExperience(candidate)) {
-    breakdown.flutter_dart = 2;
+  // 4. Core Stack Experience: React/Next.js, Node.js, TypeScript (0-2pts)
+  if (criteria.has_core_stack_exp && hasCoreStackExperience(candidate)) {
+    breakdown.core_stack = 2;
   }
 
   // 5. Online Portfolio (0-2pts)
@@ -103,7 +103,7 @@ export function calculateFlutterDeveloperScore(
     breakdown.age + 
     breakdown.education + 
     breakdown.published_apps + 
-    breakdown.flutter_dart + 
+    breakdown.core_stack + 
     breakdown.portfolio + 
     breakdown.open_source + 
     breakdown.startup + 
@@ -115,8 +115,8 @@ export function calculateFlutterDeveloperScore(
   // Normalize to 100 (max 15 points)
   breakdown.normalized = Math.round((breakdown.total / 15) * 100);
   
-  // Threshold: minimum 8 points = 53.3%, rounded to 70% on the display scale
-  breakdown.passes_threshold = breakdown.total >= 8;
+  // Threshold: minimum 12 points = 80% of max 15 (Quality-first standard)
+  breakdown.passes_threshold = breakdown.total >= 12;
 
   return {
     score: breakdown.total,
@@ -175,12 +175,12 @@ function hasPublishedApps(candidate: Candidate): boolean {
   return storeKeywords.some(kw => analysisLower.includes(kw));
 }
 
-function hasFlutterDartExperience(candidate: Candidate): boolean {
+function hasCoreStackExperience(candidate: Candidate): boolean {
   if (!candidate.skills || candidate.skills.length === 0) return false;
   
-  const flutterKeywords = ['flutter', 'dart'];
+  const coreStackKeywords = ['react', 'next.js', 'nextjs', 'node', 'nodejs', 'typescript', 'javascript', 'express', 'rest api'];
   return candidate.skills.some(skill => 
-    flutterKeywords.some(kw => skill.toLowerCase().includes(kw))
+    coreStackKeywords.some(kw => skill.toLowerCase().includes(kw))
   );
 }
 
@@ -345,8 +345,8 @@ export function getDefaultFlutterFilters(): SearchFilterCriteria {
     has_published_apps: true,
     published_apps_match: 'required',
     
-    has_flutter_dart_exp: true,
-    flutter_dart_match: 'required',
+    has_core_stack_exp: true,
+    core_stack_match: 'required',
     
     has_portfolio_online: true,
     portfolio_match: 'preferred',

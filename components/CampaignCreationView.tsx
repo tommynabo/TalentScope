@@ -42,7 +42,7 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
         if (filterCriteria.has_engineering_degree) score += 1;
         // Technical XX criteria
         if (filterCriteria.has_published_apps) score += 2;
-        if (filterCriteria.has_flutter_dart_exp) score += 2;
+        if (filterCriteria.has_core_stack_exp) score += 2;
         if (filterCriteria.has_portfolio_online) score += 2;
         if (filterCriteria.open_source_contributor) score += 2;
         // Entrepreneurship

@@ -72,6 +72,13 @@ export class MarketplaceSearchService {
         }
       );
 
+      // Explicit 402 detection: out of Apify compute units
+      if (runResponse.status === 402) {
+        const errMsg = '[APIFY ERROR]: Out of compute units. Recharge your Apify credits at apify.com/billing.';
+        console.error(errMsg);
+        throw new Error(errMsg);
+      }
+
       if (!runResponse.ok) {
         const errText = await runResponse.text();
         throw new Error(`Actor start failed: ${runResponse.status} - ${errText}`);
@@ -134,7 +141,11 @@ export class MarketplaceSearchService {
 
       console.log(`📊 Raw dataset items: ${items.length}`);
       return items;
-    } catch (error) {
+    } catch (error: any) {
+      // Re-throw Apify-tagged errors (e.g. out of compute units) so callers can surface them
+      if (error.message?.startsWith('[APIFY ERROR]')) {
+        throw error;
+      }
       console.error(`❌ Actor execution failed (${actorId}):`, error);
       return [];
     }
@@ -194,7 +205,16 @@ export class MarketplaceSearchService {
     // their own quoting (e.g. Flutter "Spanish" OR "Español"). Adding outer quotes
     // would create broken nested quotes like "Flutter "Spanish" OR "Español""
     const dorkQuery = `site:upwork.com/freelancers OR site:upwork.com/o/profiles ${filter.keyword.trim()}`;
-    const results = await this.scrapeUpworkOnce(dorkQuery, filter.maxResults || 50, filter.languages?.[0]);
+    let results: ScrapedCandidate[];
+    try {
+      results = await this.scrapeUpworkOnce(dorkQuery, filter.maxResults || 50, filter.languages?.[0]);
+    } catch (err: any) {
+      if (err.message?.startsWith('[APIFY ERROR]')) {
+        console.error(err.message);
+        throw err; // Re-throw so RaidService/UI can surface this clearly
+      }
+      results = [];
+    }
 
     // Simple dedup against existing URLs/emails
     const existingUrls = new Set<string>(
@@ -273,8 +293,26 @@ export class MarketplaceSearchService {
     }
 
     if (organicResults.length === 0) {
-      console.warn('⚠️ Upwork (Google): No organicResults found.');
-      return [];
+      // QUERY FALLBACK: relax query by stripping strict quotes and retrying once
+      const relaxedQuery = dorkQuery.replace(/"([^"]+)"/g, '$1').replace(/\s+/g, ' ').trim();
+      if (relaxedQuery !== dorkQuery) {
+        console.log(`🔄 Upwork (Google): 0 results with strict query. Retrying with relaxed query: ${relaxedQuery}`);
+        const fallbackInput = { ...actorInput, queries: relaxedQuery };
+        const fallbackItems = await this.getActorDataset(actorId, fallbackInput, 300);
+        for (const item of fallbackItems) {
+          if (item.organicResults && Array.isArray(item.organicResults)) {
+            organicResults = organicResults.concat(item.organicResults);
+          }
+        }
+        if (organicResults.length === 0) {
+          console.warn('⚠️ Upwork (Google): 0 results even with relaxed query.');
+          return [];
+        }
+        console.log(`✅ Upwork (Google): Fallback returned ${organicResults.length} results.`);
+      } else {
+        console.warn('⚠️ Upwork (Google): No organicResults found.');
+        return [];
+      }
     }
 
     // Filter valid Upwork profiles
@@ -424,7 +462,17 @@ export class MarketplaceSearchService {
 
     // Just do ONE search with the provided keyword
     // The loop and query variations are handled by RaidService, not here
-    const results = await this.scrapeFiverrOnce(filter.keyword, filter.languages?.[0]);
+    const keyword = filter.keyword.trim();
+    let results: ScrapedCandidate[];
+    try {
+      results = await this.scrapeFiverrOnce(keyword, filter.languages?.[0]);
+    } catch (err: any) {
+      if (err.message?.startsWith('[APIFY ERROR]')) {
+        console.error(err.message);
+        throw err; // Re-throw so RaidService/UI can surface this clearly
+      }
+      results = [];
+    }
 
     // Simple dedup against existing URLs/emails
     const existingUrls = new Set<string>(
@@ -504,8 +552,26 @@ export class MarketplaceSearchService {
     }
 
     if (organicResults.length === 0) {
-      console.warn('⚠️ Fiverr (Google): No organicResults found.');
-      return [];
+      // QUERY FALLBACK: relax query by stripping strict quotes and retrying once
+      const relaxedQuery = dorkQuery.replace(/"([^"]+)"/g, '$1').replace(/\s+/g, ' ').trim();
+      if (relaxedQuery !== dorkQuery) {
+        console.log(`🔄 Fiverr (Google): 0 results with strict query. Retrying with relaxed query: ${relaxedQuery}`);
+        const fallbackInput = { ...actorInput, queries: relaxedQuery };
+        const fallbackItems = await this.getActorDataset(actorId, fallbackInput, 60);
+        for (const item of fallbackItems) {
+          if (item.organicResults && Array.isArray(item.organicResults)) {
+            organicResults = organicResults.concat(item.organicResults);
+          }
+        }
+        if (organicResults.length === 0) {
+          console.warn('⚠️ Fiverr (Google): 0 results even with relaxed query.');
+          return [];
+        }
+        console.log(`✅ Fiverr (Google): Fallback returned ${organicResults.length} results.`);
+      } else {
+        console.warn('⚠️ Fiverr (Google): No organicResults found.');
+        return [];
+      }
     }
 
     // Filter valid Fiverr gig pages

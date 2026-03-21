@@ -14,6 +14,13 @@ type SortField = 'added_at' | 'github_score' | 'followers';
 type SortDirection = 'asc' | 'desc';
 type CandidateWithMeta = GitHubMetrics & { added_at?: string };
 
+// Returns today's date as YYYY-MM-DD using the CLIENT'S local timezone (not UTC).
+// Avoids the off-by-one-day bug that occurs when local time differs from UTC date.
+const getLocalDateStr = (): string => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campaignId, onBack }) => {
     const [candidates, setCandidates] = useState<CandidateWithMeta[]>([]);
     const [loading, setLoading] = useState(false);
@@ -23,8 +30,8 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
     const [showUserSelection, setShowUserSelection] = useState(false);
     const [selectedUser, setSelectedUser] = useState<OutreachUser>('mauro');
     const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
-        start: new Date().toISOString().split('T')[0],
-        end: new Date().toISOString().split('T')[0]
+        start: getLocalDateStr(),
+        end: getLocalDateStr()
     });
 
     // Load candidates from sessionStorage on mount

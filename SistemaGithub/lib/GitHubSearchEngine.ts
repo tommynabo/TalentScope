@@ -84,7 +84,7 @@ export class GitHubSearchEngine {
         }
 
         let page = 1;
-        const MAX_PAGES = 10;
+        const MAX_PAGES = 20; // Resilient: review up to 1000 raw profiles before giving up
         
         // CAMBIO 3: Inyección Forzada de País Hispanohablante
         const defaultHispanicLocations = ['spain', 'mexico', 'colombia', 'argentina', 'chile'];
@@ -108,7 +108,7 @@ export class GitHubSearchEngine {
                 // @ts-ignore - Acceso a octokit del servicio
                 response = await githubService.octokit.rest.search.users({
                     q: finalQuery,
-                    per_page: 30,
+                    per_page: 50,
                     page: page,
                     sort: 'followers',
                     order: 'desc'
@@ -198,7 +198,7 @@ export class GitHubSearchEngine {
             const evaluation = await calculateSymmetryScore(profileText);
 
             // 4. CORTOCIRCUITO INMEDIATO
-            const threshold = criteria.score_threshold || 60;
+            const threshold = criteria.score_threshold || 80; // Quality-first: 80/100 minimum
             if (evaluation.score < threshold) {
                 uLog(`⏭️ Skip: Score ${evaluation.score} insuficiente (Umbral: ${threshold}).`);
                 return null;

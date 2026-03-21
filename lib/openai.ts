@@ -17,13 +17,27 @@ export const calculateSymmetryScore = async (profileText: string): Promise<{ sco
 
     try {
         const prompt = `
-      Analyze the following candidate profile text and assign a "Symmetry Score" from 0 to 100 based on fit for a high-value "A-Player" role (Top Developer/Founder).
+      You are an ELITE Tech Recruiter for Symmetry. Your mission is QUALITY OVER VOLUME.
+      Assign a "Symmetry Score" from 0 to 100. Only scores >= 80 are considered qualified.
 
-      Criteria:
-      - Startup Experience (+20 pts)
-      - Founder / Co-founder Role (+30 pts)
-      - Published Apps / Side Projects (+25 pts)
-      - Flutter / Dart Stack Expertise (+25 pts)
+      === SYMMETRY PRODUCT ENGINEER PROFILE ===
+      Target: 3–8 years of real production experience. Full-stack Product Engineers who
+      understand product, users AND business — not merely code executors.
+
+      ✅ GREEN FLAGS (add points — ideal signals):
+      - Ownership over features/products and mentioning metrics or business impact (+25 pts)
+      - Core stack: React/Next.js, Node.js, TypeScript, REST APIs (+25 pts)
+      - Built COMPLETE end-to-end applications (frontend + backend + deploy) (+20 pts)
+      - Startup, early-stage, or freelance/agile environment experience (+15 pts)
+      - Uses AI tools (ChatGPT, Claude, Cursor, Copilot) to amplify work (+10 pts)
+      - Mobile (React Native or Flutter) or cloud infra (AWS/GCP/CI-CD) as bonus (+5 pts)
+
+      🚫 RED FLAGS — AUTO-FAIL (score MUST be < 40 if any apply):
+      - Only bootcamp/online course certifications with ZERO real production projects
+      - Experience limited to very narrow tasks with no global product context
+      - No evidence of understanding business impact or user metrics
+      - Passive attitude: only executes tasks, no initiative, no ownership
+      - No shipped products, no applications used by real users
 
       Profile Text:
       "${profileText}"
@@ -80,7 +94,7 @@ export const generateCandidateAnalysis = async (profileData: any): Promise<any> 
                 "analysis_sales_angle": "1 complete sentence hook.",
                 "analysis_bottleneck": "1 complete sentence on potential rejection reason.",
                 "outreach_icebreaker": "A hyper-personalized opening message referencing specific projects or skills. Start with 'Hola [name],' or similar. Max 2 sentences.",
-                "outreach_pitch": "A value proposition pitch explaining why this opportunity fits THEM. EXACTLY use this template: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers en [stack específico extraído del perfil, ej: Flutter y Node.js]. ¿Te interesa que te pase el brief técnico?'",
+                "outreach_pitch": "A value proposition pitch explaining why this opportunity fits THEM. EXACTLY use this template: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers en [stack específico del perfil, ej: React/Node.js o Next.js/TypeScript]. ¿Te interesa que te pase el brief técnico?'",
                 "outreach_followup": "A soft follow-up message saying you wanted to touch base about opportunity. Max 1 sentence.",
                 "ai_summary": ["Bullet 1 (Strength)", "Bullet 2 (Achievement)", "Bullet 3 (Risk/Oddity)"]
             }
@@ -88,7 +102,7 @@ export const generateCandidateAnalysis = async (profileData: any): Promise<any> 
 
         const completion = await openai.chat.completions.create({
             messages: [
-                { role: "system", content: "You are a recruitment intelligence engine. Be concise, sharp, and insightful. Avoid corporate jargon." },
+                { role: "system", content: "You are an ELITE recruitment intelligence engine for Symmetry — a health & wellness app (400k+ monthly downloads). We hire Product Engineers (3–8 yrs exp) who build end-to-end: React/Next.js, Node.js, TypeScript, REST APIs. They must understand product impact and business metrics, not just write code. Penalize heavily: only certifications, no production projects, narrow specialists with no business context. Be concise, sharp, and insightful." },
                 { role: "user", content: prompt }
             ],
             model: "gpt-4-turbo",

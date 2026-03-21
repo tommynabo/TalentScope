@@ -300,10 +300,10 @@ export class SearchEngine {
                                 score_breakdown: scoring.breakdown
                             };
                         })
-                        .filter(c => c.symmetry_score >= (options.scoreThreshold || 70))
+                        .filter(c => c.symmetry_score >= (options.scoreThreshold || 80))
                         .sort((a, b) => (b.symmetry_score || 0) - (a.symmetry_score || 0));
                     
-                    onLog(`[SCORING] ✅ ${scoredCandidates.length} candidatos cumplen threshold de ${options.scoreThreshold || 70}/100`);
+                    onLog(`[SCORING] ✅ ${scoredCandidates.length} candidatos cumplen threshold de ${options.scoreThreshold || 80}/100`);
                 }
 
                 // Add new candidates to accepted list (but only up to maxResults total)
@@ -555,7 +555,7 @@ export class SearchEngine {
         existingLinkedin: Set<string>
     ): Promise<Candidate[]> {
         const acceptedCandidates: Candidate[] = [];
-        const MAX_RETRIES = 10; // Always attempt 10 different search variations
+        const MAX_RETRIES = 15; // Resilient: more attempts needed with higher quality threshold
         let attempt = 0;
         const seenProfileNames: string[] = [];
         const seenUrls = new Set<string>(); // Track URLs within this search session
@@ -575,11 +575,11 @@ export class SearchEngine {
                 const langKeywords = options.language === 'Spanish' ? '(España OR Spanish OR Español)' : '';
 
                 // OPTIMIZED: 1 page = fastest Apify run (~8s vs ~46s with 3 pages)
-                // Request 20 results per page (Google max is ~100)
+                // Request 50 results per page to cast wider net for quality filtering
                 const searchInput = {
                     queries: `${siteOperator} ${currentQuery} ${langKeywords}`,
                     maxPagesPerQuery: 1,
-                    resultsPerPage: 20,
+                    resultsPerPage: 50,
                     languageCode: options.language === 'Spanish' ? 'es' : 'en',
                     countryCode: options.language === 'Spanish' ? 'es' : 'us',
                 };
@@ -657,7 +657,7 @@ export class SearchEngine {
 
                         processedCount++;
 
-                        if (analysis.symmetry_score < 70) {
+                        if (analysis.symmetry_score < 80) {
                             onLog(`[FILTER] 📉 ${name} (Score: ${analysis.symmetry_score}) [${processedCount}/${newProfiles.length}]`);
                             return null;
                         }
@@ -772,7 +772,28 @@ export class SearchEngine {
                     messages: [
                         {
                             role: 'system',
-                            content: `Eres un experto reclutador specializado en talento tech. Analiza el perfil y devuelve UNICAMENTE JSON con este formato:
+                            content: `Eres un Tech Recruiter de ÉLITE para Symmetry (•400k descargas/mes). Tu misión: CALIDAD SOBRE VOLUMEN. Solo apruebas "Product Engineers" — no meros ejecutores de tareas técnicas.
+
+                            === PERFIL OBJETIVO (extraído del documento Lead Ideal) ===
+                            Experiencia: 3-8 años en producción. Stack core: React/Next.js, Node.js, TypeScript, APIs REST.
+                            Full-stack end-to-end. Entienden producto, usuario Y negocio.
+
+                            ✅ GREEN FLAGS (suman al symmetry_score):
+                            - Ownership de features/productos + menciona métricas o impacto de negocio
+                            - Stack: React/Next.js, Node.js, TypeScript, integraciones REST
+                            - Construyó aplicaciones COMPLETAS (frontend + backend + deploy)
+                            - Experiencia en startups, entornos ágiles o freelance
+                            - Usa herramientas IA (ChatGPT, Claude, Cursor) en su flujo de trabajo
+                            - Mobile (React Native o Flutter) o infra cloud (AWS/GCP/CI-CD) como bonus
+
+                            🚫 RED FLAGS — AUTO-FAIL (symmetry_score DEBE ser < 40 si aplica alguno):
+                            - Solo formación teórica o bootcamp SIN proyectos en producción
+                            - Experiencia limitada a tareas muy específicas SIN contexto global de producto
+                            - No demuestra comprensión del negocio ni del impacto de lo que construye
+                            - Actitud pasiva: solo ejecuta, no tiene iniciativa ni ownership
+                            - Sin apps funcionales usadas por usuarios reales
+
+                            Analiza el perfil y devuelve UNICAMENTE JSON con este formato:
                             {
                                 "psychological_profile": "Perfil psicológico en 1 frase",
                                 "business_moment": "Momento actual en 1 frase",
@@ -788,11 +809,11 @@ export class SearchEngine {
                             }
                             
                             IMPORTANTE:
-                            - ICEBREAKER debe ser casual, corto (máx 200 chars), pedir conexión en LinkedIn
-                            - FOLLOWUP debe ser más profesional y completo, describe oportunidad sin vender directamente
-                            - SEGUNDO FOLLOWUP es para seguimiento después de X días sin respuesta, ofrece valor adicional
-                            - Los 3 mensajes deben ser super personalizados basados en el perfil
-                            - If snippet implies user is > ${context.maxAge || 40} years old, PENALIZE SCORE (<50)`
+                            - ICEBREAKER casual, corto (máx 200 chars), pedir conexión en LinkedIn
+                            - FOLLOWUP profesional, describe oportunidad sin vender directamente
+                            - SEGUNDO FOLLOWUP para seguimiento sin respuesta, ofrece valor adicional
+                            - Los 3 mensajes super personalizados basados en el perfil
+                            - Si el snippet indica que el usuario tiene > ${context.maxAge || 40} años, PENALIZAR SCORE (<50)`
                         },
                         { role: 'user', content: JSON.stringify(context) }
                     ],

@@ -25,7 +25,7 @@ export const ScoreBreakdownCard: React.FC<ScoreBreakdownCardProps> = ({
     { label: 'Age (18-30)', points: breakdown.age, max: 1, importance: 'X' },
     { label: 'Engineering Degree', points: breakdown.education, max: 1, importance: 'X' },
     { label: 'Published Apps', points: breakdown.published_apps, max: 2, importance: 'XX' },
-    { label: 'Flutter/Dart Experience', points: breakdown.flutter_dart, max: 2, importance: 'XX' },
+    { label: 'Core Stack (React/Node.js/TS)', points: breakdown.core_stack, max: 2, importance: 'XX' },
     { label: 'Online Portfolio', points: breakdown.portfolio, max: 2, importance: 'XX' },
     { label: 'Open Source Activity', points: breakdown.open_source, max: 2, importance: 'XX' },
     { label: 'Startup Experience', points: breakdown.startup, max: 2, importance: 'XX' },
