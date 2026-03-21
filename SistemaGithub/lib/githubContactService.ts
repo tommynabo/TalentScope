@@ -264,9 +264,12 @@ export class GitHubContactService {
             }
         }
 
-        // 2. Buscar en commits de los primeros 5 repositorios (increased from 3)
+        // 2. Buscar en commits de los 3 mejores repositorios (por estrellas) — límite estricto anti rate-limit
         if (topRepos && topRepos.length > 0) {
-            for (const repo of topRepos.slice(0, 5)) {
+            const bestRepos = [...topRepos]
+                .sort((a, b) => (b.stargazers_count || b.stargazerCount || 0) - (a.stargazers_count || a.stargazerCount || 0))
+                .slice(0, 3);
+            for (const repo of bestRepos) {
                 const repoOwner = repo.owner?.login || username;
                 
                 // ⚡ TRUCO DEL PATCH: Intentar extraer email del raw patch del último commit

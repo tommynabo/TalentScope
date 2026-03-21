@@ -293,26 +293,25 @@ export class MarketplaceSearchService {
     }
 
     if (organicResults.length === 0) {
-      // QUERY FALLBACK: relax query by stripping strict quotes and retrying once
-      const relaxedQuery = dorkQuery.replace(/"([^"]+)"/g, '$1').replace(/\s+/g, ' ').trim();
-      if (relaxedQuery !== dorkQuery) {
-        console.log(`🔄 Upwork (Google): 0 results with strict query. Retrying with relaxed query: ${relaxedQuery}`);
-        const fallbackInput = { ...actorInput, queries: relaxedQuery };
-        const fallbackItems = await this.getActorDataset(actorId, fallbackInput, 300);
-        for (const item of fallbackItems) {
-          if (item.organicResults && Array.isArray(item.organicResults)) {
-            organicResults = organicResults.concat(item.organicResults);
-          }
+      // QUERY FALLBACK: forza geo-targeting explícito en lugar de relajar comillas
+      // (relajar comillas produce resultados de India/Pakistan — queremos LATAM/España)
+      const cityBlock = '"Madrid" OR "Ciudad de México" OR "Bogotá" OR "Buenos Aires" OR "Santiago" OR "Lima"';
+      const negatives = '-"India" -"Pakistan" -"Bangladesh"';
+      const keyword = dorkQuery.replace(/site:[^\s]+/g, '').replace(/OR site:[^\s]+/g, '').trim();
+      const geoFallbackQuery = `site:upwork.com/freelancers ${keyword} (${cityBlock}) ${negatives}`;
+      console.log(`🔄 Upwork (Google): 0 results. Retrying with geo-targeted fallback: ${geoFallbackQuery}`);
+      const fallbackInput = { ...actorInput, queries: geoFallbackQuery };
+      const fallbackItems = await this.getActorDataset(actorId, fallbackInput, 300);
+      for (const item of fallbackItems) {
+        if (item.organicResults && Array.isArray(item.organicResults)) {
+          organicResults = organicResults.concat(item.organicResults);
         }
-        if (organicResults.length === 0) {
-          console.warn('⚠️ Upwork (Google): 0 results even with relaxed query.');
-          return [];
-        }
-        console.log(`✅ Upwork (Google): Fallback returned ${organicResults.length} results.`);
-      } else {
-        console.warn('⚠️ Upwork (Google): No organicResults found.');
+      }
+      if (organicResults.length === 0) {
+        console.warn('⚠️ Upwork (Google): 0 results even with geo-targeted fallback.');
         return [];
       }
+      console.log(`✅ Upwork (Google): Geo fallback returned ${organicResults.length} results.`);
     }
 
     // Filter valid Upwork profiles
@@ -867,27 +866,30 @@ export class MarketplaceSearchService {
 
   private getUpworkQueryVariation(base: string, attempt: number, language: string = 'es'): string {
     const sitePrefix = 'site:upwork.com/freelancers OR site:upwork.com/o/profiles';
-    const locQuery = '(Spain OR Mexico OR Argentina OR Colombia OR Chile OR Peru OR "Costa Rica" OR Uruguay)';
+    // Ciudad-explota en comillas para forzar resultados LATAM/España y excluir Asia
+    const cityBlock = '("Madrid" OR "Barcelona" OR "Ciudad de México" OR "Bogotá" OR "Buenos Aires" OR "Santiago" OR "Montevideo" OR "Lima" OR "Guadalajara" OR "Medellín")';
+    const negatives = '-"India" -"Pakistan" -"Bangladesh" -"Nigeria"';
     
     const variations = [
-      `${sitePrefix} "${base}" (${locQuery})`,
-      `${sitePrefix} "${base}" "Spanish" (${locQuery})`,
-      `${sitePrefix} ${base} "top rated" Español`,
-      `${sitePrefix} ${base} "100% Job Success" Spanish`,
-      `${sitePrefix} ${base} freelance remote (${locQuery})`,
+      `${sitePrefix} "${base}" ${cityBlock} ${negatives}`,
+      `${sitePrefix} "${base}" "España" OR "México" OR "Colombia" ${negatives}`,
+      `${sitePrefix} "${base}" "Buenos Aires" OR "Lima" OR "Santiago" ${negatives}`,
+      `${sitePrefix} "${base}" "top rated" ${cityBlock} ${negatives}`,
+      `${sitePrefix} "${base}" "100% Job Success" ${cityBlock} ${negatives}`,
     ];
     return variations[Math.min(attempt - 1, variations.length - 1)];
   }
 
   private getFiverrQueryVariation(base: string, attempt: number): string {
     const sitePrefix = 'site:fiverr.com';
-    const locQuery = '(Spain OR Mexico OR Argentina OR Colombia OR Chile OR Peru)';
+    const cityBlock = '("Madrid" OR "Barcelona" OR "Ciudad de México" OR "Bogotá" OR "Buenos Aires" OR "Santiago" OR "Lima" OR "Medellín")';
+    const negatives = '-"India" -"Pakistan" -"Bangladesh"';
     const variations = [
-      `${sitePrefix} "${base}" (${locQuery})`,
-      `${sitePrefix} "${base}" "Spanish" (${locQuery})`,
-      `${sitePrefix} "${base}" seller "Habla Español"`,
-      `${sitePrefix} "${base}" portfolio Spanish`,
-      `${sitePrefix} "${base}" studio Español`,
+      `${sitePrefix} "${base}" ${cityBlock} ${negatives}`,
+      `${sitePrefix} "${base}" "España" OR "México" OR "Colombia" ${negatives}`,
+      `${sitePrefix} "${base}" "Habla Español" ${cityBlock} ${negatives}`,
+      `${sitePrefix} "${base}" seller ${cityBlock} ${negatives}`,
+      `${sitePrefix} "${base}" portfolio "Buenos Aires" OR "Santiago" ${negatives}`,
     ];
     return variations[Math.min(attempt - 1, variations.length - 1)];
   }

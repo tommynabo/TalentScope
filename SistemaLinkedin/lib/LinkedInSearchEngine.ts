@@ -145,7 +145,7 @@ export class LinkedInSearchEngine {
             onLog(`[DEDUP] ✅ ${existingEmails.size} emails y ${existingLinkedin.size} perfiles conocidos ignorados.`);
 
             const acceptedCandidates: Candidate[] = [];
-            const MAX_RETRIES = 15;
+            const MAX_RETRIES = 30;
             let attempt = 0;
             const seenProfileNames: string[] = [];
 
@@ -246,7 +246,6 @@ export class LinkedInSearchEngine {
 
     private getQueryVariation(baseQuery: string, attempt: number, seenNames: string[]): string {
         const coreTerms = baseQuery.replace(/[()]/g, ' ').split(/\s+/).filter(w => w.length > 2);
-        // Usar los primeros 2 términos para asegurar contexto sin saturar la query
         const core = coreTerms.slice(0, 2).join(' ') || baseQuery;
 
         // Exclusiones por nombre (evitar repetir perfiles conocidos)
@@ -259,7 +258,21 @@ export class LinkedInSearchEngine {
             .filter(Boolean)
             .join(' ');
 
-        // RADICAL ROTATION: Diferentes combinaciones para forzar resultados frescos
+        // Rol sinónimos radicales — si hay saturación de duplicados forzamos un cambio de rol
+        const roleSynonyms = [
+            `"Product Engineer"`,
+            `"Full Stack Engineer"`,
+            `"Software Engineer"`,
+            `"Mobile Tech Lead"`,
+            `"Frontend Engineer"`,
+            `"Backend Engineer"`,
+            `"Full Stack Developer"`,
+            `"Senior Developer"`,
+        ];
+        const roleIdx = Math.floor((attempt - 1) / 4) % roleSynonyms.length;
+        const roleAlt = roleSynonyms[roleIdx];
+
+        // RADICAL ROTATION: Ciudad cambia cada 2 intentos para forzar páginas de resultados totalmente distintas
         const variations = [
             baseQuery,
             `"${core}" Spain OR España`,
@@ -268,22 +281,34 @@ export class LinkedInSearchEngine {
             `"${core}" Argentina OR "Buenos Aires"`,
             `"${core}" Chile OR Santiago`,
             `"${core}" Perú OR Lima`,
-            `"Senior" "${core}" startup OR scaleup`,
-            `"Lead" "${core}" remoto OR remote`,
-            `"Principal" "${core}" independiente OR freelance`,
+            `${roleAlt} "React" OR "Node.js" Spain OR México OR Colombia`,
+            `${roleAlt} "Next.js" OR "TypeScript" Bogotá OR "Buenos Aires" OR Santiago`,
+            `${roleAlt} startup OR scaleup España OR LATAM`,
             `"${core}" Barcelona OR Madrid OR Valencia`,
             `"${core}" Monterrey OR Guadalajara OR Quito`,
-            `"${core}" (entorno OR equipo OR proyecto)`,
-            `"${core}" (desarrollo OR consultoría OR tech)`,
-            `"${core}" (especialista OR experto OR experto)`,
+            `${roleAlt} "React Native" OR "Node" Lima OR Medellín OR Montevideo`,
+            `${roleAlt} freelance OR remoto España OR México`,
+            `"${core}" "startup" OR "SaaS" OR "scaleup" Colombia OR Perú OR Ecuador`,
+            `${roleAlt} "TypeScript" OR "REST API" Chile OR Uruguay OR Paraguay`,
+            `"${core}" "full-stack" OR "fullstack" España OR Argentina`,
+            `${roleAlt} "product" OR "feature" Bogotá OR "Ciudad de México" OR Lima`,
+            `"${core}" "React" "Madrid" OR "Barcelona" OR "Sevilla"`,
+            `${roleAlt} "agile" OR "scrum" México OR Colombia OR Venezuela`,
+            `"${core}" "Node.js" OR "Express" "Buenos Aires" OR "Córdoba" OR Rosario`,
+            `${roleAlt} "aws" OR "gcp" España OR LATAM remoto`,
+            `"${core}" "Next.js" OR "Vercel" Chile OR Perú OR Ecuador OR Bolivia`,
+            `${roleAlt} "independiente" OR "freelance" "Ciudad de México" OR Monterrey`,
+            `"${core}" "cloud" OR "microservices" Colombia OR Venezuela OR Panamá`,
+            `${roleAlt} "tech lead" OR "engineering" Argentina OR Chile OR Uruguay`,
+            `"${core}" "producto" OR "impacto" España OR México OR Colombia`,
+            `${roleAlt} "supabase" OR "firebase" LATAM OR "Latinoamérica"`,
+            `"${core}" "senior" OR "principal" Lima OR Quito OR Asunción`,
+            `${roleAlt} "React" startup remoto España OR México OR Argentina`,
         ];
 
-        // Usamos el intento para rotar radicalmente
         let variation = variations[(attempt - 1) % variations.length];
 
-        // Si ya hemos pasado la primera rotación, añadimos exclusiones para mayor frescura
         if (attempt > 1 && exclusions) {
-            // Limitar longitud de query para evitar errores de motores de búsqueda
             const finalQuery = `${variation} ${exclusions}`;
             return finalQuery.length > 250 ? variation : finalQuery;
         }
@@ -461,7 +486,7 @@ export class LinkedInSearchEngine {
         existingLinkedin: Set<string>
     ): Promise<Candidate[]> {
         const acceptedCandidates: Candidate[] = [];
-        const MAX_RETRIES = 15;
+        const MAX_RETRIES = 30;
         let attempt = 0;
         const seenProfileNames: string[] = [];
         const seenUrls = new Set<string>();
