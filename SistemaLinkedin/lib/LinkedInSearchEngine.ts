@@ -466,7 +466,7 @@ export class LinkedInSearchEngine {
     private async searchLinkedIn(
         query: string,
         maxResults: number,
-        options: { language: string; maxAge: number },
+        options: { language: string; maxAge: number; scoreThreshold?: number },
         onLog: LogCallback,
         existingEmails: Set<string>,
         existingLinkedin: Set<string>
@@ -592,8 +592,8 @@ export class LinkedInSearchEngine {
 
                         processedCount++;
 
-                        if (analysis.symmetry_score < 80) {
-                            onLog(`[FILTER] 📉 ${name} (Score: ${analysis.symmetry_score}) [${processedCount}/${newProfiles.length}]`);
+                        if (analysis.symmetry_score < (options.scoreThreshold || 70)) {
+                            onLog(`[FILTER] 📉 ${name} (Score: ${analysis.symmetry_score}) < threshold ${options.scoreThreshold || 70} [${processedCount}/${newProfiles.length}]`);
                             return null;
                         }
 

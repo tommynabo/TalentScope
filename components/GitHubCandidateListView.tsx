@@ -346,15 +346,13 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
                                             </td>
                                             <td className="px-4 py-2 text-right">
                                                 <div className="inline-flex items-center gap-1">
-                                                    {!!(candidate.analysis_psychological || candidate.analysis_business || candidate.analysis_sales_angle || candidate.analysis_bottleneck || (candidate.ai_summary && candidate.ai_summary.length > 0)) && (
-                                                        <button
-                                                            onClick={() => setAnalysisCandidate(candidate)}
-                                                            className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-purple-400 hover:bg-slate-700 px-2 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600"
-                                                            title="Ver Análisis IA"
-                                                        >
-                                                            <BrainCircuit className="h-3 w-3" />
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        onClick={() => setAnalysisCandidate(candidate)}
+                                                        className={`inline-flex items-center gap-1 text-xs font-medium hover:bg-slate-700 px-2 py-1 rounded-lg transition-colors border border-transparent hover:border-slate-600 ${!!(candidate.analysis_psychological || candidate.analysis_business || candidate.analysis_sales_angle || candidate.analysis_bottleneck || (candidate.ai_summary && candidate.ai_summary.length > 0)) ? 'text-purple-400 hover:text-purple-300' : 'text-slate-500 hover:text-slate-400'}`}
+                                                        title="Ver Análisis IA"
+                                                    >
+                                                        <BrainCircuit className="h-3 w-3" />
+                                                    </button>
                                                     <a
                                                         href={candidate.github_url}
                                                         target="_blank"
@@ -407,6 +405,11 @@ export const GitHubCandidateList: React.FC<GitHubCandidateListProps> = ({ campai
                                 <div className="bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
                                     <h4 className="font-semibold text-emerald-400 text-xs mb-1">⚡ Cuello de Botella</h4>
                                     <p className="text-slate-300 text-sm">{analysisCandidate.analysis_bottleneck}</p>
+                                </div>
+                            )}
+                            {!(analysisCandidate.analysis_psychological || analysisCandidate.analysis_business || analysisCandidate.analysis_sales_angle || analysisCandidate.analysis_bottleneck || (analysisCandidate.ai_summary && analysisCandidate.ai_summary.length > 0)) && (
+                                <div className="col-span-2 bg-slate-800/50 p-4 rounded-lg border border-slate-700 text-center">
+                                    <p className="text-slate-400 text-sm">Sin análisis IA disponible. Ejecuta Deep Research para generar el análisis.</p>
                                 </div>
                             )}
                         </div>

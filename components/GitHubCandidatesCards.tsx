@@ -114,15 +114,13 @@ export const GitHubCandidatesCards: React.FC<GitHubCandidatesCardsProps> = ({
                             {/* Actions Column */}
                             <td className="px-4 py-4 text-center">
                                 <div className="flex items-center justify-center gap-2">
-                                    {hasAnalysis(candidate) && (
-                                        <button
-                                            onClick={() => setAnalysisCandidate(candidate)}
-                                            className="p-2 text-slate-400 hover:text-purple-400 hover:bg-slate-800 rounded-lg transition-colors"
-                                            title="Ver Análisis IA"
-                                        >
-                                            <BrainCircuit className="h-4 w-4" />
-                                        </button>
-                                    )}
+                                    <button
+                                        onClick={() => setAnalysisCandidate(candidate)}
+                                        className={`p-2 hover:bg-slate-800 rounded-lg transition-colors ${hasAnalysis(candidate) ? 'text-purple-400 hover:text-purple-300' : 'text-slate-500 hover:text-slate-400'}`}
+                                        title="Ver Análisis IA"
+                                    >
+                                        <BrainCircuit className="h-4 w-4" />
+                                    </button>
                                     <a
                                         href={`https://github.com/${candidate.github_username}`}
                                         target="_blank"
@@ -192,6 +190,11 @@ export const GitHubCandidatesCards: React.FC<GitHubCandidatesCardsProps> = ({
                                 <div className="bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
                                     <h4 className="font-semibold text-emerald-400 text-xs mb-1">⚡ Cuello de Botella</h4>
                                     <p className="text-slate-300 text-sm">{analysisCandidate.analysis_bottleneck}</p>
+                                </div>
+                            )}
+                            {!hasAnalysis(analysisCandidate) && (
+                                <div className="col-span-2 bg-slate-800/50 p-4 rounded-lg border border-slate-700 text-center">
+                                    <p className="text-slate-400 text-sm">Sin análisis IA disponible. Ejecuta Deep Research para generar el análisis.</p>
                                 </div>
                             )}
                         </div>

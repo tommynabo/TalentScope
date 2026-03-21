@@ -155,15 +155,13 @@ export const GitHubCandidatesKanban: React.FC<GitHubCandidatesKanbanProps> = ({
                                                     <span className="text-xs font-bold text-orange-400">
                                                         {Math.round(candidate.github_score)}
                                                     </span>
-                                                    {hasAnalysis(candidate) && (
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setAnalysisCandidate(candidate); }}
-                                                            className="p-0.5 text-slate-500 hover:text-purple-400 transition-colors"
-                                                            title="Ver Análisis IA"
-                                                        >
-                                                            <BrainCircuit className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setAnalysisCandidate(candidate); }}
+                                                        className={`p-0.5 transition-colors ${hasAnalysis(candidate) ? 'text-purple-400 hover:text-purple-300' : 'text-slate-600 hover:text-slate-400'}`}
+                                                        title="Ver Análisis IA"
+                                                    >
+                                                        <BrainCircuit className="h-3.5 w-3.5" />
+                                                    </button>
                                                 </div>
                                                 {candidate.most_used_language && (
                                                     <span className="text-xs px-2 py-0.5 bg-orange-500/20 text-orange-300 rounded-full border border-orange-500/30">
@@ -213,6 +211,11 @@ export const GitHubCandidatesKanban: React.FC<GitHubCandidatesKanbanProps> = ({
                                 <div className="bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/20">
                                     <h4 className="font-semibold text-emerald-400 text-xs mb-1">⚡ Cuello de Botella</h4>
                                     <p className="text-slate-300 text-sm">{analysisCandidate.analysis_bottleneck}</p>
+                                </div>
+                            )}
+                            {!hasAnalysis(analysisCandidate) && (
+                                <div className="col-span-2 bg-slate-800/50 p-4 rounded-lg border border-slate-700 text-center">
+                                    <p className="text-slate-400 text-sm">Sin análisis IA disponible. Ejecuta Deep Research para generar el análisis.</p>
                                 </div>
                             )}
                         </div>

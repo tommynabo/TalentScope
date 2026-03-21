@@ -331,8 +331,11 @@ export class MarketplaceSearchService {
       .filter((c): c is ScrapedCandidate => c !== null)
       .filter(c => c.name.trim().length > 0)
       // FILTER BY LANGUAGE: Validate candidate speaks required language
-      // Lenient for marketplace: Google snippets have limited data (country='Unknown').
-      // If snippet text mentions Spanish/Español, accept the candidate.
+      // MARKETPLACE LENIENT MODE: Google dork queries already target Spanish/LATAM
+      // with negative filters (-"India" -"Pakistan"). Since Google snippets have
+      // very limited data (country='Unknown'), only hard-filter when we have a
+      // POSITIVE non-Hispanic signal. Otherwise, benefit of doubt — enrichment
+      // will provide more data later.
       .filter(c => {
         if (language === 'es' || language === 'español') {
           // Primary check: multi-signal (name, location, bio text)
@@ -344,6 +347,14 @@ export class MarketplaceSearchService {
           // Fallback: Google snippet mentions Spanish/Español → accept
           const textLower = `${c.bio || ''} ${c.title || ''}`.toLowerCase();
           if (/\b(spanish|español|espanol|hispanohablante|habla español|castellano)\b/i.test(textLower)) {
+            return true;
+          }
+
+          // Google-scraped profiles have country='Unknown' — not enough data to reject.
+          // The dork query already includes Spanish/LATAM targeting, so accept with
+          // benefit of doubt. Only reject if we had concrete country data.
+          if (c.country === 'Unknown' || !c.country) {
+            console.log(`⚠️ ${c.name} — sin señal hispana clara, aceptado (dork ya targetea español)`);
             return true;
           }
 
