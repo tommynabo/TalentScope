@@ -86,6 +86,7 @@ export const GitHubCandidatesKanban: React.FC<GitHubCandidatesKanbanProps> = ({
     };
 
     return (
+        <>
         <div className="h-full overflow-x-auto">
             <div className="flex gap-4 p-4 min-w-max">
                 {COLUMNS.map(column => {
@@ -237,5 +238,6 @@ export const GitHubCandidatesKanban: React.FC<GitHubCandidatesKanbanProps> = ({
                 </div>
             </div>
         )}
+        </>
     );
 };
