@@ -120,7 +120,7 @@ export default async function handler(
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${masterSecret}`,
       },
-      body: JSON.stringify({ user_id: user.id, email: user.email ?? '' }),
+      body: JSON.stringify({ userId: user.id, email: user.email ?? '' }),
     });
 
     if (!provisionRes.ok) {
