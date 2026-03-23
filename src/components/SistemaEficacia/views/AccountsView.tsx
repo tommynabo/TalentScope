@@ -5,19 +5,19 @@ import {
 } from 'lucide-react';
 import {
   eficaciaFetch, getEficaciaConfig, saveEficaciaConfig,
+  isKeyInitialized,
   EficaciaAccount, EficaciaApiError,
 } from '../../../lib/eficaciaApi';
 
 // ─── Config panel ─────────────────────────────────────────────────────────────
 const ConfigPanel: React.FC<{ onSaved: () => void }> = ({ onSaved }) => {
   const cfg = getEficaciaConfig();
-  const [apiKey, setApiKey]   = useState(cfg.apiKey);
   const [baseUrl, setBaseUrl] = useState(cfg.baseUrl);
   const [saving, setSaving]   = useState(false);
 
   const handleSave = () => {
     setSaving(true);
-    saveEficaciaConfig({ apiKey: apiKey.trim(), baseUrl: baseUrl.trim() });
+    saveEficaciaConfig({ baseUrl: baseUrl.trim() });
     setTimeout(() => { setSaving(false); onSaved(); }, 300);
   };
 
@@ -27,44 +27,52 @@ const ConfigPanel: React.FC<{ onSaved: () => void }> = ({ onSaved }) => {
         <Settings2 className="h-5 w-5 text-cyan-400" />
         <h3 className="text-lg font-semibold text-white">Configuración del Bridge</h3>
       </div>
-      <p className="text-sm text-slate-400">
-        Introduce la URL y API Key de tu instancia EficacIA. Se guardan localmente en tu navegador.
-      </p>
-      <div className="space-y-4">
-        <div>
-          <label className="flex items-center gap-1.5 text-sm font-medium text-slate-300 mb-2">
-            <Globe className="h-4 w-4 text-slate-400" />
-            URL Base
-          </label>
-          <input
-            type="url"
-            value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder="https://api.eficacia.app"
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors text-sm"
-          />
-        </div>
-        <div>
-          <label className="flex items-center gap-1.5 text-sm font-medium text-slate-300 mb-2">
-            <Key className="h-4 w-4 text-slate-400" />
-            API Key
-          </label>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="eficacia_sk_..."
-            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors text-sm"
-          />
-        </div>
+
+      {/* Shadow Accounts notice */}
+      <div className="flex items-start gap-3 p-3.5 bg-cyan-950/40 border border-cyan-500/20 rounded-xl">
+        <Key className="h-4 w-4 text-cyan-400 shrink-0 mt-0.5" />
+        <p className="text-xs text-cyan-300/80 leading-relaxed">
+          <span className="font-semibold text-cyan-300">Shadow Accounts activado.</span>{' '}
+          Tu API Key se genera y gestiona automáticamente — no necesitas introducirla manualmente.
+        </p>
       </div>
+
+      <div>
+        <label className="flex items-center gap-1.5 text-sm font-medium text-slate-300 mb-2">
+          <Globe className="h-4 w-4 text-slate-400" />
+          URL Base de EficacIA
+        </label>
+        <input
+          type="url"
+          value={baseUrl}
+          onChange={(e) => setBaseUrl(e.target.value)}
+          placeholder="https://api.eficacia.app"
+          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+        />
+      </div>
+
+      {/* Key status indicator */}
+      <div className="flex items-center gap-2 text-xs">
+        {isKeyInitialized() ? (
+          <>
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+            <span className="text-emerald-400">API Key inicializada en memoria</span>
+          </>
+        ) : (
+          <>
+            <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
+            <span className="text-amber-400">API Key pendiente (se obtiene al cargar sección EficacIA)</span>
+          </>
+        )}
+      </div>
+
       <button
         onClick={handleSave}
         disabled={saving || !baseUrl.trim()}
         className="flex items-center gap-2 px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl font-medium text-sm transition-colors"
       >
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-        {saving ? 'Guardando...' : 'Guardar configuración'}
+        {saving ? 'Guardando...' : 'Guardar URL'}
       </button>
     </div>
   );

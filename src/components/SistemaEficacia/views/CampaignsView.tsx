@@ -12,6 +12,7 @@ import {
   Send,
   MessageSquare,
   CheckCircle2,
+  ChevronRight,
 } from 'lucide-react';
 import {
   eficaciaFetch,
@@ -44,14 +45,21 @@ const Stat: React.FC<{ icon: React.ReactNode; value: number | string; label: str
 // ─── Campaign card ────────────────────────────────────────────────────────────
 const CampaignCard: React.FC<{
   campaign: EficaciaCampaign;
+  onSelect: (campaign: EficaciaCampaign) => void;
   onToggle: (id: string, current: EficaciaCampaign['status']) => void;
   onDelete: (id: string) => void;
-}> = ({ campaign, onToggle, onDelete }) => {
+}> = ({ campaign, onSelect, onToggle, onDelete }) => {
   const status = CAMPAIGN_STATUS[campaign.status];
 
   return (
-    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-5
-                    hover:border-slate-700 transition-colors group">
+    <div
+      className="bg-slate-900/50 border border-slate-800 rounded-2xl p-5
+                  hover:border-slate-600 hover:bg-slate-900/80 transition-colors group cursor-pointer"
+      onClick={() => onSelect(campaign)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && onSelect(campaign)}
+    >
       {/* Top row */}
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="flex-1 min-w-0">
@@ -96,23 +104,26 @@ const CampaignCard: React.FC<{
         <span className="text-xs text-slate-600">
           Actualizado: {new Date(campaign.updated_at).toLocaleDateString('es-ES')}
         </span>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => onToggle(campaign.id, campaign.status)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
-            title={campaign.status === 'active' ? 'Pausar' : 'Activar'}
-          >
-            {campaign.status === 'active'
-              ? <Pause className="h-4 w-4" />
-              : <Play  className="h-4 w-4" />}
-          </button>
-          <button
-            onClick={() => onDelete(campaign.id)}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-            title="Eliminar campaña"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+        <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggle(campaign.id, campaign.status); }}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+              title={campaign.status === 'active' ? 'Pausar' : 'Activar'}
+            >
+              {campaign.status === 'active'
+                ? <Pause className="h-4 w-4" />
+                : <Play  className="h-4 w-4" />}
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(campaign.id); }}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+              title="Eliminar campaña"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+          <ChevronRight className="h-4 w-4 text-slate-600 group-hover:text-slate-400 transition-colors ml-1" />
         </div>
       </div>
     </div>
@@ -190,7 +201,12 @@ const CreateModal: React.FC<{ onClose: () => void; onCreate: () => void }> = ({
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
-const CampaignsView: React.FC = () => {
+interface CampaignsViewProps {
+  /** Called when the user clicks a campaign card to drill into it. */
+  onSelect?: (campaign: EficaciaCampaign) => void;
+}
+
+const CampaignsView: React.FC<CampaignsViewProps> = ({ onSelect }) => {
   const [campaigns, setCampaigns] = useState<EficaciaCampaign[]>([]);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
@@ -321,6 +337,7 @@ const CampaignsView: React.FC = () => {
               <CampaignCard
                 key={campaign.id}
                 campaign={campaign}
+                onSelect={onSelect ?? (() => {})}
                 onToggle={handleToggle}
                 onDelete={handleDelete}
               />

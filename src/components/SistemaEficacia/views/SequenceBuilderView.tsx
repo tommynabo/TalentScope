@@ -130,7 +130,12 @@ const SequenceCard: React.FC<{
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
-const SequenceBuilderView: React.FC = () => {
+interface SequenceBuilderViewProps {
+  /** When provided, scopes sequences to a specific campaign and hides the global header. */
+  campaignId?: string;
+}
+
+const SequenceBuilderView: React.FC<SequenceBuilderViewProps> = ({ campaignId }) => {
   const [sequences, setSequences] = useState<EficaciaSequence[]>([]);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
@@ -142,7 +147,10 @@ const SequenceBuilderView: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await eficaciaFetch<EficaciaSequence[]>('/api/linkedin/sequences');
+      const url = campaignId
+        ? `/api/linkedin/campaigns/${campaignId}/sequences`
+        : '/api/linkedin/sequences';
+      const data = await eficaciaFetch<EficaciaSequence[]>(url);
       setSequences(data);
     } catch (err) {
       setError(err instanceof EficaciaApiError ? err.message : 'Error al cargar secuencias.');
@@ -153,7 +161,8 @@ const SequenceBuilderView: React.FC = () => {
 
   useEffect(() => {
     if (isEficaciaConfigured()) fetchSequences();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId]);
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -161,7 +170,11 @@ const SequenceBuilderView: React.FC = () => {
     try {
       const created = await eficaciaFetch<EficaciaSequence>('/api/linkedin/sequences', {
         method: 'POST',
-        body:   { name: newName.trim(), steps: [] },
+        body:   {
+          name:        newName.trim(),
+          steps:       [],
+          ...(campaignId ? { campaign_id: campaignId } : {}),
+        },
       });
       setSequences((prev) => [created, ...prev]);
       setNewName('');
@@ -196,11 +209,15 @@ const SequenceBuilderView: React.FC = () => {
   return (
     <div className="space-y-6">
 
-      {/* Header */}
+      {/* Header — compact when embedded inside a campaign */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white">Sequence Builder</h2>
-          <p className="text-sm text-slate-400 mt-0.5">Flujos de mensajes multi-paso para tus campañas</p>
+          {!campaignId && <h2 className="text-xl font-bold text-white">Sequence Builder</h2>}
+          <p className="text-sm text-slate-400 mt-0.5">
+            {campaignId
+              ? 'Secuencias de mensajes asignadas a esta campaña'
+              : 'Flujos de mensajes multi-paso para tus campañas'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
