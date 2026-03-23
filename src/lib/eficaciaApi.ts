@@ -17,11 +17,11 @@
 export const EFICACIA_BASE_URL = 'https://eficac-ia.vercel.app';
 
 // ─── In-memory API key (never stored in localStorage or cookies) ──────────────
-let _runtimeApiKey: string | null = null;
+let currentApiKey: string | null = null;
 
 /** Returns true once setupEficaciaAuth() has resolved successfully. */
 export function isKeyInitialized(): boolean {
-  return _runtimeApiKey !== null && _runtimeApiKey.length > 0;
+  return currentApiKey !== null && currentApiKey.length > 0;
 }
 
 /**
@@ -32,7 +32,7 @@ export function isKeyInitialized(): boolean {
  * @param supabaseSessionToken  JWT from `supabase.auth.getSession()`
  */
 export async function setupEficaciaAuth(supabaseSessionToken: string): Promise<string> {
-  if (_runtimeApiKey) return _runtimeApiKey; // already initialised — fast path
+  if (currentApiKey) return currentApiKey; // already initialised — fast path
 
   const res = await fetch('/api/get-automation-key', {
     method:  'GET',
@@ -45,16 +45,19 @@ export async function setupEficaciaAuth(supabaseSessionToken: string): Promise<s
     throw new Error(`[EficacIA] Auth setup failed: ${msg}`);
   }
 
-  const { apiKey } = (await res.json()) as { apiKey: string };
-  if (!apiKey) throw new Error('[EficacIA] Server returned an empty API key');
+  const data = (await res.json()) as { apiKey: string };
+  
+  if (!data.apiKey || data.apiKey === 'undefined') {
+    throw new Error('[EficacIA] Server returned an invalid or corrupted API key ("undefined" literal)');
+  }
 
-  _runtimeApiKey = apiKey;
-  return apiKey;
+  currentApiKey = data.apiKey;
+  return currentApiKey;
 }
 
 /** Clears the in-memory key — call on logout. */
 export function clearRuntimeKey(): void {
-  _runtimeApiKey = null;
+  currentApiKey = null;
 }
 
 // Keep for backward-compat with views that guard on this — always true
@@ -92,7 +95,7 @@ export async function eficaciaFetch<T = unknown>(
   path: string,
   options: FetchOptions = {},
 ): Promise<T> {
-  const apiKey = _runtimeApiKey ?? '';
+  const apiKey = currentApiKey ?? '';
 
   // Guard against header-injection
   if (typeof path !== 'string' || /[\r\n]/.test(path)) {
@@ -120,11 +123,36 @@ export async function eficaciaFetch<T = unknown>(
   });
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new EficaciaApiError(
+        response.status,
+        "🔐 Acceso Denegado (401/403). La llave guardada en Supabase es inválida o está corrupta. Por favor, ponla en NULL en tu base de datos para forzar la generación de una nueva."
+      );
+    }
+
     let msg = `HTTP ${response.status}`;
     try {
       const text = await response.text();
-      if (text) msg = text;
-    } catch { /* ignore */ }
+      try {
+        const json = JSON.parse(text);
+        if (json.error || json.message) {
+          msg = json.error || json.message;
+        } else {
+          msg = text;
+        }
+      } catch (parseError) {
+        throw new EficaciaApiError(
+          response.status,
+          `Error genérico de formato. La respuesta no es JSON válido (posible error 500 HTML): ${text.substring(0, 150)}`
+        );
+      }
+    } catch (e) {
+      if (e instanceof EficaciaApiError) {
+        throw e;
+      }
+      /* ignore fetching text error */
+    }
+    
     throw new EficaciaApiError(response.status, msg);
   }
 
@@ -132,8 +160,15 @@ export async function eficaciaFetch<T = unknown>(
   if (response.status === 204 || !ct.includes('application/json')) {
     return {} as T;
   }
-
-  return response.json() as Promise<T>;
+  
+  // Procesamiento para respuestas OK, pero asegurando parseo robusto
+  try {
+    const text = await response.text();
+    const json = JSON.parse(text);
+    return json as T;
+  } catch (err) {
+    throw new EficaciaApiError(500, "Error genérico de formato. La respuesta no es JSON válido.");
+  }
 }
 
 // ─── Domain types ─────────────────────────────────────────────────────────────
