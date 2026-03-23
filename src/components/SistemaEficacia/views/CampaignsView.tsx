@@ -149,8 +149,8 @@ const CreateModal: React.FC<{ onClose: () => void; onCreate: () => void }> = ({
       });
       onCreate();
       onClose();
-    } catch (err) {
-      setError(err instanceof EficaciaApiError ? err.message : 'Error al crear campaña.');
+    } catch (err: any) {
+      setError(err.message || 'Error al crear campaña.');
     } finally {
       setLoading(false);
     }
@@ -217,8 +217,8 @@ const CampaignsView: React.FC<CampaignsViewProps> = ({ onSelect }) => {
     try {
       const data = await eficaciaFetch<EficaciaCampaign[]>('/api/linkedin/campaigns');
       setCampaigns(data);
-    } catch (err) {
-      setError(err instanceof EficaciaApiError ? err.message : 'Error al cargar campañas.');
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar campañas.');
     } finally {
       setLoading(false);
     }
@@ -238,8 +238,8 @@ const CampaignsView: React.FC<CampaignsViewProps> = ({ onSelect }) => {
       setCampaigns((prev) =>
         prev.map((c) => (c.id === id ? { ...c, status: next } : c)),
       );
-    } catch (err) {
-      setError(err instanceof EficaciaApiError ? err.message : 'Error al actualizar estado.');
+    } catch (err: any) {
+      setError(err.message || 'Error al actualizar estado.');
     }
   };
 
@@ -248,8 +248,8 @@ const CampaignsView: React.FC<CampaignsViewProps> = ({ onSelect }) => {
     try {
       await eficaciaFetch(`/api/linkedin/campaigns/${id}`, { method: 'DELETE' });
       setCampaigns((prev) => prev.filter((c) => c.id !== id));
-    } catch (err) {
-      setError(err instanceof EficaciaApiError ? err.message : 'Error al eliminar campaña.');
+    } catch (err: any) {
+      setError(err.message || 'Error al eliminar campaña.');
     }
   };
 

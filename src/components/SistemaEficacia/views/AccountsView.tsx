@@ -38,8 +38,8 @@ const AccountsView: React.FC = () => {
     try {
       const data = await eficaciaFetch<EficaciaAccount[]>('/api/linkedin/accounts');
       setAccounts(data);
-    } catch (err) {
-      setError(err instanceof EficaciaApiError ? err.message : 'Error al cargar cuentas.');
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar cuentas.');
     } finally {
       setLoading(false);
     }
@@ -54,8 +54,8 @@ const AccountsView: React.FC = () => {
       const res = await eficaciaFetch<{ auth_url: string }>('/api/linkedin/accounts/connect', { method: 'POST' });
       if (res.auth_url) window.open(res.auth_url, '_blank', 'noopener,noreferrer');
       setTimeout(fetchAccounts, 3000);
-    } catch (err) {
-      setError(err instanceof EficaciaApiError ? err.message : 'Error al iniciar conexión.');
+    } catch (err: any) {
+      setError(err.message || 'Error al iniciar conexión.');
     } finally {
       setConnecting(false);
     }
@@ -66,8 +66,8 @@ const AccountsView: React.FC = () => {
     try {
       await eficaciaFetch(`/api/linkedin/accounts/${id}`, { method: 'DELETE' });
       setAccounts((prev) => prev.filter((a) => a.id !== id));
-    } catch (err) {
-      setError(err instanceof EficaciaApiError ? err.message : 'Error al eliminar.');
+    } catch (err: any) {
+      setError(err.message || 'Error al eliminar.');
     }
   };
 

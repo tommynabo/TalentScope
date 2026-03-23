@@ -72,8 +72,8 @@ const EficaciaAnalyticsView: React.FC = () => {
     try {
       const result = await eficaciaFetch<EficaciaAnalytics>('/api/linkedin/analytics');
       setData(result);
-    } catch (err) {
-      setError(err instanceof EficaciaApiError ? err.message : 'Error al cargar analíticas.');
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar analíticas.');
     } finally {
       setLoading(false);
     }

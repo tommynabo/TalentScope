@@ -114,8 +114,8 @@ const UniboxView: React.FC = () => {
     try {
       const data = await eficaciaFetch<EficaciaThread[]>('/api/linkedin/messages/threads');
       setThreads(data);
-    } catch (err) {
-      setError(err instanceof EficaciaApiError ? err.message : 'Error al cargar mensajes.');
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar mensajes.');
     } finally {
       setLoading(false);
     }
@@ -130,8 +130,8 @@ const UniboxView: React.FC = () => {
         `/api/linkedin/messages/threads/${thread.id}`,
       );
       setMessages(data);
-    } catch (err) {
-      setError(err instanceof EficaciaApiError ? err.message : 'Error al cargar conversación.');
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar conversación.');
     } finally {
       setMsgLoading(false);
     }
@@ -148,8 +148,8 @@ const UniboxView: React.FC = () => {
       );
       setMessages((prev) => [...prev, sent]);
       setReply('');
-    } catch (err) {
-      setError(err instanceof EficaciaApiError ? err.message : 'Error al enviar mensaje.');
+    } catch (err: any) {
+      setError(err.message || 'Error al enviar mensaje.');
     } finally {
       setSending(false);
     }

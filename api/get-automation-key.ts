@@ -100,8 +100,18 @@ export default async function handler(
       return;
     }
 
-    if (profile?.automation_api_key) {
-      res.status(200).json({ apiKey: profile.automation_api_key });
+    const existingKey = (profile?.automation_api_key ?? '').trim();
+    
+    // ── SELF-HEALING: Validate existing key ──────────────────────────────────
+    // Only return the key if it's not a garbage string ("undefined", "null") and has length
+    const isValidKey = 
+      existingKey && 
+      existingKey !== 'undefined' && 
+      existingKey !== 'null' && 
+      existingKey.length > 15;
+
+    if (isValidKey) {
+      res.status(200).json({ apiKey: existingKey });
       return;
     }
 
@@ -130,9 +140,13 @@ export default async function handler(
       );
     }
 
-    const payload      = (await provisionRes.json()) as { apiKey?: string; api_key?: string };
+    const payload        = (await provisionRes.json()) as { apiKey?: string; api_key?: string };
     const provisionedKey = (payload.apiKey ?? payload.api_key ?? '').trim();
-    if (!provisionedKey) throw new Error('EficacIA returned an empty API key');
+
+    // Verify the newly provisioned key is actually valid
+    if (!provisionedKey || provisionedKey === 'undefined' || provisionedKey === 'null') {
+      throw new Error('La provisión de EficacIA falló al generar la llave (recibido vacío o inválido)');
+    }
 
     // ── Persist the key (non-fatal on failure) ───────────────────────────────
     const { error: upsertErr } = await supabaseAdmin
