@@ -22,6 +22,8 @@ import { CampaignDashboard as MarketplaceCampaignDashboard } from './SistemaMark
 // Sistema Comunidad imports
 import { CommunityCampaignList } from './SistemaComunidad/components/CommunityCampaignList';
 import { CommunityScan } from './SistemaComunidad/components/CommunityScan';
+// Sistema EficacIA Bridge
+import EficaciaDashboard from './src/components/SistemaEficacia/EficaciaDashboard';
 import AllCampaignsView from './components/AllCampaignsView';
 import { User, Campaign } from './types';
 import { supabase } from './lib/supabase';
@@ -268,6 +270,13 @@ const App: React.FC = () => {
               <Route path="/buzones/*" element={
                 <ProtectedRoute user={user} loading={loading}>
                   <GmailMainView />
+                </ProtectedRoute>
+              } />
+
+              {/* EficacIA Bridge */}
+              <Route path="/eficacia" element={
+                <ProtectedRoute user={user} loading={loading}>
+                  <EficaciaDashboard />
                 </ProtectedRoute>
               } />
 

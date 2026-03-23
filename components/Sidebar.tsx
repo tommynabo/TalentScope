@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, Activity, Settings, Zap, LogOut, Mail } from 'lucide-react';
+import { LayoutDashboard, Users, Activity, Settings, Zap, LogOut, Mail, Bot } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 interface SidebarProps {
@@ -73,6 +73,16 @@ const Sidebar: React.FC<SidebarProps> = ({ onLogout }) => {
         >
           <Activity className="h-5 w-5" />
           <span className="hidden lg:block font-medium">Analíticas</span>
+        </button>
+
+        {/* EficacIA Bridge */}
+        <div className="mx-2 my-1 h-px bg-slate-800" />
+        <button
+          onClick={() => navigate('/eficacia')}
+          className={getButtonClass('/eficacia')}
+        >
+          <Bot className="h-5 w-5" />
+          <span className="hidden lg:block font-medium">EficacIA</span>
         </button>
       </nav>
 
