@@ -1,100 +1,66 @@
 /**
  * EficacIA API Client
  * ===================
- * Typed fetch wrapper that injects credentials and routes all calls to
- * the external EficacIA backend.
+ * Typed fetch wrapper that routes all calls to the EficacIA backend.
  *
- * "Shadow Accounts" key flow
- * --------------------------
- * Instead of asking the user to paste a raw API key, call `initEficaciaKey()`
- * once on mount (passing the Supabase session access_token).  It hits
- * TalentScope's own serverless endpoint `/api/get-automation-key`, which
- * provisions / retrieves a user-scoped key from EficacIA using a server-side
- * master secret the client never sees.  The returned key is cached in memory
- * and injected into every `eficaciaFetch()` call automatically.
- *
- * The baseUrl (EficacIA backend address) is still stored in localStorage so
- * the user only has to enter it once in the "Cuentas" panel.
+ * Key design decisions
+ * --------------------
+ * · EFICACIA_BASE_URL is hardcoded — users never configure a URL.
+ * · Call `setupEficaciaAuth(supabaseSessionToken)` once on mount.
+ *   It hits TalentScope's own `/api/get-automation-key` serverless endpoint
+ *   which provisions / retrieves a user-scoped key via master secret (server only).
+ *   The key is cached in memory for the lifetime of the browser session.
+ * · Every subsequent `eficaciaFetch()` injects the key automatically.
  */
 
-// ─── Storage keys ────────────────────────────────────────────────────────────
-const STORAGE_KEY_URL   = 'eficacia_base_url';
-const STORAGE_KEY_ACCT  = 'eficacia_account_id'; // optional default Unipile account
+// ─── Hardcoded backend URL ────────────────────────────────────────────────────
+export const EFICACIA_BASE_URL = 'https://eficac-ia.vercel.app';
 
-// ─── Env fallback (set VITE_EFICACIA_BASE_URL in .env) ───────────────────────
-const ENV_BASE_URL = (import.meta as any).env?.VITE_EFICACIA_BASE_URL ?? '';
-
-// ─── In-memory API key cache (lives for the duration of the browser session) ──
+// ─── In-memory API key (never stored in localStorage or cookies) ──────────────
 let _runtimeApiKey: string | null = null;
 
-/** Returns true once initEficaciaKey() has resolved successfully. */
+/** Returns true once setupEficaciaAuth() has resolved successfully. */
 export function isKeyInitialized(): boolean {
   return _runtimeApiKey !== null && _runtimeApiKey.length > 0;
 }
 
 /**
- * "Shadow Accounts" initialiser.
- * Call this once after the user logs in, passing the Supabase access token.
- * It calls TalentScope's backend to provision / retrieve the user-scoped key
- * and stores it in memory so every subsequent eficaciaFetch() works without
- * the user ever seeing an API key.
+ * Call once when the user enters the EficacIA section.
+ * Internally calls TalentScope's `/api/get-automation-key` with the user's
+ * Supabase JWT; the server either returns a cached key or provisions a new one.
  *
- * @param supabaseAccessToken  The JWT from `supabase.auth.getSession()`
- * @returns                    The resolved API key
+ * @param supabaseSessionToken  JWT from `supabase.auth.getSession()`
  */
-export async function initEficaciaKey(supabaseAccessToken: string): Promise<string> {
-  if (_runtimeApiKey) return _runtimeApiKey; // already initialised
+export async function setupEficaciaAuth(supabaseSessionToken: string): Promise<string> {
+  if (_runtimeApiKey) return _runtimeApiKey; // already initialised — fast path
 
   const res = await fetch('/api/get-automation-key', {
     method:  'GET',
-    headers: { Authorization: `Bearer ${supabaseAccessToken}` },
+    headers: { Authorization: `Bearer ${supabaseSessionToken}` },
   });
 
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
-    try { msg = (await res.json() as { error?: string }).error ?? msg; } catch { /* ignore */ }
-    throw new Error(`[EficacIA] Key init failed: ${msg}`);
+    try { msg = ((await res.json()) as { error?: string }).error ?? msg; } catch { /* ignore */ }
+    throw new Error(`[EficacIA] Auth setup failed: ${msg}`);
   }
 
-  const { apiKey } = await res.json() as { apiKey: string };
+  const { apiKey } = (await res.json()) as { apiKey: string };
   if (!apiKey) throw new Error('[EficacIA] Server returned an empty API key');
 
   _runtimeApiKey = apiKey;
   return apiKey;
 }
 
-/** Clears the in-memory key (call on logout). */
+/** Clears the in-memory key — call on logout. */
 export function clearRuntimeKey(): void {
   _runtimeApiKey = null;
 }
 
-// ─── Config helpers ───────────────────────────────────────────────────────────
-export interface EficaciaConfig {
-  baseUrl:   string;
-  accountId: string;
-}
-
-export function getEficaciaConfig(): EficaciaConfig {
-  return {
-    baseUrl:   localStorage.getItem(STORAGE_KEY_URL)  ?? ENV_BASE_URL,
-    accountId: localStorage.getItem(STORAGE_KEY_ACCT) ?? '',
-  };
-}
-
-export function saveEficaciaConfig(config: Partial<EficaciaConfig>): void {
-  if (config.baseUrl   !== undefined) localStorage.setItem(STORAGE_KEY_URL,  config.baseUrl);
-  if (config.accountId !== undefined) localStorage.setItem(STORAGE_KEY_ACCT, config.accountId);
-}
-
-export function clearEficaciaConfig(): void {
-  localStorage.removeItem(STORAGE_KEY_URL);
-  localStorage.removeItem(STORAGE_KEY_ACCT);
-  clearRuntimeKey();
-}
-
+// Keep for backward-compat with views that guard on this — always true
+// now that the URL is hardcoded.
 export function isEficaciaConfigured(): boolean {
-  const { baseUrl } = getEficaciaConfig();
-  return baseUrl.trim().length > 0;
+  return true;
 }
 
 // ─── Error class ──────────────────────────────────────────────────────────────
@@ -110,15 +76,13 @@ export class EficaciaApiError extends Error {
 
 // ─── Core fetch function ──────────────────────────────────────────────────────
 export interface FetchOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  body?:   unknown;
-  /** Extra headers merged on top of defaults */
+  method?:  'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  body?:    unknown;
   headers?: Record<string, string>;
 }
 
 /**
  * Makes an authenticated request to the EficacIA backend.
- * Automatically uses the in-memory key set by initEficaciaKey().
  *
  * Usage:
  *   const campaigns = await eficaciaFetch<EficaciaCampaign[]>('/api/linkedin/campaigns');
@@ -128,23 +92,14 @@ export async function eficaciaFetch<T = unknown>(
   path: string,
   options: FetchOptions = {},
 ): Promise<T> {
-  // Prefer the in-memory runtime key (set by initEficaciaKey) over nothing
-  const apiKey   = _runtimeApiKey ?? '';
-  const { baseUrl } = getEficaciaConfig();
+  const apiKey = _runtimeApiKey ?? '';
 
-  if (!baseUrl.trim()) {
-    throw new EficaciaApiError(
-      0,
-      'EficacIA base URL no configurada. Ve a la pestaña "Cuentas" para configurarla.',
-    );
-  }
-
-  // Validate path doesn't contain injection attempts before constructing URL
+  // Guard against header-injection
   if (typeof path !== 'string' || /[\r\n]/.test(path)) {
     throw new EficaciaApiError(400, 'Ruta de API inválida.');
   }
 
-  const url = `${baseUrl.replace(/\/$/, '')}${path}`;
+  const url = `${EFICACIA_BASE_URL}${path}`;
 
   const baseHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -152,7 +107,6 @@ export async function eficaciaFetch<T = unknown>(
   };
 
   if (apiKey) {
-    // Some EficacIA variants use Bearer, others use x-api-key — send both
     baseHeaders['Authorization'] = `Bearer ${apiKey}`;
     baseHeaders['x-api-key']     = apiKey;
   }
@@ -174,7 +128,6 @@ export async function eficaciaFetch<T = unknown>(
     throw new EficaciaApiError(response.status, msg);
   }
 
-  // 204 No Content or non-JSON → return empty object
   const ct = response.headers.get('content-type') ?? '';
   if (response.status === 204 || !ct.includes('application/json')) {
     return {} as T;

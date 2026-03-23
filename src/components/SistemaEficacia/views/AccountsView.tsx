@@ -1,82 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
-  UserCircle2, Plus, Trash2, CheckCircle2, AlertCircle, Loader2,
-  Settings2, ExternalLink, Key, Globe,
+  UserCircle2, Plus, Trash2, AlertCircle, Loader2, ExternalLink,
 } from 'lucide-react';
 import {
-  eficaciaFetch, getEficaciaConfig, saveEficaciaConfig,
-  isKeyInitialized,
+  eficaciaFetch,
   EficaciaAccount, EficaciaApiError,
 } from '../../../lib/eficaciaApi';
-
-// ─── Config panel ─────────────────────────────────────────────────────────────
-const ConfigPanel: React.FC<{ onSaved: () => void }> = ({ onSaved }) => {
-  const cfg = getEficaciaConfig();
-  const [baseUrl, setBaseUrl] = useState(cfg.baseUrl);
-  const [saving, setSaving]   = useState(false);
-
-  const handleSave = () => {
-    setSaving(true);
-    saveEficaciaConfig({ baseUrl: baseUrl.trim() });
-    setTimeout(() => { setSaving(false); onSaved(); }, 300);
-  };
-
-  return (
-    <div className="bg-slate-900/60 border border-slate-700 rounded-2xl p-6 space-y-5">
-      <div className="flex items-center gap-3">
-        <Settings2 className="h-5 w-5 text-cyan-400" />
-        <h3 className="text-lg font-semibold text-white">Configuración del Bridge</h3>
-      </div>
-
-      {/* Shadow Accounts notice */}
-      <div className="flex items-start gap-3 p-3.5 bg-cyan-950/40 border border-cyan-500/20 rounded-xl">
-        <Key className="h-4 w-4 text-cyan-400 shrink-0 mt-0.5" />
-        <p className="text-xs text-cyan-300/80 leading-relaxed">
-          <span className="font-semibold text-cyan-300">Shadow Accounts activado.</span>{' '}
-          Tu API Key se genera y gestiona automáticamente — no necesitas introducirla manualmente.
-        </p>
-      </div>
-
-      <div>
-        <label className="flex items-center gap-1.5 text-sm font-medium text-slate-300 mb-2">
-          <Globe className="h-4 w-4 text-slate-400" />
-          URL Base de EficacIA
-        </label>
-        <input
-          type="url"
-          value={baseUrl}
-          onChange={(e) => setBaseUrl(e.target.value)}
-          placeholder="https://api.eficacia.app"
-          className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors text-sm"
-        />
-      </div>
-
-      {/* Key status indicator */}
-      <div className="flex items-center gap-2 text-xs">
-        {isKeyInitialized() ? (
-          <>
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-            <span className="text-emerald-400">API Key inicializada en memoria</span>
-          </>
-        ) : (
-          <>
-            <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
-            <span className="text-amber-400">API Key pendiente (se obtiene al cargar sección EficacIA)</span>
-          </>
-        )}
-      </div>
-
-      <button
-        onClick={handleSave}
-        disabled={saving || !baseUrl.trim()}
-        className="flex items-center gap-2 px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl font-medium text-sm transition-colors"
-      >
-        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-        {saving ? 'Guardando...' : 'Guardar URL'}
-      </button>
-    </div>
-  );
-};
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 const STATUS_CFG: Record<EficaciaAccount['status'], { label: string; cls: string }> = {
@@ -98,12 +27,10 @@ const StatusBadge: React.FC<{ status: EficaciaAccount['status'] }> = ({ status }
 
 // ─── Main view ────────────────────────────────────────────────────────────────
 const AccountsView: React.FC = () => {
-  const [accounts, setAccounts]     = useState<EficaciaAccount[]>([]);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState<string | null>(null);
-  const [showConfig, setShowConfig] = useState(false);
+  const [accounts, setAccounts] = useState<EficaciaAccount[]>([]);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
-  const cfg = getEficaciaConfig();
 
   const fetchAccounts = async () => {
     setLoading(true);
@@ -118,7 +45,7 @@ const AccountsView: React.FC = () => {
     }
   };
 
-  useEffect(() => { if (cfg.baseUrl) fetchAccounts(); }, []);
+  useEffect(() => { fetchAccounts(); }, []);
 
   const handleConnectUnipile = async () => {
     setConnecting(true);
@@ -154,15 +81,8 @@ const AccountsView: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowConfig((v) => !v)}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors"
-          >
-            <Settings2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Configuración</span>
-          </button>
-          <button
             onClick={handleConnectUnipile}
-            disabled={connecting || !cfg.baseUrl}
+            disabled={connecting}
             className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-sm font-medium transition-colors"
           >
             {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -171,24 +91,7 @@ const AccountsView: React.FC = () => {
         </div>
       </div>
 
-      {showConfig && <ConfigPanel onSaved={() => { setShowConfig(false); fetchAccounts(); }} />}
 
-      {/* Not configured */}
-      {!cfg.baseUrl && !showConfig && (
-        <div className="bg-slate-900/40 border border-dashed border-slate-700 rounded-2xl p-10 text-center">
-          <Settings2 className="h-10 w-10 text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400 font-medium mb-1">EficacIA no está configurado</p>
-          <p className="text-slate-500 text-sm mb-4">
-            Pulsa «Configuración» para introducir la URL base y tu API Key.
-          </p>
-          <button
-            onClick={() => setShowConfig(true)}
-            className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-sm font-medium transition-colors"
-          >
-            Abrir Configuración
-          </button>
-        </div>
-      )}
 
       {/* Error */}
       {error && (
@@ -259,7 +162,7 @@ const AccountsView: React.FC = () => {
       )}
 
       {/* Empty */}
-      {!loading && cfg.baseUrl && accounts.length === 0 && !error && (
+      {!loading && accounts.length === 0 && !error && (
         <div className="bg-slate-900/40 border border-dashed border-slate-700 rounded-2xl p-10 text-center">
           <UserCircle2 className="h-10 w-10 text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-medium mb-1">Sin cuentas conectadas</p>

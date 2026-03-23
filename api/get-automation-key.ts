@@ -1,23 +1,20 @@
 /**
  * GET /api/get-automation-key
  * ============================
- * Serverless Vercel endpoint that implements the "Shadow Accounts" pattern:
- * the client never handles the EficacIA master secret — it just hits this
- * endpoint with its Supabase session token and receives a user-scoped API key.
+ * Shadow Accounts pattern: the client's Supabase session token is exchanged
+ * for a user-scoped EficacIA API key.  The EficacIA master secret never
+ * reaches the browser.
  *
- * Flow:
- *  1. Validate the user's Supabase access token.
- *  2. Check profiles.automation_api_key. If present, return it immediately.
- *  3. Otherwise, POST to EficacIA's /api/internal/provision with the master secret.
- *  4. Persist the provisioned key in profiles and return it to the client.
+ * ⚠️  This file MUST NOT import anything from src/ — Vite-only APIs like
+ *     import.meta.env break in the Vercel Node runtime.
  *
- * Required environment variables (Vercel project settings):
- *   SUPABASE_SERVICE_ROLE_KEY     – service-role key (bypasses RLS for profiles writes)
- *   SUPABASE_URL or VITE_SUPABASE_URL – project URL
- *   EFICACIA_BASE_URL             – EficacIA backend root, e.g. https://api.eficacia.io
- *   TALENTSCOPE_MASTER_SECRET     – shared secret between TalentScope server <> EficacIA
+ * Required Vercel environment variables:
+ *   VITE_SUPABASE_URL          – Supabase project URL
+ *   VITE_SUPABASE_ANON_KEY     – Supabase anon / public key
+ *   SUPABASE_SERVICE_ROLE_KEY  – (optional) service-role key for RLS bypass
+ *   TALENTSCOPE_MASTER_SECRET  – shared secret used to call EficacIA /provision
  *
- * Required DB migration (apply once in Supabase SQL editor):
+ * Required DB migration (run once in Supabase SQL editor):
  *   ALTER TABLE profiles ADD COLUMN IF NOT EXISTS automation_api_key TEXT;
  */
 
@@ -26,123 +23,122 @@ import { createClient }                        from '@supabase/supabase-js';
 
 export const config = { maxDuration: 15 };
 
+// Hardcoded EficacIA provisioning endpoint — no env var needed for the URL
+const EFICACIA_PROVISION_URL = 'https://eficac-ia.vercel.app/api/internal/provision';
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ): Promise<void> {
-  // ── Only GET is supported ───────────────────────────────────────────────────
-  if (req.method !== 'GET') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
-
-  // ── 1. Extract + validate Bearer token sent by the frontend ─────────────────
-  const authHeader = (req.headers['authorization'] ?? '') as string;
-  if (!authHeader.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Missing Authorization: Bearer <token> header' });
-    return;
-  }
-  const userToken = authHeader.slice(7).trim();
-  if (!userToken) {
-    res.status(401).json({ error: 'Empty bearer token' });
-    return;
-  }
-
-  // ── 2. Build service-role Supabase client ────────────────────────────────────
-  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? '';
-  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-  if (!supabaseUrl || !serviceKey) {
-    console.error('[get-automation-key] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
-    res.status(500).json({ error: 'Server misconfiguration: missing Supabase credentials' });
-    return;
-  }
-
-  const supabase = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  // ── 3. Validate user token → get user identity ───────────────────────────────
-  const { data: { user }, error: authErr } = await supabase.auth.getUser(userToken);
-  if (authErr || !user) {
-    res.status(401).json({ error: 'Invalid or expired session token' });
-    return;
-  }
-
-  // ── 4. Check for an existing automation key in the user's profile ────────────
-  const { data: profile, error: profileErr } = await supabase
-    .from('profiles')
-    .select('automation_api_key')
-    .eq('id', user.id)
-    .maybeSingle();                                 // null if not found, no TS error
-
-  if (profileErr) {
-    console.error('[get-automation-key] Profile read error:', profileErr.message);
-    res.status(500).json({ error: 'Error fetching user profile' });
-    return;
-  }
-
-  if (profile?.automation_api_key) {
-    res.status(200).json({ apiKey: profile.automation_api_key });
-    return;
-  }
-
-  // ── 5. Provision a new key from EficacIA backend ─────────────────────────────
-  const eficaciaBaseUrl  = (process.env.EFICACIA_BASE_URL  ?? '').replace(/\/$/, '');
-  const masterSecret     = process.env.TALENTSCOPE_MASTER_SECRET ?? '';
-
-  if (!eficaciaBaseUrl || !masterSecret) {
-    console.error('[get-automation-key] Missing EFICACIA_BASE_URL or TALENTSCOPE_MASTER_SECRET');
-    res.status(500).json({
-      error:
-        'Server misconfiguration: EficacIA provisioning not set up. ' +
-        'Add EFICACIA_BASE_URL and TALENTSCOPE_MASTER_SECRET to Vercel environment variables.',
-    });
-    return;
-  }
-
-  let provisionedKey: string;
+  // Wrap everything so we never return an opaque 502
   try {
-    const provisionRes = await fetch(`${eficaciaBaseUrl}/api/internal/provision`, {
+    // ── Method guard ────────────────────────────────────────────────────────
+    if (req.method !== 'GET') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+
+    // ── Extract Bearer token ─────────────────────────────────────────────────
+    const authHeader = ((req.headers['authorization'] as string) ?? '').trim();
+    if (!authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'Missing Authorization: Bearer <token>' });
+      return;
+    }
+    const userToken = authHeader.slice(7).trim();
+    if (!userToken) {
+      res.status(401).json({ error: 'Empty bearer token' });
+      return;
+    }
+
+    // ── Build Supabase clients (completely self-contained — no src/ imports) ─
+    const supabaseUrl = process.env.VITE_SUPABASE_URL ?? '';
+    const anonKey     = process.env.VITE_SUPABASE_ANON_KEY ?? '';
+    // Prefer service-role for writes; fall back to anon (works if RLS allows it)
+    const writeKey    = process.env.SUPABASE_SERVICE_ROLE_KEY ?? anonKey;
+
+    if (!supabaseUrl || !anonKey) {
+      res.status(500).json({
+        error: 'Server misconfiguration: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY not set',
+      });
+      return;
+    }
+
+    const opts = { auth: { persistSession: false as const, autoRefreshToken: false as const } };
+
+    // Anon client — used only for getUser() (JWT validation)
+    const supabaseAuth  = createClient(supabaseUrl, anonKey,   opts);
+    // Write client — service role (or anon+user JWT) for profile reads/writes
+    const supabaseAdmin = createClient(supabaseUrl, writeKey,  opts);
+
+    // ── Validate user token → get user identity ──────────────────────────────
+    const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser(userToken);
+    if (authErr || !user) {
+      res.status(401).json({ error: 'Invalid or expired session token' });
+      return;
+    }
+
+    // ── Check profiles for an existing key ────────────────────────────────────
+    const { data: profile, error: profileErr } = await supabaseAdmin
+      .from('profiles')
+      .select('automation_api_key')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profileErr) {
+      res.status(500).json({ error: `Profile read failed: ${profileErr.message}` });
+      return;
+    }
+
+    if (profile?.automation_api_key) {
+      res.status(200).json({ apiKey: profile.automation_api_key });
+      return;
+    }
+
+    // ── Provision a new key from EficacIA ────────────────────────────────────
+    const masterSecret = (process.env.TALENTSCOPE_MASTER_SECRET ?? '').trim();
+    if (!masterSecret) {
+      res.status(500).json({
+        error: 'Server misconfiguration: TALENTSCOPE_MASTER_SECRET not set',
+      });
+      return;
+    }
+
+    const provisionRes = await fetch(EFICACIA_PROVISION_URL, {
       method:  'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${masterSecret}`,
       },
-      body: JSON.stringify({
-        user_id: user.id,
-        email:   user.email ?? '',
-      }),
+      body: JSON.stringify({ user_id: user.id, email: user.email ?? '' }),
     });
 
     if (!provisionRes.ok) {
       const text = await provisionRes.text().catch(() => '');
-      throw new Error(`EficacIA responded ${provisionRes.status}: ${text.slice(0, 300)}`);
+      throw new Error(
+        `EficacIA provisioning returned ${provisionRes.status}: ${text.slice(0, 300)}`,
+      );
     }
 
-    // EficacIA can return { apiKey } or { api_key } — handle both conventions
-    const payload = (await provisionRes.json()) as { apiKey?: string; api_key?: string };
-    provisionedKey = (payload.apiKey ?? payload.api_key ?? '').trim();
+    const payload      = (await provisionRes.json()) as { apiKey?: string; api_key?: string };
+    const provisionedKey = (payload.apiKey ?? payload.api_key ?? '').trim();
     if (!provisionedKey) throw new Error('EficacIA returned an empty API key');
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[get-automation-key] Provisioning failed:', msg);
-    res.status(502).json({ error: `Key provisioning error: ${msg}` });
-    return;
+
+    // ── Persist the key (non-fatal on failure) ───────────────────────────────
+    const { error: upsertErr } = await supabaseAdmin
+      .from('profiles')
+      .upsert({ id: user.id, automation_api_key: provisionedKey }, { onConflict: 'id' });
+
+    if (upsertErr) {
+      console.warn('[get-automation-key] Key persistence failed (non-fatal):', upsertErr.message);
+    }
+
+    res.status(200).json({ apiKey: provisionedKey });
+
+  } catch (e: unknown) {
+    // Catch-all: always return a JSON 500, never an opaque 502
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[get-automation-key] Unhandled error:', msg);
+    res.status(500).json({ error: msg });
   }
-
-  // ── 6. Persist the key in the user's profile (non-fatal if it fails) ─────────
-  const { error: upsertErr } = await supabase
-    .from('profiles')
-    .upsert(
-      { id: user.id, automation_api_key: provisionedKey },
-      { onConflict: 'id' },
-    );
-
-  if (upsertErr) {
-    // The key was provisioned — return it to the client even if persistence failed.
-    // Next request will provision again (idempotent on EficacIA side).
-    console.error('[get-automation-key] Could not persist key:', upsertErr.message);
-  }
-
-  res.status(200).json({ apiKey: provisionedKey });
 }
+

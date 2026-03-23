@@ -7,9 +7,8 @@ import {
   UserCircle2,
   Zap,
   Loader2,
-  AlertCircle,
 } from 'lucide-react';
-import { isEficaciaConfigured, initEficaciaKey, EficaciaCampaign } from '../../lib/eficaciaApi';
+import { setupEficaciaAuth, EficaciaCampaign } from '../../lib/eficaciaApi';
 import { supabase }          from '../../../lib/supabase';
 import CampaignsView         from './views/CampaignsView';
 import CampaignDetailView    from './views/CampaignDetailView';
@@ -37,43 +36,40 @@ const TABS: Tab[] = [
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const EficaciaDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabId>(
-    isEficaciaConfigured() ? 'campaigns' : 'accounts',
-  );
+  const [activeTab, setActiveTab] = useState<TabId>('campaigns');
 
   // ── Shadow Accounts: auto-init the API key on mount ──────────────────────────
-  const [keyLoading, setKeyLoading] = useState(false);
-  const [keyError,   setKeyError]   = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
 
     const init = async () => {
-      // Only provision if the user has already configured the backend URL
-      if (!isEficaciaConfigured()) return;
-
-      setKeyLoading(true);
-      setKeyError(null);
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) {
-          setKeyError('No hay sesión activa. Por favor, inicia sesión de nuevo.');
-          return;
+        if (session?.access_token) {
+          await setupEficaciaAuth(session.access_token);
         }
-        await initEficaciaKey(session.access_token);
-      } catch (err) {
-        if (!cancelled) {
-          const msg = err instanceof Error ? err.message : String(err);
-          setKeyError(msg);
-        }
+      } catch {
+        // Views handle post-init errors independently
       } finally {
-        if (!cancelled) setKeyLoading(false);
+        if (!cancelled) setIsInitializing(false);
       }
     };
 
     init();
     return () => { cancelled = true; };
   }, []);
+
+  // ── Full-screen spinner while key is being provisioned ────────────────────────
+  if (isInitializing) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <Loader2 className="h-10 w-10 text-cyan-400 animate-spin" />
+        <p className="text-slate-400 text-sm">Iniciando motor de automatización...</p>
+      </div>
+    );
+  }
 
   // ── Campaign drill-down state ─────────────────────────────────────────────────
   const [selectedCampaign, setSelectedCampaign] = useState<EficaciaCampaign | null>(null);
@@ -126,22 +122,7 @@ const EficaciaDashboard: React.FC = () => {
           <p className="text-slate-400 text-sm mt-0.5">Motor de automatización LinkedIn · Bridge</p>
         </div>
 
-        {/* Key init status indicator */}
-        {keyLoading && (
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Inicializando acceso…
-          </div>
-        )}
-        {keyError && !keyLoading && (
-          <div
-            className="flex items-center gap-1.5 text-xs text-amber-400 max-w-xs truncate cursor-help"
-            title={keyError}
-          >
-            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">Error de acceso · ve a Cuentas</span>
-          </div>
-        )}
+
       </div>
 
       {/* ── Tab bar ─────────────────────────────────────────────────────────── */}
