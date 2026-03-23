@@ -34,9 +34,15 @@ export function isKeyInitialized(): boolean {
 export async function setupEficaciaAuth(supabaseSessionToken: string): Promise<string> {
   if (currentApiKey) return currentApiKey; // already initialised — fast path
 
-  const res = await fetch('/api/get-automation-key', {
+  const res = await fetch(`/api/get-automation-key?t=${Date.now()}`, {
     method:  'GET',
-    headers: { Authorization: `Bearer ${supabaseSessionToken}` },
+    cache:   'no-store',
+    headers: {
+      'Authorization':  `Bearer ${supabaseSessionToken}`,
+      'Cache-Control':  'no-cache, no-store, must-revalidate',
+      'Pragma':         'no-cache',
+      'Expires':        '0',
+    },
   });
 
   if (!res.ok) {
