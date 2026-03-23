@@ -23,7 +23,6 @@ import {
   eficaciaFetch,
   EficaciaAnalytics,
   EficaciaApiError,
-  isEficaciaConfigured,
 } from '../../../lib/eficaciaApi';
 
 // ─── Metric card ──────────────────────────────────────────────────────────────
@@ -81,18 +80,8 @@ const EficaciaAnalyticsView: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isEficaciaConfigured()) fetchAnalytics();
+    fetchAnalytics();
   }, []);
-
-  if (!isEficaciaConfigured()) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <BarChart3 className="h-12 w-12 text-slate-700 mb-4" />
-        <p className="text-slate-400 font-medium mb-1">EficacIA no configurado</p>
-        <p className="text-slate-600 text-sm">Ve a la pestaña "Cuentas" para configurar el bridge.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

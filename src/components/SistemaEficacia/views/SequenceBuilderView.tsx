@@ -17,7 +17,6 @@ import {
   EficaciaSequence,
   EficaciaCampaignStep,
   EficaciaApiError,
-  isEficaciaConfigured,
 } from '../../../lib/eficaciaApi';
 
 // ─── Step type config ─────────────────────────────────────────────────────────
@@ -160,7 +159,7 @@ const SequenceBuilderView: React.FC<SequenceBuilderViewProps> = ({ campaignId })
   };
 
   useEffect(() => {
-    if (isEficaciaConfigured()) fetchSequences();
+    fetchSequences();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId]);
 
@@ -195,16 +194,6 @@ const SequenceBuilderView: React.FC<SequenceBuilderViewProps> = ({ campaignId })
       setError(err instanceof EficaciaApiError ? err.message : 'Error al eliminar.');
     }
   };
-
-  if (!isEficaciaConfigured()) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <GitBranch className="h-12 w-12 text-slate-700 mb-4" />
-        <p className="text-slate-400 font-medium mb-1">EficacIA no configurado</p>
-        <p className="text-slate-600 text-sm">Ve a la pestaña "Cuentas" para configurar el bridge.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

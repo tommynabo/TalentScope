@@ -7,6 +7,7 @@ import {
   UserCircle2,
   Zap,
   Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { setupEficaciaAuth, EficaciaCampaign } from '../../lib/eficaciaApi';
 import { supabase }          from '../../../lib/supabase';
@@ -40,6 +41,12 @@ const EficaciaDashboard: React.FC = () => {
 
   // ── Shadow Accounts: auto-init the API key on mount ──────────────────────────
   const [isInitializing, setIsInitializing] = useState(true);
+  const [initError,      setInitError]      = useState<string | null>(null);
+  const [retryCount,     setRetryCount]     = useState(0);
+
+  // ── Campaign drill-down — declared unconditionally (hooks must never be
+  //    placed after an early return or inside conditions)
+  const [selectedCampaign, setSelectedCampaign] = useState<EficaciaCampaign | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,8 +57,10 @@ const EficaciaDashboard: React.FC = () => {
         if (session?.access_token) {
           await setupEficaciaAuth(session.access_token);
         }
-      } catch {
-        // Views handle post-init errors independently
+      } catch (err) {
+        if (!cancelled) {
+          setInitError(err instanceof Error ? err.message : String(err));
+        }
       } finally {
         if (!cancelled) setIsInitializing(false);
       }
@@ -59,7 +68,21 @@ const EficaciaDashboard: React.FC = () => {
 
     init();
     return () => { cancelled = true; };
-  }, []);
+  }, [retryCount]);
+
+  // ── Handlers (also unconditional — defined before any early return) ───────────
+  const handleSelectCampaign = (campaign: EficaciaCampaign) => {
+    setSelectedCampaign(campaign);
+  };
+
+  const handleBackToCampaigns = () => {
+    setSelectedCampaign(null);
+  };
+
+  const handleTabChange = (tab: TabId) => {
+    setSelectedCampaign(null);
+    setActiveTab(tab);
+  };
 
   // ── Full-screen spinner while key is being provisioned ────────────────────────
   if (isInitializing) {
@@ -71,22 +94,23 @@ const EficaciaDashboard: React.FC = () => {
     );
   }
 
-  // ── Campaign drill-down state ─────────────────────────────────────────────────
-  const [selectedCampaign, setSelectedCampaign] = useState<EficaciaCampaign | null>(null);
-
-  const handleSelectCampaign = (campaign: EficaciaCampaign) => {
-    setSelectedCampaign(campaign);
-  };
-
-  const handleBackToCampaigns = () => {
-    setSelectedCampaign(null);
-  };
-
-  // When the user changes tabs, clear any campaign drill-down
-  const handleTabChange = (tab: TabId) => {
-    setSelectedCampaign(null);
-    setActiveTab(tab);
-  };
+  // ── Init error screen ─────────────────────────────────────────────────────────
+  if (initError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 p-8">
+        <div className="w-full max-w-lg bg-red-950/40 border border-red-500/30 rounded-2xl p-6 text-center">
+          <p className="text-red-400 font-semibold mb-2">Error al iniciar EficacIA</p>
+          <p className="text-red-300/70 text-sm font-mono break-all">{initError}</p>
+          <button
+            onClick={() => { setInitError(null); setIsInitializing(true); setRetryCount(c => c + 1); }}
+            className="mt-4 px-4 py-2 bg-red-900/50 hover:bg-red-900 border border-red-500/30 text-red-300 rounded-xl text-sm transition-colors"
+          >
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const renderActiveTab = () => {
     // If we're on the campaigns tab and a campaign is selected, show its detail view

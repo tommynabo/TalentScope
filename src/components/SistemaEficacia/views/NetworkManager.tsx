@@ -16,7 +16,6 @@ import {
   EficaciaPendingConnection,
   EficaciaWithdrawResult,
   EficaciaApiError,
-  isEficaciaConfigured,
 } from '../../../lib/eficaciaApi';
 
 // ─── Pending connection row ────────────────────────────────────────────────────
@@ -99,7 +98,7 @@ const NetworkManager: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isEficaciaConfigured()) fetchPending();
+    fetchPending();
   }, []);
 
   const toggleAll = () => {
@@ -142,16 +141,6 @@ const NetworkManager: React.FC = () => {
       setWithdrawing(false);
     }
   };
-
-  if (!isEficaciaConfigured()) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <Network className="h-12 w-12 text-slate-700 mb-4" />
-        <p className="text-slate-400 font-medium mb-1">EficacIA no configurado</p>
-        <p className="text-slate-600 text-sm">Ve a la pestaña "Cuentas" para configurar el bridge.</p>
-      </div>
-    );
-  }
 
   const staleCount = pending.filter((p) => p.days_pending >= minDays).length;
 

@@ -14,7 +14,6 @@ import {
   EficaciaThread,
   EficaciaMessage,
   EficaciaApiError,
-  isEficaciaConfigured,
 } from '../../../lib/eficaciaApi';
 
 // ─── Thread list item ─────────────────────────────────────────────────────────
@@ -157,7 +156,7 @@ const UniboxView: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isEficaciaConfigured()) fetchThreads();
+    fetchThreads();
   }, []);
 
   useEffect(() => {
@@ -168,16 +167,6 @@ const UniboxView: React.FC = () => {
     t.contact_name.toLowerCase().includes(search.toLowerCase()) ||
     t.last_message.toLowerCase().includes(search.toLowerCase()),
   );
-
-  if (!isEficaciaConfigured()) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <Inbox className="h-12 w-12 text-slate-700 mb-4" />
-        <p className="text-slate-400 font-medium mb-1">EficacIA no configurado</p>
-        <p className="text-slate-600 text-sm">Ve a la pestaña "Cuentas" para configurar el bridge.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-[calc(100vh-240px)] min-h-[500px] border border-slate-800 rounded-2xl overflow-hidden">

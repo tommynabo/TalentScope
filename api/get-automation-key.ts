@@ -32,6 +32,16 @@ export default async function handler(
 ): Promise<void> {
   // Wrap everything so we never return an opaque 502
   try {
+    // ── CORS preflight ────────────────────────────────────────────────────────
+    res.setHeader('Access-Control-Allow-Origin',  '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      res.status(200).end();
+      return;
+    }
+
     // ── Method guard ────────────────────────────────────────────────────────
     if (req.method !== 'GET') {
       res.status(405).json({ error: 'Method not allowed' });
@@ -51,8 +61,9 @@ export default async function handler(
     }
 
     // ── Build Supabase clients (completely self-contained — no src/ imports) ─
-    const supabaseUrl = process.env.VITE_SUPABASE_URL ?? '';
-    const anonKey     = process.env.VITE_SUPABASE_ANON_KEY ?? '';
+    // Support both Vite-prefixed names and plain names for Vercel env config
+    const supabaseUrl = (process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '').trim();
+    const anonKey     = (process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? '').trim();
     // Prefer service-role for writes; fall back to anon (works if RLS allows it)
     const writeKey    = process.env.SUPABASE_SERVICE_ROLE_KEY ?? anonKey;
 
