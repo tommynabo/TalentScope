@@ -25,19 +25,38 @@ export class DeduplicationService {
         const existingLinkedin = new Set<string>();
 
         try {
-            const { data, error } = await supabase
-                .from('candidates')
-                .select('email, linkedin_url');
+            // Paginate in batches of 1000 to bypass Supabase PostgREST default row limit
+            const PAGE_SIZE = 1000;
+            let from = 0;
+            let hasMore = true;
 
-            if (error) {
-                console.error("[DEDUP] Error fetching existing candidates:", error);
-                return { existingEmails, existingLinkedin };
+            while (hasMore) {
+                const { data, error } = await supabase
+                    .from('candidates')
+                    .select('email, linkedin_url')
+                    .range(from, from + PAGE_SIZE - 1);
+
+                if (error) {
+                    console.error("[DEDUP] Error fetching existing candidates:", error);
+                    break;
+                }
+
+                if (!data || data.length === 0) {
+                    hasMore = false;
+                    break;
+                }
+
+                data.forEach((c: any) => {
+                    if (c.email) existingEmails.add(c.email.toLowerCase().trim());
+                    if (c.linkedin_url) existingLinkedin.add(this.normalizeUrl(c.linkedin_url));
+                });
+
+                if (data.length < PAGE_SIZE) {
+                    hasMore = false;
+                } else {
+                    from += PAGE_SIZE;
+                }
             }
-
-            data?.forEach((c: any) => {
-                if (c.email) existingEmails.add(c.email.toLowerCase().trim());
-                if (c.linkedin_url) existingLinkedin.add(this.normalizeUrl(c.linkedin_url));
-            });
 
             return { existingEmails, existingLinkedin };
         } catch (e) {

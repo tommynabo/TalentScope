@@ -145,10 +145,13 @@ export class LinkedInSearchEngine {
             onLog(`[DEDUP] ✅ ${existingEmails.size} emails y ${existingLinkedin.size} perfiles conocidos ignorados.`);
 
             const acceptedCandidates: Candidate[] = [];
-            const MAX_RETRIES = 30;
+            // Scale retries based on target: at least 30, up to 100 for large searches
+            const MAX_RETRIES = Math.min(100, Math.max(30, Math.ceil(maxResults / 5)));
+            // Allow more consecutive dup attempts before early-exit for larger targets
+            const MAX_CONSEC_DUPS = maxResults > 50 ? 5 : 3;
             let attempt = 0;
             const seenProfileNames: string[] = [];
-            let consecutiveDupAttempts = 0; // EARLY EXIT: 3 consecutivos = abortar
+            let consecutiveDupAttempts = 0; // EARLY EXIT
 
             while (acceptedCandidates.length < maxResults && attempt < MAX_RETRIES && this.isRunning) {
                 attempt++;
@@ -170,11 +173,11 @@ export class LinkedInSearchEngine {
 
                 if (uniqueCandidates.length === 0) {
                     consecutiveDupAttempts++;
-                    if (consecutiveDupAttempts >= 3) {
-                        onLog(`[EARLY-EXIT] 🛑 3 intentos consecutivos con 100% duplicados. El nicho actual está agotado.`);
+                    if (consecutiveDupAttempts >= MAX_CONSEC_DUPS) {
+                        onLog(`[EARLY-EXIT] 🛑 ${MAX_CONSEC_DUPS} intentos consecutivos con 100% duplicados. El nicho actual está agotado.`);
                         break;
                     }
-                    onLog(`[DEDUP] ⚠️ No candidatos nuevos (${consecutiveDupAttempts}/3 consecutivos). Reintentando...`);
+                    onLog(`[DEDUP] ⚠️ No candidatos nuevos (${consecutiveDupAttempts}/${MAX_CONSEC_DUPS} consecutivos). Reintentando...`);
                     continue;
                 }
 
@@ -472,7 +475,10 @@ export class LinkedInSearchEngine {
         existingLinkedin: Set<string>
     ): Promise<Candidate[]> {
         const acceptedCandidates: Candidate[] = [];
-        const MAX_RETRIES = 30;
+        // Scale retries based on target: at least 30, up to 100 for large searches
+        const MAX_RETRIES = Math.min(100, Math.max(30, Math.ceil(maxResults / 5)));
+        // Allow more consecutive dup attempts before early-exit for larger targets
+        const MAX_CONSEC_DUPS = maxResults > 50 ? 5 : 3;
         let attempt = 0;
         const seenProfileNames: string[] = [];
         const seenUrls = new Set<string>();
@@ -541,11 +547,11 @@ export class LinkedInSearchEngine {
 
                 if (newProfiles.length === 0) {
                     consecutiveDupAttempts++;
-                    if (consecutiveDupAttempts >= 3) {
-                        onLog(`[EARLY-EXIT] 🛑 3 intentos consecutivos con 100% duplicados. El nicho actual está agotado.`);
+                    if (consecutiveDupAttempts >= MAX_CONSEC_DUPS) {
+                        onLog(`[EARLY-EXIT] 🛑 ${MAX_CONSEC_DUPS} intentos consecutivos con 100% duplicados. El nicho actual está agotado.`);
                         break;
                     }
-                    onLog(`[LINKEDIN] ⚠️ Todos duplicados (${consecutiveDupAttempts}/3 consecutivos). Reintentando...`);
+                    onLog(`[LINKEDIN] ⚠️ Todos duplicados (${consecutiveDupAttempts}/${MAX_CONSEC_DUPS} consecutivos). Reintentando...`);
                     continue;
                 }
 

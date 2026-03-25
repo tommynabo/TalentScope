@@ -485,10 +485,10 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
             <input
               type="number"
               min="1"
-              max="50"
+              max="500"
               value={leadCount}
               onChange={(e) => setLeadCount(Number(e.target.value))}
-              className="w-11 lg:w-14 bg-slate-800 border border-slate-700 rounded px-1 lg:px-1.5 py-0.5 text-white text-xs text-center focus:outline-none focus:border-cyan-500"
+              className="w-14 lg:w-20 bg-slate-800 border border-slate-700 rounded px-1 lg:px-1.5 py-0.5 text-white text-xs text-center focus:outline-none focus:border-cyan-500"
             />
           </div>
           <button
