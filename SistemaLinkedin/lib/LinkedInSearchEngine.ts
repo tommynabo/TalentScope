@@ -61,6 +61,14 @@ export class LinkedInSearchEngine {
         this.apiKey = import.meta.env.VITE_APIFY_API_KEY || '';
         this.openaiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
 
+        // BUG FIX: Emit diagnostic logs immediately so the UI shows something right away
+        onLog(`[LINKEDIN] 🚀 Motor de búsqueda iniciado.`);
+        onLog(`[LINKEDIN] 🔑 Modo: ${this.apiKey ? 'Apify (APIs externas activas)' : '⚡ Rápido (sin API key — usando datos locales)'}`);
+        if (!this.apiKey) {
+            onLog(`[LINKEDIN] ℹ️ Para activar búsqueda real configura VITE_APIFY_API_KEY en .env`);
+        }
+        onLog(`[LINKEDIN] 🎯 Objetivo: ${maxResults} candidatos para "${query}"`);
+
         const campaignId = options.campaignId || `campaign_${Date.now()}`;
         this.unbreakableExecutor = new UnbreakableExecutor(campaignId);
 
@@ -76,17 +84,45 @@ export class LinkedInSearchEngine {
                     );
                 },
                 (state) => {
-                    onLog(`[EXECUTOR] Current state: ${state}`);
+                    onLog(`[EXECUTOR] Estado: ${state}`);
                 }
             ).catch((err) => {
                 if (!this.userIntentedStop) {
-                    onLog(`[ERROR] ❌ ${err.message}`);
+                    onLog(`[ERROR] ❌ Error crítico en el motor: ${err.message}`);
+                    console.error('[LINKEDIN] startSearch executor error:', err);
                 }
                 this.isRunning = false;
+                // BUG FIX: always call onComplete so DetailView can reset its searching state
+                onComplete([]);
             });
         } catch (err: any) {
             onLog(`[ERROR] ❌ ${err.message}`);
+            console.error('[LINKEDIN] startSearch sync error:', err);
             this.isRunning = false;
+            onComplete([]);
+        }
+    }
+
+    /** Fetch existing candidates with a hard timeout so Supabase latency never hangs the search */
+    private async fetchDeduplicationDataSafe(onLog: LogCallback): Promise<{ existingEmails: Set<string>; existingLinkedin: Set<string> }> {
+        onLog(`[DEDUP] 🔍 Cargando base de datos para evitar duplicados...`);
+        try {
+            const result = await Promise.race([
+                deduplicationService.fetchExistingCandidates(),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('DEDUP_TIMEOUT')), 15000)
+                )
+            ]);
+            onLog(`[DEDUP] ✅ ${result.existingEmails.size} emails y ${result.existingLinkedin.size} perfiles conocidos ignorados.`);
+            return result;
+        } catch (err: any) {
+            if (err.message === 'DEDUP_TIMEOUT') {
+                onLog(`[DEDUP] ⚠️ Timeout (15s) cargando duplicados — continuando sin deduplicación.`);
+            } else {
+                onLog(`[DEDUP] ⚠️ Error cargando duplicados: ${err.message} — continuando.`);
+                console.error('[LINKEDIN] fetchDeduplicationDataSafe error:', err);
+            }
+            return { existingEmails: new Set(), existingLinkedin: new Set() };
         }
     }
 
@@ -100,14 +136,13 @@ export class LinkedInSearchEngine {
         // OPTIMIZED: Use fast fallback for demo/production without API keys
         if (!this.apiKey || !this.openaiKey) {
             onLog("🚀 Iniciando búsqueda en modo RÁPIDO (Sin APIs externas)...");
-            this.startFastSearch(query, maxResults, options, onLog, onComplete);
+            // BUG FIX: must await so executeCoreSearch doesn't return before the search finishes
+            await this.startFastSearch(query, maxResults, options, onLog, onComplete);
             return;
         }
 
         try {
-            onLog(`[DEDUP] 🔍 Cargando base de datos para evitar duplicados...`);
-            const { existingEmails, existingLinkedin } = await deduplicationService.fetchExistingCandidates();
-            onLog(`[DEDUP] ✅ ${existingEmails.size} emails y ${existingLinkedin.size} perfiles conocidos ignorados.`);
+            const { existingEmails, existingLinkedin } = await this.fetchDeduplicationDataSafe(onLog);
 
             const uniqueCandidates = await this.searchLinkedIn(
                 query,
@@ -140,9 +175,8 @@ export class LinkedInSearchEngine {
         onComplete: (candidates: Candidate[]) => void
     ) {
         try {
-            onLog(`[DEDUP] 🔍 Cargando base de datos para evitar duplicados...`);
-            const { existingEmails, existingLinkedin } = await deduplicationService.fetchExistingCandidates();
-            onLog(`[DEDUP] ✅ ${existingEmails.size} emails y ${existingLinkedin.size} perfiles conocidos ignorados.`);
+            // BUG FIX: use the safe version with 15s timeout (same as slow path)
+            const { existingEmails, existingLinkedin } = await this.fetchDeduplicationDataSafe(onLog);
 
             const acceptedCandidates: Candidate[] = [];
             // Scale retries based on target: at least 30, up to 100 for large searches

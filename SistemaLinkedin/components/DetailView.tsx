@@ -236,7 +236,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
   const handleRunSearch = async () => {
     isSearchingRef.current = true;
     setSearching(true);
-    setLogs([]);
+    // Show an immediate log so the panel is never empty while the engine initialises
+    setLogs(['[SISTEMA] ⚡ Conectando con el motor de búsqueda...']);
     setShowLogs(true);
 
     try {
@@ -246,6 +247,9 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
       // 'Communities' -> Community Scouting Strategy
       const source = campaign.platform === 'Communities' || campaign.platform === 'Freelance' ? 'communities' :
         campaign.platform === 'GitHub' ? 'github' : 'linkedin';
+
+      const apifyKey = (import.meta as any).env?.VITE_APIFY_API_KEY;
+      console.log(`[DetailView] Iniciando búsqueda. Platform: ${campaign.platform}, Source: ${source}, Apify key present: ${!!apifyKey}, Campaign ID: ${campaign.id}`);
 
       const searchOptions: any = {
         language: campaign.settings?.language || 'Spanish',
@@ -264,7 +268,16 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
         (msg) => setLogs(prev => [...prev, msg]),
         async (newCandidates) => {
           try {
-            console.log(`[DetailView] Processing ${newCandidates.length} new candidates...`);
+            console.log(`[DetailView] onComplete fired with ${newCandidates.length} new candidates.`);
+
+            // Engine called onComplete with empty array — this means it errored internally.
+            // The UI already shows the error log from the engine; just reset state.
+            if (newCandidates.length === 0) {
+              isSearchingRef.current = false;
+              setSearching(false);
+              // Do NOT overwrite the error logs with a misleading toast; they're already visible.
+              return;
+            }
 
             // 1. Save candidates to database
             const savePromises = newCandidates.map(async (c) => {
