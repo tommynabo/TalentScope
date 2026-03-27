@@ -112,32 +112,34 @@ export class LinkedInSearchEngine {
         candidates: Candidate[],
         campaignId: string | undefined,
         onLog: LogCallback
-    ): Promise<void> {
-        if (candidates.length === 0) return;
+    ): Promise<Candidate[]> {
+        if (candidates.length === 0) return [];
         if (!campaignId) {
             onLog(`[LINKEDIN] ⚠️ Sin campaignId — saltando guardado en BD.`);
-            return;
+            return [];
         }
 
         onLog(`[LINKEDIN] 💾 Iniciando guardado de ${candidates.length} candidatos en Supabase...`);
-        let savedCount = 0;
+        const savedCandidates: Candidate[] = [];
 
         for (const candidate of candidates) {
             try {
                 const saved = await CandidateService.create(candidate);
                 await CampaignService.addCandidateToCampaign(campaignId, saved.id);
-                savedCount++;
+                savedCandidates.push(saved);
             } catch (err: any) {
                 console.error('[LINKEDIN] Error guardando candidato:', candidate.full_name, err);
                 onLog(`[LINKEDIN] ❌ Error guardando "${candidate.full_name}": ${err.message}`);
             }
         }
 
-        if (savedCount > 0) {
-            onLog(`[LINKEDIN] ✅ Guardado exitoso: ${savedCount}/${candidates.length} candidatos en Supabase.`);
+        if (savedCandidates.length > 0) {
+            onLog(`[LINKEDIN] ✅ Guardado exitoso: ${savedCandidates.length}/${candidates.length} candidatos en Supabase.`);
         } else {
             onLog(`[LINKEDIN] ❌ Ningún candidato pudo guardarse — revisa los errores anteriores.`);
         }
+
+        return savedCandidates;
     }
 
     /** Fetch existing candidates with a hard timeout so Supabase latency never hangs the search */
@@ -190,9 +192,9 @@ export class LinkedInSearchEngine {
                 existingLinkedin
             );
 
-            await this.saveCandidatesToDatabase(uniqueCandidates, options.campaignId, onLog);
-            onLog(`[FIN] ✅ ${uniqueCandidates.length} candidatos nuevos encontrados.`);
-            onComplete(uniqueCandidates);
+            const savedCandidates = await this.saveCandidatesToDatabase(uniqueCandidates, options.campaignId, onLog);
+            onLog(`[FIN] ✅ ${savedCandidates.length} candidatos guardados en base de datos.`);
+            onComplete(savedCandidates);
 
         } catch (error: any) {
             onLog(`[ERROR] ❌ ${error.message}`);
@@ -321,9 +323,9 @@ export class LinkedInSearchEngine {
             }
 
             const finalCandidatesFast = acceptedCandidates.slice(0, maxResults);
-            await this.saveCandidatesToDatabase(finalCandidatesFast, options.campaignId, onLog);
-            onLog(`[FIN] ✅ ${finalCandidatesFast.length} candidatos procesados y listos.`);
-            onComplete(finalCandidatesFast);
+            const savedCandidatesFast = await this.saveCandidatesToDatabase(finalCandidatesFast, options.campaignId, onLog);
+            onLog(`[FIN] ✅ ${savedCandidatesFast.length} candidatos procesados y guardados.`);
+            onComplete(savedCandidatesFast);
 
         } catch (error: any) {
             onLog(`[ERROR] ❌ ${error.message}`);

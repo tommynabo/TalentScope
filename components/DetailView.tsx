@@ -272,27 +272,29 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
           try {
             console.log(`[DetailView] Processing ${newCandidates.length} new candidates...`);
 
-            // 1. Save candidates to database
-            const savePromises = newCandidates.map(async (c) => {
+            // 1. Save candidates to database (individual try/catch per candidate)
+            let savedCount = 0;
+            for (const c of newCandidates) {
               try {
                 const savedCandidate = await CandidateService.create(c);
                 await CampaignService.addCandidateToCampaign(campaign.id, savedCandidate.id);
+                savedCount++;
               } catch (err) {
-                console.error("Failed to save candidate", c.email, err);
+                console.error("Failed to save candidate", (c as any).email ?? (c as any).full_name, err);
               }
-            });
+            }
+            console.log(`[DetailView] Saved ${savedCount}/${newCandidates.length} candidates to database`);
 
-            await Promise.all(savePromises);
-            console.log(`[DetailView] Saved ${newCandidates.length} candidates to database`);
-
-            // 2. Update global analytics BEFORE other operations
-            try {
-              console.log('[DetailView] Updating global analytics...');
-              await AnalyticsService.trackLeadsGenerated(newCandidates.length);
-              console.log('[DetailView] Global analytics updated successfully');
-            } catch (err) {
-              console.error('[DetailView] Failed to update global analytics', err);
-              setLogs(prev => [...prev, `❌ Error updating dashboard stats: ${(err as any).message}`]);
+            // 2. Update global analytics ONLY when at least one candidate was actually persisted
+            if (savedCount > 0) {
+              try {
+                console.log('[DetailView] Updating global analytics...');
+                await AnalyticsService.trackLeadsGenerated(savedCount);
+                console.log('[DetailView] Global analytics updated successfully');
+              } catch (err) {
+                console.error('[DetailView] Failed to update global analytics', err);
+                setLogs(prev => [...prev, `❌ Error updating dashboard stats: ${(err as any).message}`]);
+              }
             }
 
             // 3. Update campaign stats

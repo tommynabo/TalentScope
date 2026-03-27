@@ -26,17 +26,41 @@ export const CandidateService = {
     },
 
     async create(candidateData: Partial<Candidate>) {
-        // Upsert on linkedin_url: if a candidate with the same URL already exists,
-        // return the existing record instead of throwing a unique-constraint error
-        // (prevents "ghost leads" from silent insert failures).
+        const linkedinUrl = candidateData.linkedin_url;
+
+        // Find-or-Create: avoids depender del constraint UNIQUE de BD para ON CONFLICT.
+        // 1) Si hay linkedin_url, verificar si ya existe el registro.
+        if (linkedinUrl) {
+            const { data: existing, error: findError } = await supabase
+                .from('candidates')
+                .select('id')
+                .eq('linkedin_url', linkedinUrl)
+                .maybeSingle();
+
+            if (findError) throw findError;
+
+            if (existing) {
+                // Existe → actualizar y devolver
+                const { data, error } = await supabase
+                    .from('candidates')
+                    .update(candidateData)
+                    .eq('linkedin_url', linkedinUrl)
+                    .select()
+                    .single();
+                if (error) throw error;
+                return data as Candidate;
+            }
+        }
+
+        // No existe o no tiene linkedin_url → insertar
         const { data, error } = await supabase
             .from('candidates')
-            .upsert([candidateData], { onConflict: 'linkedin_url', ignoreDuplicates: false })
+            .insert([candidateData])
             .select()
             .single();
 
         if (error) {
-            console.error('[CandidateService.create] Supabase upsert error:', error);
+            console.error('[CandidateService.create] Supabase insert error:', error);
             throw error;
         }
         return data as Candidate;
