@@ -146,10 +146,10 @@ export const CampaignService = {
     async updateStats(campaignId: string) {
         console.log('[updateStats] Starting stats update for campaign:', campaignId);
 
-        // Get all candidates for this campaign
-        const { data: relations, error: relError } = await supabase
+        // Use HEAD + exact count — never fetches rows, bypasses PostgREST 1000-row default limit
+        const { count: totalCandidates, error: relError } = await supabase
             .from('campaign_candidates')
-            .select('added_at')
+            .select('*', { count: 'exact', head: true })
             .eq('campaign_id', campaignId);
 
         if (relError) {
@@ -157,18 +157,29 @@ export const CampaignService = {
             throw relError;
         }
 
-        const totalCandidates = relations?.length || 0;
         console.log('[updateStats] Total candidates in campaign:', totalCandidates);
 
-        // Count candidates added today
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const addedToday = relations?.filter(r => {
-            const addedDate = new Date(r.added_at);
-            addedDate.setHours(0, 0, 0, 0);
-            return addedDate.getTime() === today.getTime();
-        }).length || 0;
-        console.log('[updateStats] Candidates added today:', addedToday);
+        // All date math done server-side — zero rows transferred
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const yesterdayStart = new Date(todayStart);
+        yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+
+        const [{ count: addedToday }, { count: addedYesterday }] = await Promise.all([
+            supabase
+                .from('campaign_candidates')
+                .select('*', { count: 'exact', head: true })
+                .eq('campaign_id', campaignId)
+                .gte('added_at', todayStart.toISOString()),
+            supabase
+                .from('campaign_candidates')
+                .select('*', { count: 'exact', head: true })
+                .eq('campaign_id', campaignId)
+                .gte('added_at', yesterdayStart.toISOString())
+                .lt('added_at', todayStart.toISOString()),
+        ]);
+
+        console.log('[updateStats] Candidates added today:', addedToday, '| yesterday:', addedYesterday);
 
         // Get current campaign to preserve other settings
         const { data: campaign, error: fetchError } = await supabase
@@ -185,8 +196,9 @@ export const CampaignService = {
         console.log('[updateStats] Current campaign settings:', campaign.settings);
 
         const updatedStats = {
-            sent: totalCandidates,
-            addedToday: addedToday,
+            sent: totalCandidates ?? 0,
+            addedToday: addedToday ?? 0,
+            addedYesterday: addedYesterday ?? 0,
             responseRate: campaign.settings?.stats?.responseRate || 0,
             leads: campaign.settings?.stats?.leads || 0
         };

@@ -291,12 +291,17 @@ export class LinkedInSearchEngine {
     }
 
     private getQueryVariation(baseQuery: string, attempt: number, seenNames: string[]): string {
-        // ═══ SNIPER MICRO-QUERIES: 1 rol × 1 tech × 1 ciudad por intento ═══
-        // Elimina las queries genéricas con OR que devolvían siempre los mismos resultados.
+        // Attempt 1: always use the exact campaign query unmodified
+        if (attempt === 1) return baseQuery;
 
-        // Exclusiones por nombre (evitar repetir perfiles conocidos)
+        // ─── Extract campaign role from baseQuery ──────────────────────────────
+        // Prefer the first quoted phrase; fall back to the first 3 words
+        const quotedRoles = [...baseQuery.matchAll(/"([^"]+)"/g)].map(m => m[1]);
+        const campaignRole = quotedRoles[0] || baseQuery.replace(/site:\S+/g, '').trim().split(/\s+/).slice(0, 3).join(' ');
+
+        // ─── Name exclusions (avoid re-surfacing already-seen profiles) ────────
         const exclusions = seenNames
-            .slice(-15)
+            .slice(-12)
             .map(name => {
                 const parts = name.replace(/[^a-zA-ZÀ-ÿ\s]/g, '').trim().split(/\s+/);
                 return parts[0] && parts[0].length > 2 ? `-"${parts[0]}"` : '';
@@ -304,18 +309,6 @@ export class LinkedInSearchEngine {
             .filter(Boolean)
             .join(' ');
 
-        // Primer intento: query original del usuario tal cual
-        if (attempt === 1) return baseQuery;
-
-        const roles = [
-            '"Product Engineer"', '"Full Stack Engineer"', '"Software Engineer"',
-            '"Mobile Tech Lead"', '"Frontend Engineer"', '"Backend Engineer"',
-            '"Full Stack Developer"', '"Senior Developer"',
-        ];
-        const techs = [
-            '"Flutter"', '"React"', '"Node.js"', '"TypeScript"',
-            '"Next.js"', '"React Native"', '"AWS"', '"Python"',
-        ];
         const cities = [
             '"Madrid"', '"Barcelona"', '"Valencia"', '"Sevilla"',
             '"Ciudad de México"', '"Monterrey"', '"Guadalajara"',
@@ -323,13 +316,27 @@ export class LinkedInSearchEngine {
             '"Santiago"', '"Lima"', '"Quito"', '"Montevideo"',
         ];
 
-        // Rotación con velocidades coprimas para máxima diversidad entre intentos
-        const idx = attempt - 2; // offset porque attempt 1 ya se usó
-        const role = roles[idx % roles.length];
-        const tech = techs[(idx * 3) % techs.length];   // ×3 = coprime con 8
+        const idx = attempt - 2; // attempt 1 already consumed above
         const city = cities[idx % cities.length];
 
-        let variation = `${role} ${tech} ${city}`;
+        let variation: string;
+
+        // ─── RELAXATION LEVEL 1 (attempts 2-5): exact campaign role + rotating city ─
+        // Wide funnel: bring volume, let Scoring AI reject the non-fits
+        if (attempt <= 5) {
+            variation = `"${campaignRole}" ${city}`;
+        }
+        // ─── RELAXATION LEVEL 2 (attempts 6-10): drop strict role quotes ──────────
+        // More Google results because phrase-exact-match is removed
+        else if (attempt <= 10) {
+            const lastWord = campaignRole.split(' ').filter(w => w.length > 3).pop() || campaignRole;
+            variation = `(${campaignRole} OR "${lastWord} Developer" OR "${lastWord} Engineer") ${city}`;
+        }
+        // ─── RELAXATION LEVEL 3 (attempts 11+): keyword only, maximum breadth ──────
+        else {
+            const keyword = campaignRole.split(' ').filter(w => w.length > 3).pop() || campaignRole;
+            variation = `${keyword} developer ${city}`;
+        }
 
         if (exclusions) {
             const finalQuery = `${variation} ${exclusions}`;
@@ -517,6 +524,8 @@ export class LinkedInSearchEngine {
         const seenProfileNames: string[] = [];
         const seenUrls = new Set<string>();
         let consecutiveDupAttempts = 0; // EARLY EXIT: cuenta intentos consecutivos 100% duplicados
+        let zeroApifyAttempts = 0;      // ANTI-LOOP: abort if Apify returns 0 profiles repeatedly
+        const MAX_ZERO_APIFY = 5;       // max consecutive zero-result Apify calls before aborting
 
         const startTime = performance.now();
 
@@ -562,9 +571,17 @@ export class LinkedInSearchEngine {
                 });
 
                 if (profiles.length === 0) {
-                    onLog(`[LINKEDIN] ⚠️ 0 perfiles LinkedIn en resultados. Reintentando...`);
+                    zeroApifyAttempts++;
+                    if (zeroApifyAttempts >= MAX_ZERO_APIFY) {
+                        onLog(`[ABORT] 🛑 Apify devolvió 0 perfiles LinkedIn en ${MAX_ZERO_APIFY} intentos consecutivos.`);
+                        onLog(`[ABORT] 💡 La query no produce resultados en Google. Prueba un rol o tecnología diferente en la campaña.`);
+                        break;
+                    }
+                    onLog(`[LINKEDIN] ⚠️ 0 perfiles LinkedIn (${zeroApifyAttempts}/${MAX_ZERO_APIFY}). Relajando query...`);
                     continue;
                 }
+                // Apify returned results — reset the zero-result streak
+                zeroApifyAttempts = 0;
 
                 const newProfiles = profiles.filter((p: any) => {
                     const url = normalizeLinkedInUrl(p.url);
