@@ -6,6 +6,7 @@ import { SearchService } from '../../lib/search';
 import { normalizeLinkedInUrl } from '../../lib/normalization';
 import { UnbreakableExecutor, initializeUnbreakableMarker } from '../../lib/UnbreakableExecution';
 import { isLikelySpanishSpeaker } from './spanishLanguageFilter';
+import { CandidateService, CampaignService } from '../../lib/services';
 
 export type LogCallback = (message: string) => void;
 
@@ -103,6 +104,42 @@ export class LinkedInSearchEngine {
         }
     }
 
+    /**
+     * Saves accepted candidates to Supabase and links them to the campaign.
+     * Logs every step through onLog so errors are visible in the UI log panel.
+     */
+    private async saveCandidatesToDatabase(
+        candidates: Candidate[],
+        campaignId: string | undefined,
+        onLog: LogCallback
+    ): Promise<void> {
+        if (candidates.length === 0) return;
+        if (!campaignId) {
+            onLog(`[LINKEDIN] ⚠️ Sin campaignId — saltando guardado en BD.`);
+            return;
+        }
+
+        onLog(`[LINKEDIN] 💾 Iniciando guardado de ${candidates.length} candidatos en Supabase...`);
+        let savedCount = 0;
+
+        for (const candidate of candidates) {
+            try {
+                const saved = await CandidateService.create(candidate);
+                await CampaignService.addCandidateToCampaign(campaignId, saved.id);
+                savedCount++;
+            } catch (err: any) {
+                console.error('[LINKEDIN] Error guardando candidato:', candidate.full_name, err);
+                onLog(`[LINKEDIN] ❌ Error guardando "${candidate.full_name}": ${err.message}`);
+            }
+        }
+
+        if (savedCount > 0) {
+            onLog(`[LINKEDIN] ✅ Guardado exitoso: ${savedCount}/${candidates.length} candidatos en Supabase.`);
+        } else {
+            onLog(`[LINKEDIN] ❌ Ningún candidato pudo guardarse — revisa los errores anteriores.`);
+        }
+    }
+
     /** Fetch existing candidates with a hard timeout so Supabase latency never hangs the search */
     private async fetchDeduplicationDataSafe(onLog: LogCallback): Promise<{ existingEmails: Set<string>; existingLinkedin: Set<string> }> {
         onLog(`[DEDUP] 🔍 Cargando base de datos para evitar duplicados...`);
@@ -153,6 +190,7 @@ export class LinkedInSearchEngine {
                 existingLinkedin
             );
 
+            await this.saveCandidatesToDatabase(uniqueCandidates, options.campaignId, onLog);
             onLog(`[FIN] ✅ ${uniqueCandidates.length} candidatos nuevos encontrados.`);
             onComplete(uniqueCandidates);
 
@@ -170,6 +208,7 @@ export class LinkedInSearchEngine {
             maxAge: number;
             filters?: SearchFilterCriteria;
             scoreThreshold?: number;
+            campaignId?: string;
         },
         onLog: LogCallback,
         onComplete: (candidates: Candidate[]) => void
@@ -281,8 +320,10 @@ export class LinkedInSearchEngine {
                 onLog(`[INFO] ℹ️ Se encontraron ${acceptedCandidates.length}/${maxResults} candidatos (menos que el objetivo)`);
             }
 
-            onLog(`[FIN] ✅ ${acceptedCandidates.length} candidatos procesados y listos.`);
-            onComplete(acceptedCandidates.slice(0, maxResults));
+            const finalCandidatesFast = acceptedCandidates.slice(0, maxResults);
+            await this.saveCandidatesToDatabase(finalCandidatesFast, options.campaignId, onLog);
+            onLog(`[FIN] ✅ ${finalCandidatesFast.length} candidatos procesados y listos.`);
+            onComplete(finalCandidatesFast);
 
         } catch (error: any) {
             onLog(`[ERROR] ❌ ${error.message}`);

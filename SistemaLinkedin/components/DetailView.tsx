@@ -268,66 +268,50 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
         (msg) => setLogs(prev => [...prev, msg]),
         async (newCandidates) => {
           try {
-            console.log(`[DetailView] onComplete fired with ${newCandidates.length} new candidates.`);
+            // The engine already saved candidates to Supabase before calling onComplete.
+            // Here we just update stats and force a fresh read from the DB so the UI reflects reality.
+            setLogs(prev => [...prev, `[SISTEMA] 🔄 Motor finalizado (${newCandidates.length} candidatos). Sincronizando pipeline...`]);
 
-            // Engine called onComplete with empty array — this means it errored internally.
-            // The UI already shows the error log from the engine; just reset state.
-            if (newCandidates.length === 0) {
-              isSearchingRef.current = false;
-              setSearching(false);
-              // Do NOT overwrite the error logs with a misleading toast; they're already visible.
-              return;
-            }
-
-            // 1. Save candidates to database
-            const savePromises = newCandidates.map(async (c) => {
+            // 1. Update global analytics (only when we have new candidates)
+            if (newCandidates.length > 0) {
               try {
-                const savedCandidate = await CandidateService.create(c);
-                await CampaignService.addCandidateToCampaign(campaign.id, savedCandidate.id);
+                await AnalyticsService.trackLeadsGenerated(newCandidates.length);
               } catch (err) {
-                console.error("Failed to save candidate", c.email, err);
+                console.error('[DetailView] Failed to update global analytics', err);
+                setLogs(prev => [...prev, `⚠️ Error actualizando estadísticas globales: ${(err as any).message}`]);
               }
-            });
-
-            await Promise.all(savePromises);
-            console.log(`[DetailView] Saved ${newCandidates.length} candidates to database`);
-
-            // 2. Update global analytics BEFORE other operations
-            try {
-              console.log('[DetailView] Updating global analytics...');
-              await AnalyticsService.trackLeadsGenerated(newCandidates.length);
-              console.log('[DetailView] Global analytics updated successfully');
-            } catch (err) {
-              console.error('[DetailView] Failed to update global analytics', err);
-              setLogs(prev => [...prev, `❌ Error updating dashboard stats: ${(err as any).message}`]);
             }
 
-            // 3. Update campaign stats
+            // 2. Update campaign stats
             try {
-              console.log('[DetailView] Updating campaign stats...');
               await CampaignService.updateStats(campaign.id);
-              console.log('[DetailView] Stats updated, reloading campaign...');
-              await reloadCampaign(); // Reload campaign to get updated stats
-              console.log('[DetailView] Campaign reloaded with new stats:', campaign.settings?.stats);
+              await reloadCampaign();
             } catch (err) {
-              console.error("[DetailView] Failed to update campaign stats", err);
+              console.error('[DetailView] Failed to update campaign stats', err);
             }
 
-            // 4. Reload candidates list
-            try {
-              await loadCandidates();
-            } catch (err) {
-              console.error("[DetailView] Failed to load candidates", err);
-            }
+            // 3. Always reload candidates list — even if 0 were found this run,
+            //    a previous partial run may have saved some before hitting an error.
+            setLogs(prev => [...prev, `[SISTEMA] 🔄 Recargando pipeline desde base de datos...`]);
+            await loadCandidates();
+            setLogs(prev => [...prev, `[SISTEMA] ✅ Pipeline actualizado.`]);
 
             isSearchingRef.current = false;
             setSearching(false);
-            setToast({ show: true, message: `¡${newCandidates.length} nuevos candidatos encontrados!` });
+
+            if (newCandidates.length > 0) {
+              setToast({ show: true, message: `¡${newCandidates.length} nuevos candidatos encontrados!` });
+            } else {
+              // Don't overwrite engine error logs with a misleading toast — they're already visible.
+              setToast({ show: true, message: '⚠️ Búsqueda completada sin candidatos nuevos.' });
+            }
           } catch (error) {
             console.error('[DetailView] Unexpected error in search callback', error);
             isSearchingRef.current = false;
             setSearching(false);
-            setToast({ show: true, message: '❌ Error procesando candidatos' });
+            // Still attempt a reload — something may have been saved before the error
+            try { await loadCandidates(); } catch (_) {}
+            setToast({ show: true, message: '❌ Error sincronizando el pipeline' });
           }
         }
       );
