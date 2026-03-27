@@ -299,9 +299,9 @@ export class LinkedInSearchEngine {
         const quotedRoles = [...baseQuery.matchAll(/"([^"]+)"/g)].map(m => m[1]);
         const campaignRole = quotedRoles[0] || baseQuery.replace(/site:\S+/g, '').trim().split(/\s+/).slice(0, 3).join(' ');
 
-        // ─── Name exclusions (avoid re-surfacing already-seen profiles) ────────
+        // ─── Name exclusions: max 3 to avoid Google query bloat ─────────────
         const exclusions = seenNames
-            .slice(-12)
+            .slice(-3)
             .map(name => {
                 const parts = name.replace(/[^a-zA-ZÀ-ÿ\s]/g, '').trim().split(/\s+/);
                 return parts[0] && parts[0].length > 2 ? `-"${parts[0]}"` : '';
@@ -542,8 +542,9 @@ export class LinkedInSearchEngine {
                     ? '(España OR México OR Colombia OR Argentina OR Chile OR Perú OR "habla española" OR Español)'
                     : '';
 
-                // DYNAMIC FETCH SCALE-UP: If target is high, request more results per attempt to handle duplicates
-                const resultsPerPage = Math.max(20, Math.min(100, maxResults * 3));
+                // PAYLOAD SCALING: minimum 50 per call — one large fetch beats 5 small ones.
+                // For larger targets scale up naturally, capped at 100 to keep response time predictable.
+                const resultsPerPage = Math.max(50, Math.min(100, maxResults * 3));
                 
                 const searchInput = {
                     queries: `${siteOperator} ${currentQuery} ${langKeywords}`,
@@ -737,7 +738,7 @@ export class LinkedInSearchEngine {
             icebreaker: `Hola ${context.name}, me encantaría conectar. Tenemos roles top para ti.`,
             followup_message: `Vimos tu perfil y creemos que eres exactamente lo que buscamos. ¿Podríamos charlar?`,
             skills: [],
-            symmetry_score: 75
+            symmetry_score: 82
         };
 
         try {
@@ -755,28 +756,41 @@ export class LinkedInSearchEngine {
                     messages: [
                         {
                             role: 'system',
-                            content: `Eres un Tech Recruiter de ÉLITE para Symmetry (•400k descargas/mes). Tu misión: CALIDAD SOBRE VOLUMEN. Solo apruebas "Product Engineers" — no meros ejecutores de tareas técnicas.
+                            content: `Eres un Tech Recruiter de ÉLITE para Symmetry (•400k descargas/mes). Tu misión: encontrar Product Engineers con impacto real en producción.
 
-                            === PERFIL OBJETIVO (extraído del documento Lead Ideal) ===
+                            === PERFIL OBJETIVO ===
                             Experiencia: 3-8 años en producción. Stack core: React/Next.js, Node.js, TypeScript, APIs REST.
                             Full-stack end-to-end. Entienden producto, usuario Y negocio.
 
-                            ✅ GREEN FLAGS (suman al symmetry_score):
-                            - Ownership de features/productos + menciona métricas o impacto de negocio
-                            - Stack: React/Next.js, Node.js, TypeScript, integraciones REST
-                            - Construyó aplicaciones COMPLETAS (frontend + backend + deploy)
-                            - Experiencia en startups, entornos ágiles o freelance
-                            - Usa herramientas IA (ChatGPT, Claude, Cursor) en su flujo de trabajo
-                            - Mobile (React Native o Flutter) o infra cloud (AWS/GCP/CI-CD) como bonus
+                            ═══ SISTEMA DE ANCLAJE DE PUNTUACIÓN (ANCHOR SYSTEM) ═══
+                            REGLA BASE: Si el candidato menciona tecnologías clave del stack (React, Next.js, Node.js, TypeScript, Flutter, React Native) Y su perfil indica que habla español o está en España/Latinoamérica → su puntuación BASE es 85.
+                            DESDE ESE 85, SUMA puntos (hasta 100) si:
+                            - Menciona impacto real con métricas (usuarios, descargas, revenue)
+                            - Proyectos en producción con usuarios reales
+                            - Experiencia en startups o como founder/co-founder
+                            - Ownership end-to-end de features o productos
+                            - Usa IA en su flujo de trabajo (ChatGPT, Cursor, Copilot)
+                            SOLO RESTA puntos (por debajo de 80) si el perfil es EXPLÍCITAMENTE:
+                            - Junior sin experiencia en producción real
+                            - Solo formación teórica/bootcamp sin apps en producción
+                            - Consultor puramente técnico sin visión de producto o negocio
+                            - Perfil sin señales de impacto o ownership
+                            NO USES 75 como valor por defecto. Un perfil ambiguo que menciona el stack correcto vale 85.
 
-                            🚫 RED FLAGS — AUTO-FAIL (symmetry_score DEBE ser < 40 si aplica alguno):
-                            - Solo formación teórica o bootcamp SIN proyectos en producción
-                            - Experiencia limitada a tareas muy específicas SIN contexto global de producto
-                            - No demuestra comprensión del negocio ni del impacto de lo que construye
-                            - Actitud pasiva: solo ejecuta, no tiene iniciativa ni ownership
-                            - Sin apps funcionales usadas por usuarios reales
+                            ✅ GREEN FLAGS (suman desde el 85):
+                            - Ownership de features/productos + métricas o impacto de negocio (+5 a +10)
+                            - Construyó aplicaciones COMPLETAS (frontend + backend + deploy) (+5)
+                            - Experiencia en startups, entornos ágiles o freelance (+5)
+                            - Usa herramientas IA en su flujo de trabajo (+3)
+                            - Mobile (React Native o Flutter) o infra cloud como bonus (+3)
 
-                            Analiza el perfil y devuelve UNICAMENTE JSON con este formato:
+                            🚫 RED FLAGS — BAJA SCORE (por debajo de 80):
+                            - Solo formación teórica o bootcamp SIN proyectos en producción → 50-60
+                            - Perfil puramente teórico sin evidencia de impacto → 55-65
+                            - Sin apps funcionales usadas por usuarios reales → 60
+                            - AUTO-FAIL (<40): No tiene stack relevante Y es puramente teórico
+
+                            Analiza el perfil y devuelve ÚNICAMENTE JSON con este formato:
                             {
                                 "psychological_profile": "Perfil psicológico en 1 frase",
                                 "business_moment": "Momento actual en 1 frase",
@@ -788,12 +802,13 @@ export class LinkedInSearchEngine {
                                 "followup_message": "FOLLOWUP: Mensaje EXACTO que diga: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers en [stack específico extraído del perfil, ej: React/Node.js o Next.js/TypeScript]. ¿Te interesa que te pase el brief técnico?'",
                                 "second_followup": "SEGUNDO FOLLOWUP: Mensaje de seguimiento (300-500 chars) si no hay respuesta inicial. Proporciona más valor e información",
                                 "skills": ["Habilidad 1", "Habilidad 2"],
-                                "symmetry_score": 75
+                                "symmetry_score": 85
                             }
-                            
+
                             IMPORTANTE:
+                            - symmetry_score por defecto es 85, NO 75. Ajusta hacia arriba o abajo según las reglas anteriores.
                             - ICEBREAKER debe ser casual, corto (máx 200 chars), pedir conexión en LinkedIn
-                            - FOLLOWUP debe usar EXACTAMENTE el formato solicitado para el mensaje post-aceptación con el nombre del candidato y su stack principal.
+                            - FOLLOWUP debe usar EXACTAMENTE el formato solicitado con el nombre y stack del candidato.
                             - SEGUNDO FOLLOWUP es para seguimiento después de X días sin respuesta, ofrece valor adicional
                             - Los 3 mensajes deben ser super personalizados basados en el perfil
                             - If snippet implies user is > ${context.maxAge || 40} years old, PENALIZE SCORE (<50)
@@ -838,7 +853,7 @@ export class LinkedInSearchEngine {
                 followup_message: `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers. ¿Te interesa que te pase el brief técnico?`,
                 second_followup: `${context.name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`,
                 skills: context.skills || ['N/A'],
-                symmetry_score: 75
+                symmetry_score: 82
             };
         }
     }

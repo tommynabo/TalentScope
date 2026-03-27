@@ -26,13 +26,19 @@ export const CandidateService = {
     },
 
     async create(candidateData: Partial<Candidate>) {
+        // Upsert on linkedin_url: if a candidate with the same URL already exists,
+        // return the existing record instead of throwing a unique-constraint error
+        // (prevents "ghost leads" from silent insert failures).
         const { data, error } = await supabase
             .from('candidates')
-            .insert([candidateData])
+            .upsert([candidateData], { onConflict: 'linkedin_url', ignoreDuplicates: false })
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error('[CandidateService.create] Supabase upsert error:', error);
+            throw error;
+        }
         return data as Candidate;
     },
 
@@ -129,17 +135,22 @@ export const CampaignService = {
     },
 
     async addCandidateToCampaign(campaignId: string, candidateId: string) {
+        // Upsert to tolerate re-runs: if the relation already exists, update the
+        // status back to Pool so the candidate stays visible in the UI.
         const { data, error } = await supabase
             .from('campaign_candidates')
-            .insert([{
+            .upsert([{
                 campaign_id: campaignId,
                 candidate_id: candidateId,
                 status: 'Pool'
-            }])
+            }], { onConflict: 'campaign_id,candidate_id', ignoreDuplicates: false })
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error('[CampaignService.addCandidateToCampaign] Supabase upsert error:', error);
+            throw error;
+        }
         return data as CampaignCandidate;
     },
 
