@@ -166,6 +166,9 @@ export interface CommunityCandidate {
     outreachIcebreaker?: string;
     outreachPitch?: string;
     outreachFollowup?: string;
+
+    // Campaign mapping
+    campaignId?: string;
 }
 
 // ─── Campaign Types ──────────────────────────────────────────────────────────

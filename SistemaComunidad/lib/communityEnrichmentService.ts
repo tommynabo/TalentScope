@@ -1,7 +1,7 @@
 import { supabase } from '../../lib/supabase';
 import { CommunityCandidate } from '../types/community';
 import { ContactResearchService } from '../../SistemaMarketplace/services/contactResearchService';
-import { ScrapedCandidate } from '../../SistemaMarketplace/types/marketplace';
+import { ScrapedCandidate, FreelancePlatform } from '../../SistemaMarketplace/types/marketplace';
 
 // ─── Email Validation ─────────────────────────────────────────────────────────
 // Reject placeholder, template, and obviously fake emails
@@ -59,8 +59,8 @@ export const CommunityEnrichmentService = {
     async enrichCandidate(candidate: CommunityCandidate): Promise<Partial<CommunityCandidate>> {
         console.log(`[CommunityEnrichment] Starting enrichment for ${candidate.username}...`);
 
-        const apifyApiKey = import.meta.env.VITE_APIFY_API_KEY;
-        const openaiApiKey = import.meta.env.VITE_OPENAI_API_KEY;
+        const apifyApiKey = (import.meta as any).env.VITE_APIFY_API_KEY;
+        const openaiApiKey = (import.meta as any).env.VITE_OPENAI_API_KEY;
 
         if (!apifyApiKey) {
             console.warn('[CommunityEnrichment] Missing Apify API Key, cannot perform OSINT search.');
@@ -74,15 +74,20 @@ export const CommunityEnrichmentService = {
         const mappedCandidate: ScrapedCandidate = {
             id: candidate.id || '',
             name: candidate.displayName || candidate.username,
+            platform: FreelancePlatform.Upwork,
+            platformUsername: candidate.username,
+            profileUrl: candidate.profileUrl || '',
             title: candidate.skills?.[0] || 'Developer',
-            country: 'Global', // Usually we don't have this in communities unless inferred
+            country: 'Global', 
             hourlyRate: 0,
             jobSuccessRate: 100,
-            profileUrl: candidate.profileUrl || '',
-            avatarUrl: candidate.avatarUrl || '',
+            certifications: [],
             bio: candidate.bio || '',
-            platform: 'Upwork', // Mocked to bypass type errors, not deeply used in email logic
-            platformData: {}
+            scrapedAt: new Date().toISOString(),
+            talentScore: candidate.talentScore || 0,
+            skills: candidate.skills || [],
+            badges: [],
+            yearsExperience: 0
         };
 
         try {
