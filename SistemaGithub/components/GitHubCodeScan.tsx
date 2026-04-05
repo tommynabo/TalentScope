@@ -1,16 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Star, GitBranch, Users, Code2, Trophy, ExternalLink, Loader, Plus, Link2, List, Columns3, Grid3x3, X, Download, Calendar } from 'lucide-react';
 import { GitHubMetrics, GitHubFilterCriteria } from '../../types/database';
-import { githubService, GitHubLogCallback } from '../../lib/githubService';
+import { GitHubGraphQLSearchEngine } from '../lib/GitHubGraphQLSearchEngine';
+import { GitHubCandidate } from '../../types/database';
 import { GitHubFilterConfig } from './GitHubFilterConfig';
 import { ApifyCrossSearchService } from '../../lib/apifyCrossSearchService';
 import { PRESET_PRODUCT_ENGINEERS } from '../../lib/githubPresets';
 import { GitHubCandidatesCards } from './GitHubCandidatesCards';
 import { GitHubCandidatesPipeline } from './GitHubCandidatesPipeline';
 import { GitHubCandidatesKanban } from './GitHubCandidatesKanban';
-import { GitHubSearchService } from '../../lib/githubSearchService';
 import { GitHubCandidatePersistence } from '../../lib/githubCandidatePersistence';
-import { UnbreakableExecutor } from '../../lib/UnbreakableExecution';
 import { supabase } from '../../lib/supabase';
 import Toast from '../../components/Toast';
 import UserSelectionModal from '../../components/UserSelectionModal';
@@ -34,7 +33,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, init
     const [viewMode, setViewMode] = useState<ViewMode>('pipeline'); // Default to pipeline
     const [userId, setUserId] = useState<string>('');
     const [isStoppable, setIsStoppable] = useState(false); // Track if search can be stopped
-    const executorRef = useRef<UnbreakableExecutor | null>(null);
+    const engineRef = useRef<GitHubGraphQLSearchEngine | null>(null);
     const isSearchingRef = useRef(false); // Mirror of loading state that survives React batching
     const [showExportOptions, setShowExportOptions] = useState(false);
     const [showUserSelection, setShowUserSelection] = useState(false);
@@ -111,7 +110,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, init
             if (document.visibilityState !== 'visible') return;
 
             // Only restore logs if a search was running
-            const isActive = isSearchingRef.current || executorRef.current?.isActive();
+            const isActive = isSearchingRef.current || engineRef.current?.getIsRunning();
             if (!isActive) {
                 // Check localStorage fallback
                 const savedState = localStorage.getItem(`github_search_state_${campaignId}`);
@@ -128,7 +127,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, init
             loadPersistentLogs();
 
             // Restore search state if needed
-            if (isSearchingRef.current || executorRef.current?.isActive()) {
+            if (isSearchingRef.current || engineRef.current?.getIsRunning()) {
                 setLoading(true);
                 setIsStoppable(true);
             }
@@ -168,7 +167,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, init
         return () => clearInterval(syncInterval);
     }, [loading]);
 
-    const handleLogMessage: GitHubLogCallback = (message: string) => {
+    const handleLogMessage = (message: string) => {
         setLogs(prev => {
             const newLogs = [...prev, message];
             // Persist to both sessionStorage (fast) and localStorage (persistent)
@@ -228,9 +227,7 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, init
     }, [loading, isStoppable, maxResults]);
 
     const handleStopSearch = () => {
-        if (executorRef.current) {
-            executorRef.current.stop('User clicked stop button');
-        }
+        engineRef.current?.stop('User clicked stop button');
         isSearchingRef.current = false;
         setLoading(false);
         setIsStoppable(false);
@@ -254,83 +251,69 @@ export const GitHubCodeScan: React.FC<GitHubCodeScanProps> = ({ campaignId, init
         setLogs([]);
         setShowLogs(true);
 
-        // Create and store executor reference for later stop() calls
-        const executor = new UnbreakableExecutor(`github_search_${campaignId}`);
-        executorRef.current = executor;
+        // Instantiate the new OO engine and store the ref for stop() calls
+        const engine = new GitHubGraphQLSearchEngine();
+        engineRef.current = engine;
 
-        // Wrap entire search in Unbreakable Execution Mode
-        await executor.run(async () => {
-            try {
-                handleLogMessage('🔄 Loading existing candidates from Supabase...');
+        // Build keyword query from criteria (engine adds location: prefixes itself)
+        const queryParts: string[] = [];
+        if (criteria.languages?.length) queryParts.push(criteria.languages[0]);
+        if (criteria.keywords?.length) queryParts.push(`"${criteria.keywords[0]}"`);
+        if (criteria.target_role) queryParts.push(`"${criteria.target_role}"`);
+        const searchQuery = queryParts.join(' ') || 'developer';
 
-                // Search with campaign context - persistence happens automatically in githubService
-                const results = await githubService.searchDevelopers(
-                    criteria,
-                    maxResults,
-                    handleLogMessage,
-                    campaignId,  // Pass campaign context
-                    userId       // Pass user context
-                );
+        try {
+            await engine.startGitHubSearch(
+                searchQuery,
+                maxResults,
+                { campaignId, userId, githubFilters: criteria },
+                handleLogMessage,
+                (results: GitHubCandidate[]) => {
+                    // Map GitHubCandidate[] → GitHubMetrics[], merging avatar/name from the top-level
+                    const metrics = results.map(c => ({
+                        ...(c.github_metrics as GitHubMetrics),
+                        name: c.full_name ?? undefined,
+                        avatar_url: c.avatar_url ?? undefined,
+                    })) as GitHubMetrics[];
 
-                handleLogMessage(`\n🔗 Syncing results...`);
-
-                // Get current candidates from localStorage as source of truth
-                const localStorageKey = `github_candidates_${campaignId}`;
-                let previousCandidates: GitHubMetrics[] = [];
-
-                try {
-                    const stored = localStorage.getItem(localStorageKey);
-                    if (stored) {
-                        previousCandidates = JSON.parse(stored);
-                        handleLogMessage(`📦 Found ${previousCandidates.length} previous candidates in localStorage`);
+                    // Merge with existing localStorage candidates (dedup by github_username)
+                    const localStorageKey = `github_candidates_${campaignId}`;
+                    let previousCandidates: GitHubMetrics[] = [];
+                    try {
+                        const stored = localStorage.getItem(localStorageKey);
+                        if (stored) {
+                            previousCandidates = JSON.parse(stored);
+                            handleLogMessage(`📦 Found ${previousCandidates.length} previous candidates in localStorage`);
+                        }
+                    } catch {
+                        handleLogMessage('⚠️ Could not read previous candidates from storage');
                     }
-                } catch (err) {
-                    console.warn('Failed to load from localStorage');
-                    handleLogMessage(`⚠️ Could not load previous candidates from storage`);
-                }
 
-                // Combine: previous + new, with deduplication by username
-                const allCandidates = [...previousCandidates];
-                let newCount = 0;
-
-                for (const candidate of results) {
-                    const exists = allCandidates.some(c => c.github_username.toLowerCase() === candidate.github_username.toLowerCase());
-                    if (!exists) {
-                        allCandidates.push(candidate);
-                        newCount++;
+                    const allCandidates = [...previousCandidates];
+                    let newCount = 0;
+                    for (const m of metrics) {
+                        if (!allCandidates.some(e => e.github_username.toLowerCase() === m.github_username.toLowerCase())) {
+                            allCandidates.push(m);
+                            newCount++;
+                        }
                     }
-                }
 
-                handleLogMessage(`✨ Found ${results.length} developers in GitHub search`);
-                handleLogMessage(`✅ Added ${newCount} new (${results.length - newCount} were duplicates)`);
-                handleLogMessage(`📊 Total accumulated: ${allCandidates.length} developers`);
+                    handleLogMessage(`✨ Found ${results.length} developers via GraphQL`);
+                    handleLogMessage(`✅ Added ${newCount} new (${results.length - newCount} duplicates)`);
+                    handleLogMessage(`📊 Total accumulated: ${allCandidates.length} developers`);
 
-                // Save all to localStorage
-                localStorage.setItem(localStorageKey, JSON.stringify(allCandidates));
-                handleLogMessage(`💾 Synced ${allCandidates.length} candidates to localStorage`);
-
-                // Update state with all candidates
-                setCandidates([...allCandidates]); // Force new array reference to ensure re-render
-
-                if (allCandidates.length > 0) {
-                    handleLogMessage(`✅ Ready to view ${allCandidates.length} developers`);
-                }
-
-            } catch (error: any) {
-                handleLogMessage(`❌ Error: ${error.message}`);
-                console.error('Search error:', error);
-            } finally {
-                isSearchingRef.current = false;
-                setLoading(false);
-                setIsStoppable(false);
-            }
-        }, (state) => {
-            // Monitor executor state changes
-            if (state === 'error' || state === 'completed') {
-                setLoading(false);
-                setIsStoppable(false);
-            }
-        });
+                    try { localStorage.setItem(localStorageKey, JSON.stringify(allCandidates)); } catch {}
+                    setCandidates([...allCandidates]);
+                },
+            );
+        } catch (error: any) {
+            handleLogMessage(`❌ Error: ${error.message}`);
+            console.error('Search error:', error);
+        } finally {
+            isSearchingRef.current = false;
+            setLoading(false);
+            setIsStoppable(false);
+        }
     };
 
     const handleStartCrossSearch = async () => {

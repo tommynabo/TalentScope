@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Play, Square, Terminal, Users, TrendingUp, Download, ArrowLeft, ChevronLeft, Globe, ChevronDown, ChevronUp, SlidersHorizontal, List } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CommunityCandidate, CommunityFilterCriteria, CommunityPlatform, CommunitySearchProgress, CommunityCampaign } from '../types/community';
-import { communitySearchEngine } from '../lib/CommunitySearchEngine';
+import { CommunitySearchEngine as CommunitySearchEngineV2 } from '../lib/CommunitySearchEngineV2';
 import { CommunityCandidatePersistence } from '../lib/communityCandidatePersistence';
 import { CommunityFilterConfig } from './CommunityFilterConfig';
 import { CommunityCandidatesPipeline } from './CommunityCandidatesPipeline';
@@ -33,6 +33,7 @@ export const CommunityScan: React.FC<CommunityScanProps> = ({ campaignId: propCa
     });
 
     const logsEndRef = useRef<HTMLDivElement>(null);
+    const engineRef = useRef<CommunitySearchEngineV2 | null>(null);
 
     // Load campaign from localStorage
     useEffect(() => {
@@ -76,7 +77,11 @@ export const CommunityScan: React.FC<CommunityScanProps> = ({ campaignId: propCa
         const { data: { user } } = await supabase.auth.getUser();
         const userId = user?.id || 'anonymous';
 
-        communitySearchEngine.startCommunitySearch(
+        // Instantiate V2 engine and store ref for stop()
+        const engine = new CommunitySearchEngineV2();
+        engineRef.current = engine;
+
+        engine.startCommunitySearch(
             criteria.keywords.join(' '),
             criteria.maxResults || 100,
             {
@@ -157,7 +162,7 @@ export const CommunityScan: React.FC<CommunityScanProps> = ({ campaignId: propCa
     };
 
     const handleStop = () => {
-        communitySearchEngine.stop();
+        engineRef.current?.stop();
         setIsSearching(false);
         addLog('⛔ Búsqueda detenida por el usuario');
     };

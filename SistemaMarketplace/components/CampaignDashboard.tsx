@@ -8,9 +8,8 @@ import {
 import { Campaign, EnrichedCandidateInCampaign } from '../types/campaigns';
 import { KanbanBoard } from './KanbanBoard';
 import { ManualEnrichmentModal } from './ManualEnrichmentModal';
-import { MarketplaceRaidService } from '../services/marketplaceRaidService';
-import { dedupService } from '../services/marketplaceDeduplicationService';
-import { ScrapingFilter, FreelancePlatform } from '../types/marketplace';
+import { MarketplaceSearchEngine as MarketplaceSearchEngineV2 } from '../services/MarketplaceSearchEngineV2';
+import { ScrapingFilter, FreelancePlatform, ScrapedCandidate } from '../types/marketplace';
 
 import Toast from '../../components/Toast';
 import UserSelectionModal from '../../components/UserSelectionModal';
@@ -94,12 +93,13 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
     end: new Date().toISOString().split('T')[0]
   });
 
-  // Search state (simulated for now — backend logic untouched)
+  // Search state
   const [searching, setSearching] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const [leadCount, setLeadCount] = useState(50);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const engineRef = useRef<MarketplaceSearchEngineV2 | null>(null);
 
   useEffect(() => {
     if (logsEndRef.current) {
@@ -224,10 +224,9 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
     setToast({ show: true, message: '✅ Candidato añadido' });
   };
 
-  // ─── Search with Real Services ─────────────────────────────────────────
+  // ─── Search with MarketplaceSearchEngineV2 ────────────────────────────
   const handleRunSearch = async () => {
     setSearching(true);
-    // Crear línea separadora en lugar de limpiar todo
     setLogs(prev => {
       const newLogs = [...prev];
       if (newLogs.length > 0) {
@@ -237,251 +236,120 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
     });
     setShowLogs(true);
 
+    const addLog = (msg: string) => setLogs(prev => [...prev, msg]);
+
     try {
-      setLogs(prev => [...prev, `🔍 Iniciando búsqueda de ${leadCount} leads en ${campaign.platform}...`]);
-      setLogs(prev => [...prev, `📋 Keywords: ${campaign.searchTerms.keyword}`]);
-      setLogs(prev => [...prev, `💰 Tarifa: $${campaign.searchTerms.minHourlyRate}-$${campaign.searchTerms.maxHourlyRate || '∞'}/h`]);
-      setLogs(prev => [...prev, `✅ Job Success Rate mínimo: ${campaign.searchTerms.minJobSuccessRate}%`]);
-      setLogs(prev => [...prev, `⏳ Conectando con APIs de scraping...`]);
+      addLog(`🔍 Iniciando búsqueda de ${leadCount} leads en ${campaign.platform}...`);
+      addLog(`📋 Keywords: ${campaign.searchTerms.keyword}`);
+      addLog(`💰 Tarifa: $${campaign.searchTerms.minHourlyRate}-${campaign.searchTerms.maxHourlyRate ?? '∞'}/h`);
+      addLog(`✅ Job Success Rate mínimo: ${campaign.searchTerms.minJobSuccessRate}%`);
 
-      // Get API keys from environment
-      // Usa VITE_APIFY_MARKETPLACE_API_KEY si existe, si no usa VITE_APIFY_API_KEY
-      const apifyMarketplaceKey = import.meta.env.VITE_APIFY_MARKETPLACE_API_KEY || import.meta.env.VITE_APIFY_API_KEY;
-      const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      // Map campaign platform string to FreelancePlatform enum
+      const platform =
+        campaign.platform === 'Fiverr' ? FreelancePlatform.Fiverr
+        : campaign.platform === 'LinkedIn' ? FreelancePlatform.LinkedIn
+        : FreelancePlatform.Upwork;
 
-      // Log which mode we're in
-      if (!apifyMarketplaceKey || apifyMarketplaceKey === 'mock') {
-        setLogs(prev => [...prev, `⚠️ MODO SIMULACIÓN: No hay API key de Apify configurada`]);
-      } else if (apifyMarketplaceKey) {
-        setLogs(prev => [...prev, `✅ SCRAPING REAL: Apify API Marketplace configurada (${apifyMarketplaceKey.substring(0, 15)}...)`]);
-      }
-
-      if (!openaiKey || openaiKey === 'mock') {
-        setLogs(prev => [...prev, `⚠️ ENRIQUECIMIENTO MOCK: No hay API key de OpenAI configurada`]);
-      } else if (openaiKey) {
-        setLogs(prev => [...prev, `✅ ENRIQUECIMIENTO REAL: OpenAI API configurada (sk-proj-...)`]);
-      }
-
-      // Initialize service with MARKETPLACE API KEY
-      const raidService = MarketplaceRaidService.getInstance(apifyMarketplaceKey, openaiKey, supabaseUrl, supabaseKey);
-
-      setLogs(prev => [...prev, `✅ Servicio marketplace inicializado`]);
-
-      // ⭐ CRITICAL: Initialize deduplication service with existing candidates from campaign
-      if (campaign.candidates.length > 0) {
-        // Convert campaign candidates back to ScrapedCandidate format for dedup registration
-        const existingScraped = campaign.candidates.map(c => ({
-          id: c.candidateId,
-          name: c.name,
-          platform: c.platform,
-          platformUsername: c.name.toLowerCase().replace(/\s+/g, '-'),
-          profileUrl: c.linkedInUrl || `https://${c.platform.toLowerCase()}.com/${c.name}`,
-          title: '',
-          country: '',
-          hourlyRate: c.hourlyRate,
-          jobSuccessRate: c.jobSuccessRate,
-          certifications: [],
-          bio: '',
-          scrapedAt: c.addedAt,
-          talentScore: c.talentScore,
-          skills: [],
-          badges: [],
-          yearsExperience: 0,
-          email: c.email,
-        }));
-        dedupService.registerCandidates(existingScraped);
-      }
-
-      // Validate connections
-      setLogs(prev => [...prev, `🔗 Validando conexiones a APIs...`]);
-      const connections = await raidService.validateAllConnections();
-
-      if (connections.apify) {
-        setLogs(prev => [...prev, `✅✅✅ APIFY CONECTADO - SCRAPING EN VIVO`]);
-      } else {
-        setLogs(prev => [...prev, `❌ Apify no responde - verifica tu API key y los Actor IDs configurados en BD`]);
-        setLogs(prev => [...prev, `📋 SOLUCIÓN: Ve a Supabase y actualiza los Actor IDs en la tabla 'apify_config'`]);
-        setLogs(prev => [...prev, `📖 Lee: SistemaMarketplace/APIFY_ACTOR_ID_SETUP.md para instrucciones completas`]);
-        setLogs(prev => [...prev, `⛔ Búsqueda cancelada: no se pueden obtener candidatos sin conexión a Apify`]);
-        setSearching(false);
-        return;
-      }
-
-      if (connections.openai) {
-        setLogs(prev => [...prev, `✅✅✅ OPENAI CONECTADO - ENRIQUECIMIENTO EN VIVO`]);
-      } else {
-        setLogs(prev => [...prev, `⚠️ OpenAI no conectado - los candidatos se añadirán sin enriquecimiento IA`]);
-      }
-
-      // Create scraping filter from campaign search terms
-      // Pass ALL existing identifiers: LinkedIn URLs, emails, AND names
-      // so dedup can catch duplicates BEFORE expensive enrichment
-      const allExistingUrls = [
-        ...campaign.candidates.map(c => c.linkedInUrl).filter(Boolean) as string[],
-        ...campaign.candidates.map(c => c.candidateId).filter(id => id.startsWith('http')),
-      ];
+      // Build ScrapingFilter from campaign search terms
       const filter: ScrapingFilter = {
         keyword: campaign.searchTerms.keyword,
         minHourlyRate: campaign.searchTerms.minHourlyRate,
         minJobSuccessRate: campaign.searchTerms.minJobSuccessRate,
-        certifications: campaign.searchTerms.certifications || [],
-        platforms: [campaign.platform as FreelancePlatform],
-        languages: campaign.searchTerms.languages || ['es'], // Default: español (hispanohablantes)
+        certifications: campaign.searchTerms.certifications ?? [],
+        platforms: [platform],
+        languages: campaign.searchTerms.languages ?? ['es'],
         maxResults: leadCount,
-        // Pass existing candidates so scraper skips them (ALL identifiers)
-        existingProfileUrls: allExistingUrls,
-        existingEmails: campaign.candidates.map(c => c.email).filter(Boolean) as string[],
+        existingProfileUrls: campaign.candidates
+          .map(c => c.linkedInUrl)
+          .filter(Boolean) as string[],
+        existingEmails: campaign.candidates
+          .map(c => c.email)
+          .filter(Boolean) as string[],
         existingNames: campaign.candidates.map(c => c.name).filter(Boolean),
       };
 
-      setLogs(prev => [...prev, `📊 FASE 1: Scraping en ${campaign.platform.toUpperCase()}...`]);
+      // Instantiate V2 engine and store ref for stop()
+      const engine = new MarketplaceSearchEngineV2();
+      engineRef.current = engine;
 
-      // Start raid
-      const raid = await raidService.startRaid(`Campaign: ${campaign.name}`, filter);
-
-      setLogs(prev => [...prev, `🆔 Raid ID: ${raid.id.substring(0, 12)}...`]);
-
-      // Execute scraping
-      const raidAfterScraping = await raidService.executeScraping(raid.id, filter);
-      if (!raidAfterScraping) {
-        setLogs(prev => [...prev, `❌ Error en scraping`]);
-        setSearching(false);
-        return;
-      }
-
-      const scrapedCount = raidAfterScraping.scrapedCandidates.length;
-
-      // Check if we actually got candidates
-      if (scrapedCount === 0) {
-        setLogs(prev => [...prev, `❌ No se encontraron candidatos`]);
-        setLogs(prev => [...prev, `⚠️ MOTIVOS POSIBLES:`]);
-        setLogs(prev => [...prev, `   1. Los Actor IDs en la BD de Supabase no son correctos`]);
-        setLogs(prev => [...prev, `   2. La API key de Apify no tiene permisos o créditos suficientes`]);
-        setLogs(prev => [...prev, `   3. El actor especificado no existe o está inactivo en tu cuenta de Apify`]);
-        setLogs(prev => [...prev, `📋 SOLUCIÓN: Actualiza los Actor IDs en Supabase tabla 'apify_config'`]);
-        setLogs(prev => [...prev, `📖 Guía completa: SistemaMarketplace/APIFY_ACTOR_ID_SETUP.md`]);
-        setSearching(false);
-        return;
-      }
-
-      setLogs(prev => [...prev, `🎯 Scraping completado: ${scrapedCount} candidatos REALES encontrados de ${campaign.platform}`]);
-
-      setLogs(prev => [...prev, `📊 FASE 2: Enriquecimiento de datos con IA...`]);
-
-      // Execute enrichment
-      const raidAfterEnrichment = await raidService.executeEnrichment(raid.id);
-      if (!raidAfterEnrichment) {
-        setLogs(prev => [...prev, `❌ Error en enriquecimiento`]);
-        setSearching(false);
-        return;
-      }
-
-      const enrichedCount = raidAfterEnrichment.enrichedCandidates.length;
-      const isRealEnrichment = connections.openai;
-      setLogs(prev => [...prev, `${isRealEnrichment ? '🤖' : '🧠'} Enriquecimiento completado: ${enrichedCount} candidatos ${isRealEnrichment ? 'ENRIQUECIDOS CON OpenAI' : 'CON EMAILS GENERADOS'}`]);
-
-      // Convert enriched candidates to campaign format
-      const newCandidates: EnrichedCandidateInCampaign[] = raidAfterEnrichment.enrichedCandidates.map((enriched, index) => ({
-        candidateId: enriched.id,
-        name: enriched.name,
-        email: enriched.emails?.[0] || enriched.platformUsername + '@unknown.com',
-        linkedInUrl: enriched.linkedInUrl,
-        platform: enriched.platform,
-        hourlyRate: enriched.hourlyRate,
-        jobSuccessRate: enriched.jobSuccessRate,
-        talentScore: (enriched as any).talentScore || 0,
-        addedAt: enriched.scrapedAt || new Date().toISOString(),
-        kanbanLane: 'todo' as const,
-        // Include deep AI analysis
-        psychologicalProfile: (enriched as any).psychologicalProfile,
-        businessMoment: (enriched as any).businessMoment,
-        salesAngle: (enriched as any).salesAngle,
-        bottleneck: (enriched as any).bottleneck,
-        walead_messages: (enriched as any).walead_messages,
-      }));
-
-      // Safety check: Filter out any candidates that somehow slipped through
-      // (The scraper should have already filtered these out)
-      const dedupedNewCandidates = newCandidates.filter(candidate => {
-        const alreadyExists = campaign.candidates.some(c => {
-          // Normalize URLs for comparison
-          if (c.linkedInUrl && candidate.linkedInUrl) {
-            const normalizedC = normalizeUrl(c.linkedInUrl);
-            const normalizedCandidate = normalizeUrl(candidate.linkedInUrl);
-            if (normalizedC && normalizedCandidate && normalizedC === normalizedCandidate) {
-              console.warn(`⏭️ Safety filter: Duplicate URL ${normalizedC}`);
-              return true;
-            }
+      await engine.startMarketplaceSearch(
+        campaign.searchTerms.keyword,
+        leadCount,
+        { campaignId: campaign.id, filter, platform, scoreThreshold: 40 },
+        (msg) => addLog(msg),
+        async (scrapedCandidates: ScrapedCandidate[]) => {
+          if (scrapedCandidates.length === 0) {
+            addLog('⚠️ No se encontraron candidatos nuevos.');
+            return;
           }
-          // Compare emails
-          if (c.email && candidate.email && c.email.toLowerCase() === candidate.email.toLowerCase()) {
-            console.warn(`⏭️ Safety filter: Duplicate email ${c.email}`);
-            return true;
-          }
-          // Compare names
-          if (c.name.toLowerCase().trim() === candidate.name.toLowerCase().trim()) {
-            console.warn(`⏭️ Safety filter: Duplicate name ${c.name}`);
-            return true;
-          }
-          return false;
-        });
 
-        return !alreadyExists;
-      });
+          addLog(`🎯 ${scrapedCandidates.length} candidatos obtenidos del motor V2.`);
 
-      if (dedupedNewCandidates.length === 0) {
-        setLogs(prev => [...prev, `⚠️ No new candidates found - all results already exist in campaign`]);
-        setSearching(false);
-        return;
-      }
+          // Convert ScrapedCandidate[] → EnrichedCandidateInCampaign[]
+          const newCandidates: EnrichedCandidateInCampaign[] = scrapedCandidates.map(s => ({
+            candidateId: s.id,
+            name: s.name,
+            email: s.email ?? `${s.platformUsername}@unknown.com`,
+            linkedInUrl: undefined,
+            platform: s.platform,
+            hourlyRate: s.hourlyRate,
+            jobSuccessRate: s.jobSuccessRate,
+            talentScore: s.talentScore ?? 0,
+            addedAt: s.scrapedAt ?? new Date().toISOString(),
+            kanbanLane: 'todo' as const,
+          }));
 
-      // Add to campaign
-      const updatedCandidates = [...campaign.candidates, ...dedupedNewCandidates];
-      const stats = {
-        total: updatedCandidates.length,
-        inTodo: updatedCandidates.filter(c => c.kanbanLane === 'todo').length,
-        inContacted: updatedCandidates.filter(c => c.kanbanLane === 'contacted').length,
-        inReplied: updatedCandidates.filter(c => c.kanbanLane === 'replied').length,
-        inRejected: updatedCandidates.filter(c => c.kanbanLane === 'rejected').length,
-        inHired: updatedCandidates.filter(c => c.kanbanLane === 'hired').length,
-        contactRate: (updatedCandidates.filter(c => c.kanbanLane !== 'todo').length / updatedCandidates.length) * 100 || 0,
-        responseRate: (updatedCandidates.filter(c => c.kanbanLane === 'replied' || c.kanbanLane === 'hired').length / updatedCandidates.length) * 100 || 0,
-      };
-
-      onUpdateCampaign({ ...campaign, candidates: updatedCandidates, stats });
-
-      setLogs(prev => [...prev, `✅ ${dedupedNewCandidates.length} candidatos REALES añadidos al pipeline exitosamente`]);
-
-      // 💾 Persist to Supabase for Buzones > Candidatos
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const currentUserId = sessionData?.session?.user?.id;
-        if (currentUserId) {
-          setLogs(prev => [...prev, `💾 Guardando candidatos en Supabase...`]);
-          const saved = await MarketplaceCandidatePersistence.saveCandidates(
-            campaign.id,
-            campaign.name,
-            campaign.platform,
-            dedupedNewCandidates,
-            currentUserId
+          // Safety dedup against existing campaign candidates
+          const dedupedNew = newCandidates.filter(nc =>
+            !campaign.candidates.some(
+              existing =>
+                (existing.email && nc.email && existing.email.toLowerCase() === nc.email.toLowerCase()) ||
+                existing.name.toLowerCase().trim() === nc.name.toLowerCase().trim(),
+            )
           );
-          if (saved) {
-            setLogs(prev => [...prev, `✅ Candidatos guardados en Supabase → aparecerán en Buzones > Candidatos`]);
-          } else {
-            setLogs(prev => [...prev, `⚠️ No se pudieron guardar en Supabase (solo en localStorage)`]);
-          }
-        } else {
-          setLogs(prev => [...prev, `⚠️ Sin sesión de usuario → candidatos solo en localStorage`]);
-        }
-      } catch (persistError) {
-        console.warn('[MarketplacePersistence] Error:', persistError);
-        setLogs(prev => [...prev, `⚠️ Error al guardar en Supabase (candidatos disponibles en localStorage)`]);
-      }
 
-      setLogs(prev => [...prev, `🚀 Búsqueda completada con éxito`]);
-      setToast({ show: true, message: `✅ ${dedupedNewCandidates.length} nuevos candidatos enriquecidos añadidos` });
+          if (dedupedNew.length === 0) {
+            addLog('⚠️ Todos los resultados ya existen en la campaña (deduplicados).');
+            return;
+          }
+
+          const updatedCandidates = [...campaign.candidates, ...dedupedNew];
+          const stats = {
+            total: updatedCandidates.length,
+            inTodo: updatedCandidates.filter(c => c.kanbanLane === 'todo').length,
+            inContacted: updatedCandidates.filter(c => c.kanbanLane === 'contacted').length,
+            inReplied: updatedCandidates.filter(c => c.kanbanLane === 'replied').length,
+            inRejected: updatedCandidates.filter(c => c.kanbanLane === 'rejected').length,
+            inHired: updatedCandidates.filter(c => c.kanbanLane === 'hired').length,
+            contactRate: (updatedCandidates.filter(c => c.kanbanLane !== 'todo').length / updatedCandidates.length) * 100 || 0,
+            responseRate: (updatedCandidates.filter(c => c.kanbanLane === 'replied' || c.kanbanLane === 'hired').length / updatedCandidates.length) * 100 || 0,
+          };
+
+          onUpdateCampaign({ ...campaign, candidates: updatedCandidates, stats });
+          addLog(`✅ ${dedupedNew.length} candidatos añadidos al pipeline.`);
+
+          // Persist to Supabase (Buzones > Candidatos view)
+          try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const currentUserId = sessionData?.session?.user?.id;
+            if (currentUserId) {
+              addLog('💾 Guardando candidatos en Supabase...');
+              const saved = await MarketplaceCandidatePersistence.saveCandidates(
+                campaign.id, campaign.name, campaign.platform, dedupedNew, currentUserId
+              );
+              addLog(saved
+                ? '✅ Candidatos guardados en Supabase → aparecerán en Buzones > Candidatos'
+                : '⚠️ No se pudieron guardar en Supabase (solo en localStorage)');
+            }
+          } catch (persistError) {
+            console.warn('[MarketplacePersistence] Error:', persistError);
+            addLog('⚠️ Error al guardar en Supabase (candidatos disponibles en localStorage)');
+          }
+
+          addLog('🚀 Búsqueda completada con éxito');
+          setToast({ show: true, message: `✅ ${dedupedNew.length} nuevos candidatos añadidos` });
+        },
+      );
     } catch (error) {
       console.error('Search error:', error);
       setLogs(prev => [...prev, `❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`]);
@@ -490,7 +358,6 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
       setSearching(false);
     }
   };
-
   // ─── Clear all candidates ──────────────────────────────────────────────
   const handleClearAllCandidates = () => {
     if (campaign.candidates.length === 0) {
@@ -518,6 +385,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
   };
 
   const handleStopSearch = () => {
+    engineRef.current?.stop('User clicked stop button');
     setSearching(false);
     setLogs(prev => [...prev, '⏹️ Búsqueda detenida por el usuario.']);
     setToast({ show: true, message: 'Búsqueda detenida.' });
