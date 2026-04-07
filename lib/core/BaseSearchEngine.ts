@@ -30,6 +30,10 @@ import { SharedBatchScoringService, ScoringProfile, ScoringResult, SYSTEM_PROMPT
 import { isLikelySpanishSpeaker } from './SharedLanguageFilter';
 import { UnbreakableExecutor, initializeUnbreakableMarker } from '../UnbreakableExecution';
 
+// ─── Sliding-Window constants ─────────────────────────────────────────────────
+/** Number of candidates processed per window: score → filter → save → notify UI. */
+const CHUNK_SIZE = 5;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type LogCallback = (message: string) => void;
@@ -80,12 +84,20 @@ export abstract class BaseSearchEngine<TCandidate extends RawCandidate = RawCand
 
     // ─── Lifecycle control ────────────────────────────────────────────────────
 
-    /** Call from subclass start methods to kick off the pipeline. */
+    /**
+     * Call from subclass start methods to kick off the pipeline.
+     *
+     * @param onProgress  Optional incremental callback fired after each
+     *                    sliding window (chunk of CHUNK_SIZE) is persisted.
+     *                    Use this to refresh the UI without waiting for the
+     *                    full pipeline to finish.
+     */
     protected async execute(
         query: string,
         options: BaseSearchOptions,
         onLog: LogCallback,
         onComplete: (candidates: TCandidate[]) => void,
+        onProgress?: (chunk: TCandidate[]) => void,
     ): Promise<void> {
         this.isRunning        = true;
         this.userIntendedStop = false;
@@ -101,7 +113,7 @@ export abstract class BaseSearchEngine<TCandidate extends RawCandidate = RawCand
         try {
             await this.unbreakableExecutor.run(
                 async () => {
-                    await this.runPipeline(query, options, onLog, onComplete);
+                    await this.runPipeline(query, options, onLog, onComplete, onProgress);
                 },
                 (state) => onLog(`[EXECUTOR] ${state}`),
             );
@@ -134,6 +146,7 @@ export abstract class BaseSearchEngine<TCandidate extends RawCandidate = RawCand
         options: BaseSearchOptions,
         onLog: LogCallback,
         onComplete: (candidates: TCandidate[]) => void,
+        onProgress?: (chunk: TCandidate[]) => void,
     ): Promise<void> {
 
         const { scoreThreshold = 0, maxResults, skipLanguageFilter = false } = options;
@@ -207,53 +220,86 @@ export abstract class BaseSearchEngine<TCandidate extends RawCandidate = RawCand
         if (preFiltered.length === 0) { onComplete([]); return; }
 
         // ── Step 3b: Heuristic keyword pre-filter (Layer 2) ──────────────────
-        // Discards in milliseconds candidates with zero role-keyword signals in
-        // their bio/title before any expensive OpenAI call is made.
         const heuristicPassed = this.applyHeuristicFilter(preFiltered, query, onLog);
         onLog(`[${this.engineName}] 🔑 ${heuristicPassed.length}/${preFiltered.length} pasaron el filtro heurístico de keywords.`);
         if (heuristicPassed.length === 0) { onComplete([]); return; }
 
-        // ── Step 4: Batch AI scoring (parallel chunks via Promise.all) ────────
-        onLog(`[${this.engineName}] 🤖 Evaluando con IA en paralelo (${heuristicPassed.length} candidatos en chunks de 10)...`);
-        const profilesToScore: ScoringProfile[] = heuristicPassed.map(c =>
-            this.buildScoringProfile(c)
-        );
+        // ── Steps 4-6: Sliding Window — CHUNK_SIZE candidatos a la vez ────────
+        //
+        // Por cada ventana:
+        //   1. Score con IA (un solo llamado batch de ≤ CHUNK_SIZE perfiles)
+        //   2. Aplicar threshold
+        //   3. Guardar en Supabase (save())
+        //   4. Notificar a la UI (onProgress)
+        //   5. Pasar a la siguiente ventana
+        //
+        // Esto evita explosiones de Rate Limit en OpenAI y permite que la
+        // interfaz muestre candidatos en tiempo real sin esperar el batch completo.
+        // ─────────────────────────────────────────────────────────────────────────
 
-        let scoringResults: ScoringResult[] = [];
-        try {
-            scoringResults = await this.scorer.scoreBatch(profilesToScore);
-        } catch (err: any) {
-            onLog(`[${this.engineName}] ⚠️ Error en scoring IA: ${err.message}`);
-            scoringResults = heuristicPassed.map(c => ({ id: c._id, score: 0, reasoning: 'Scoring unavailable.' }));
+        const windows = this.chunkArray(heuristicPassed, CHUNK_SIZE);
+        const allFinalCandidates: TCandidate[] = [];
+
+        onLog(`[${this.engineName}] 🪟 Procesando ${heuristicPassed.length} candidatos en ${windows.length} ventanas de ${CHUNK_SIZE}...`);
+
+        for (let winIdx = 0; winIdx < windows.length; winIdx++) {
+            if (!this.isRunning || this.userIntendedStop) break;
+
+            const window = windows[winIdx];
+            onLog(`[${this.engineName}] ⚙️  Ventana ${winIdx + 1}/${windows.length} — evaluando ${window.length} candidatos con IA...`);
+
+            // ── Score this window ────────────────────────────────────────────
+            const profiles: ScoringProfile[] = window.map(c => this.buildScoringProfile(c));
+            let scoringResults: ScoringResult[] = [];
+
+            try {
+                scoringResults = await this.scorer.scoreBatch(profiles);
+            } catch (err: any) {
+                onLog(`[${this.engineName}] ⚠️ Scoring falló en ventana ${winIdx + 1}: ${err.message} — asignando score 0.`);
+                scoringResults = window.map(c => ({ id: c._id, score: 0, reasoning: 'Scoring unavailable.' }));
+            }
+
+            // ── Merge scores + apply threshold ───────────────────────────────
+            const scoreMap = new Map(scoringResults.map(r => [r.id, r]));
+            const scored: TCandidate[] = [];
+
+            for (const candidate of window) {
+                const result = scoreMap.get(candidate._id);
+                const score  = result?.score ?? 0;
+                if (score < scoreThreshold) continue;
+                scored.push(this.mergeScoreIntoCandidate(candidate, result ?? { id: candidate._id, score: 0, reasoning: '' }));
+            }
+
+            onLog(`[${this.engineName}] 🎯 Ventana ${winIdx + 1}: ${scored.length}/${window.length} superaron el umbral de ${scoreThreshold} pts.`);
+
+            if (scored.length === 0) continue;
+
+            // ── Save this window ─────────────────────────────────────────────
+            let savedChunk: TCandidate[];
+            try {
+                onLog(`[${this.engineName}] 💾 Guardando ventana ${winIdx + 1} en Supabase...`);
+                savedChunk = await this.save(scored, options, onLog);
+            } catch (err: any) {
+                onLog(`[${this.engineName}] ❌ save() falló en ventana ${winIdx + 1}: ${err.message}`);
+                savedChunk = scored; // Return unsaved so UI still sees them
+            }
+
+            allFinalCandidates.push(...savedChunk);
+
+            // ── Notify UI of incremental progress ────────────────────────────
+            onProgress?.(savedChunk);
+
+            onLog(`[${this.engineName}] ✅ Ventana ${winIdx + 1} lista — ${savedChunk.length} guardados (acumulado: ${allFinalCandidates.length}).`);
+
+            // ── Early exit when target reached ───────────────────────────────
+            if (maxResults && allFinalCandidates.length >= maxResults) {
+                onLog(`[${this.engineName}] 🎉 Objetivo alcanzado: ${allFinalCandidates.length}/${maxResults}.`);
+                break;
+            }
         }
 
-        // ── Step 5: Merge scores + apply threshold ────────────────────────────
-        const scored: TCandidate[] = [];
-        const scoreMap = new Map(scoringResults.map(r => [r.id, r]));
-
-        for (const candidate of heuristicPassed) {
-            const result = scoreMap.get(candidate._id);
-            const score  = result?.score ?? 0;
-            if (score < scoreThreshold) continue;
-            scored.push(this.mergeScoreIntoCandidate(candidate, result ?? { id: candidate._id, score: 0, reasoning: '' }));
-        }
-
-        onLog(`[${this.engineName}] 🎯 ${scored.length} candidatos superaron el umbral de ${scoreThreshold} pts.`);
-        if (scored.length === 0) { onComplete([]); return; }
-
-        // ── Step 6: Persist results ───────────────────────────────────────────
-        onLog(`[${this.engineName}] 💾 Guardando resultados en Supabase...`);
-        let finalCandidates: TCandidate[];
-
-        try {
-            finalCandidates = await this.save(scored, options, onLog);
-        } catch (err: any) {
-            onLog(`[${this.engineName}] ❌ save() falló: ${err.message}`);
-            finalCandidates = scored; // Return unsaved results so UI still receives them
-        }
-
-        onLog(`[${this.engineName}] ✅ Pipeline completo: ${finalCandidates.length} candidatos guardados.`);
-        onComplete(finalCandidates);
+        onLog(`[${this.engineName}] ✅ Pipeline completo: ${allFinalCandidates.length} candidatos guardados.`);
+        onComplete(allFinalCandidates);
     }
 
     // ─── Hooks that subclasses MUST implement ────────────────────────────────
@@ -422,5 +468,14 @@ export abstract class BaseSearchEngine<TCandidate extends RawCandidate = RawCand
         const loadOpts = this.getDeduplicationLoadOptions(options);
         if (!loadOpts) return;
         await this.dedup.loadFromDatabase(loadOpts);
+    }
+
+    /** Split an array into sequential chunks of at most `size` elements. */
+    private chunkArray<T>(arr: T[], size: number): T[][] {
+        const chunks: T[][] = [];
+        for (let i = 0; i < arr.length; i += size) {
+            chunks.push(arr.slice(i, i + size));
+        }
+        return chunks;
     }
 }

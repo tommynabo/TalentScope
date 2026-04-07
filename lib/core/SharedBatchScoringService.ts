@@ -173,6 +173,13 @@ Evaluate the ${profiles.length} candidate profile(s) below using the ANCHORING S
    • No shipped product used by actual people → -10
    • Very narrow task scope, no ownership or initiative → -5
 4. MINIMUM PASSING SCORE = 80.  If a candidate does NOT meet the base requirements, score freely from 0–79.
+5. BORDERLINE RESCUE RULE: If you would score a candidate between 74–79 ("Dudoso / Borderline"),
+   but they show at least ONE of these clear positive signals:
+     • A shipped mobile/web product (even personal) with visible adoption
+     • An open-source project with any stars or active contributors
+     • Demonstrable industry experience in the target tech stack (even if incomplete)
+   → Assign score 81 instead and include "Borderline — requiere revisión manual" in the reasoning.
+   This ensures Nyo can review them rather than them being silently discarded.
 
 ${profileList}
 

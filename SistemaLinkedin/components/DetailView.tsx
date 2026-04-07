@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Candidate, Campaign, CandidateStatus } from '../../types/database';
 import { ChevronLeft, Linkedin, Send, MessageSquare, Calendar, BrainCircuit, Search, Play, Loader2, ExternalLink, Terminal, ChevronDown, ChevronUp, X, Target, TrendingUp, AlertTriangle, Columns, List, Download, Edit2 } from 'lucide-react';
 import { linkedInSearchEngine } from '../lib/LinkedInSearchEngine';
@@ -51,6 +51,11 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const isSearchingRef = useRef(false); // Survives React batching during background tabs
+  /** Timestamp of the last log message — used by the heartbeat watchdog. */
+  const lastLogTimeRef = useRef<number>(Date.now());
+  const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const HEARTBEAT_TIMEOUT_MS = 60_000; // 60 s of silence → stale-state alert
 
   // Show recovery toast if we restored from a snapshot
   useEffect(() => {
@@ -142,7 +147,60 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
     if (logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
+    // Bump heartbeat timestamp on every new log line
+    lastLogTimeRef.current = Date.now();
   }, [logs]);
+
+  // ─── Heartbeat watchdog ──────────────────────────────────────────────────
+  // While a search is running, poll every 10 s. If no log has been emitted
+  // for HEARTBEAT_TIMEOUT_MS (60 s), warn the user and re-sync from Supabase.
+  useEffect(() => {
+    if (!searching) {
+      if (heartbeatTimerRef.current) {
+        clearInterval(heartbeatTimerRef.current);
+        heartbeatTimerRef.current = null;
+      }
+      return;
+    }
+
+    heartbeatTimerRef.current = setInterval(async () => {
+      const elapsed = Date.now() - lastLogTimeRef.current;
+      if (elapsed >= HEARTBEAT_TIMEOUT_MS) {
+        // Engine appears stalled — alert the user and attempt DB re-sync
+        setLogs(prev => [
+          ...prev,
+          `[HEARTBEAT] ⚠️ ${Math.round(elapsed / 1000)}s sin actividad — el motor puede haberse detenido silenciosamente.`,
+          `[HEARTBEAT] 🔄 Re-sincronizando pipeline desde Supabase...`,
+        ]);
+        lastLogTimeRef.current = Date.now(); // prevent repeated alerts
+
+        try {
+          await loadCandidates();
+          setLogs(prev => [...prev, `[HEARTBEAT] ✅ Re-sincronización completada.`]);
+        } catch {
+          setLogs(prev => [...prev, `[HEARTBEAT] ❌ Re-sincronización falló.`]);
+        }
+
+        // If we've been silent for 2× the timeout, assume the engine is dead
+        if (elapsed >= HEARTBEAT_TIMEOUT_MS * 2) {
+          setLogs(prev => [...prev, `[HEARTBEAT] 🛑 Motor detenido — marcando búsqueda como inactiva.`]);
+          isSearchingRef.current = false;
+          setSearching(false);
+          if (heartbeatTimerRef.current) {
+            clearInterval(heartbeatTimerRef.current);
+            heartbeatTimerRef.current = null;
+          }
+        }
+      }
+    }, 10_000); // check every 10 seconds
+
+    return () => {
+      if (heartbeatTimerRef.current) {
+        clearInterval(heartbeatTimerRef.current);
+        heartbeatTimerRef.current = null;
+      }
+    };
+  }, [searching]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadCandidates = async () => {
     setLoading(true);
@@ -235,6 +293,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
 
   const handleRunSearch = async () => {
     isSearchingRef.current = true;
+    lastLogTimeRef.current = Date.now(); // initialise heartbeat clock
     setSearching(true);
     // Show an immediate log so the panel is never empty while the engine initialises
     setLogs(['[SISTEMA] ⚡ Conectando con el motor de búsqueda...']);
@@ -324,9 +383,16 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
   };
 
   const handleStopSearch = () => {
+    // Signal the engine's AbortController so any in-flight Apify/fetch calls are
+    // cancelled immediately, then clean up all local state.
     linkedInSearchEngine.stop();
     isSearchingRef.current = false;
     setSearching(false);
+    lastLogTimeRef.current = Date.now(); // reset heartbeat so no stale-state alert fires
+    if (heartbeatTimerRef.current) {
+      clearInterval(heartbeatTimerRef.current);
+      heartbeatTimerRef.current = null;
+    }
     setLogs(prev => [...prev, '⏹️ Búsqueda detenida por el usuario.']);
     setToast({ show: true, message: 'Búsqueda detenida.' });
     TabGuard.setSearchActive(false);

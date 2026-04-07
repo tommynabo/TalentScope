@@ -97,6 +97,37 @@ export interface GitHubGraphQLSearchOptions extends BaseSearchOptions {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const HISPANIC_LOCATIONS = ['spain', 'mexico', 'colombia', 'argentina', 'chile', 'peru'];
+
+/**
+ * Extended location pool used by expandSearch().
+ * The engine cycles through EXTENDED_LOCATIONS when the primary
+ * HISPANIC_LOCATIONS pass yields fewer candidates than the target.
+ */
+const EXTENDED_LOCATIONS = [
+    ...HISPANIC_LOCATIONS,
+    'venezuela', 'ecuador', 'uruguay', 'bolivia', 'paraguay',
+    'costa rica', 'guatemala', 'panama', 'latinoamerica', 'latam',
+    'madrid', 'barcelona', 'sevilla', 'bogota', 'medellin',
+    'buenos aires', 'santiago', 'lima', 'ciudad de mexico',
+    'remote', 'remoto',
+];
+
+/**
+ * Keyword synonym variants used when results are insufficient.
+ * The engine cycles through these variants to find more candidates.
+ */
+const GH_KEYWORD_SYNONYMS: Record<string, string[]> = {
+    'flutter':   ['flutter developer', 'flutter engineer', 'dart developer', 'mobile flutter'],
+    'mobile':    ['mobile developer', 'ios developer', 'android developer', 'react native'],
+    'react':     ['react developer', 'react.js', 'frontend react', 'react native developer'],
+    'backend':   ['backend developer', 'node.js developer', 'api developer', 'server developer'],
+    'fullstack': ['full stack developer', 'full-stack engineer', 'software engineer'],
+    'python':    ['python developer', 'python engineer', 'data engineer python'],
+};
+
+/** Maximum attempts across all location/keyword combinations. */
+const MAX_GH_ATTEMPTS = 40;
+
 /** One GraphQL page = up to 100 users. We run one page per location = 600 users raw. */
 const USERS_PER_PAGE     = 100;
 /** Skip profiles where >60 % of repos are forks — no original work to evaluate. */
@@ -202,12 +233,17 @@ export class GitHubGraphQLSearchEngine extends BaseSearchEngine<GitHubRawCandida
     // ── Layer 1: fetchRawCandidates (GraphQL edition) ─────────────────────────
 
     /**
-     * LAYER 1: HIGH-VOLUME FETCH
+     * LAYER 1: HIGH-VOLUME FETCH with Smart Query Expansion
      *
-     * For each Hispanic location we fire ONE GraphQL request that returns
-     * up to 100 users WITH their top-3 repos.  Six locations × 100 users =
-     * up to 600 raw profiles collected before any filtering, all in ~6 parallel
-     * network requests (one per location).
+     * Phase 1 — Primary fetch:
+     *   For each Hispanic location we fire ONE GraphQL request (up to 100 users
+     *   with top-3 repos).  Six locations × 100 users = up to 600 raw profiles
+     *   in ~6 parallel requests.
+     *
+     * Phase 2 — expandSearch():
+     *   If Phase 1 yields fewer than (maxResults × 3) raw profiles, we iterate
+     *   through EXTENDED_LOCATIONS and GH_KEYWORD_SYNONYMS to find more.
+     *   The loop respects the MAX_GH_ATTEMPTS hard cap.
      *
      * Then:
      *  1. Normalize into GitHubRawCandidate (no extra API calls).
@@ -228,71 +264,153 @@ export class GitHubGraphQLSearchEngine extends BaseSearchEngine<GitHubRawCandida
         }
 
         const maxResults = options.maxResults ?? 50;
+        const targetRaw  = maxResults * 3; // over-fetch before filters narrow results
 
-        // Build one search string per location, then fetch all in parallel
-        const queries = HISPANIC_LOCATIONS.map(loc => {
+        const seenLogins = new Set<string>();
+        const raw: GitHubRawCandidate[] = [];
+
+        // ── Phase 1: Primary parallel fetch across base Hispanic locations ────
+        const primaryQueries = HISPANIC_LOCATIONS.map(loc => {
             let q = baseQuery;
             if (!q.includes('location:')) q += ` location:${loc}`;
             if (!q.includes('type:user'))  q += ' type:user';
             return q;
         });
 
-        onLog(`[GITHUB_GQL] 🚀 Lanzando ${queries.length} requests GraphQL en paralelo (hasta ${USERS_PER_PAGE * queries.length} perfiles)...`);
+        onLog(`[GITHUB_GQL] 🚀 Fase 1: ${primaryQueries.length} requests GraphQL en paralelo (hasta ${USERS_PER_PAGE * primaryQueries.length} perfiles)...`);
 
-        const pageSets = await Promise.all(
-            queries.map((q, idx) =>
+        const primaryPages = await Promise.all(
+            primaryQueries.map((q, idx) =>
                 this.fetchGraphQLPage(q, token, onLog, HISPANIC_LOCATIONS[idx])
             ),
         );
 
-        // Flatten + deduplicate by login
-        const seenLogins = new Set<string>();
-        const raw: GitHubRawCandidate[] = [];
-
-        for (const users of pageSets) {
-            for (const user of users) {
-                if (seenLogins.has(user.login)) continue;
-                seenLogins.add(user.login);
-
-                const originality = (user.repositories.nodes.length > 0 || (user.repositories.totalCount ?? 0) > 0)
-                    ? user.repositories.nodes.length / Math.max(user.repositories.totalCount ?? 1, 1)
-                    : 0;
-
-                if (originality < MIN_ORIGINALITY && (user.repositories.totalCount ?? 0) > 5) {
-                    onLog(`[GITHUB_GQL] ⏭️ @${user.login}: demasiados forks (originality ${(originality * 100).toFixed(0)}%)`);
-                    continue;
-                }
-
-                const topRepos: GraphQLRepo[] = user.repositories.nodes.map((r: any) => ({
-                    name:           r.name,
-                    description:    r.description ?? null,
-                    stargazerCount: r.stargazerCount ?? 0,
-                    language:       r.primaryLanguage?.name ?? null,
-                }));
-
-                raw.push({
-                    _id:             `gh_${user.login}`,
-                    name:            user.name ?? user.login,
-                    title:           null,
-                    description:     user.bio ?? null,
-                    location:        user.location ?? null,
-                    email:           user.email ?? null,
-                    profileUrl:      `https://github.com/${user.login}`,
-                    github_username: user.login,
-                    github_url:      `https://github.com/${user.login}`,
-                    avatar_url:      user.avatarUrl ?? null,
-                    followers:       user.followers.totalCount,
-                    public_repos:    user.repositories.totalCount ?? 0,
-                    topRepos,
-                });
-
-                if (raw.length >= maxResults * 3) break; // cap raw over-fetch at 3×
-            }
-            if (raw.length >= maxResults * 3) break;
+        for (const users of primaryPages) {
+            this.absorb(users, seenLogins, raw, onLog);
         }
 
-        onLog(`[GITHUB_GQL] 📦 ${raw.length} perfiles crudos obtenidos con ${pageSets.length} requests.`);
+        onLog(`[GITHUB_GQL] 📦 Fase 1 completa: ${raw.length} perfiles únicos.`);
+
+        // ── Phase 2: expandSearch() — keep looking if below target ───────────
+        if (raw.length < targetRaw) {
+            onLog(`[GITHUB_GQL] 🔄 Por debajo del objetivo (${raw.length}/${targetRaw}) — activando expansión de búsqueda...`);
+            await this.expandSearch(baseQuery, token, maxResults, targetRaw, seenLogins, raw, onLog);
+        }
+
+        onLog(`[GITHUB_GQL] 📦 ${raw.length} perfiles crudos obtenidos en total.`);
         return raw;
+    }
+
+    /**
+     * Cycles through EXTENDED_LOCATIONS and GH_KEYWORD_SYNONYMS to find
+     * additional candidates when the primary fetch is below the target.
+     * Mutates `seenLogins` and `raw` in place.
+     */
+    private async expandSearch(
+        baseQuery: string,
+        token: string,
+        maxResults: number,
+        targetRaw: number,
+        seenLogins: Set<string>,
+        raw: GitHubRawCandidate[],
+        onLog: LogCallback,
+    ): Promise<void> {
+        const synonyms    = this.buildGHSynonymList(baseQuery);
+        let attempt       = 0;
+        let locationIdx   = HISPANIC_LOCATIONS.length; // start after already-fetched locations
+        let keywordIdx    = 0;
+
+        while (raw.length < targetRaw && attempt < MAX_GH_ATTEMPTS) {
+            if (!this.isRunning || this.userIntendedStop) break;
+
+            attempt++;
+
+            const location = EXTENDED_LOCATIONS[locationIdx % EXTENDED_LOCATIONS.length];
+            const keyword  = synonyms[keywordIdx  % synonyms.length];
+
+            let q = keyword;
+            if (!q.includes('location:')) q += ` location:${location}`;
+            if (!q.includes('type:user'))  q += ' type:user';
+
+            onLog(`[GITHUB_GQL] 🔄 Expansión ${attempt}/${MAX_GH_ATTEMPTS}: "${q}"...`);
+
+            const users = await this.fetchGraphQLPage(q, token, onLog, location);
+            const before = raw.length;
+            this.absorb(users, seenLogins, raw, onLog);
+            const added = raw.length - before;
+
+            if (added === 0) {
+                onLog(`[GITHUB_GQL] ↩️ Sin nuevos perfiles — rotando ubicación.`);
+                locationIdx++;
+                // After a full location cycle, advance the keyword
+                if (locationIdx % EXTENDED_LOCATIONS.length === 0) {
+                    keywordIdx++;
+                    onLog(`[GITHUB_GQL] 🔑 Rotando keyword a "${synonyms[keywordIdx % synonyms.length]}".`);
+                }
+            } else {
+                onLog(`[GITHUB_GQL] ✅ +${added} perfiles (total: ${raw.length}/${targetRaw}).`);
+                locationIdx++;
+            }
+        }
+    }
+
+    /**
+     * Normalise GraphQL users and append non-duplicate profiles to `raw`.
+     * Also applies the originality (fork-ratio) filter.
+     */
+    private absorb(
+        users: GraphQLUser[],
+        seenLogins: Set<string>,
+        raw: GitHubRawCandidate[],
+        onLog: LogCallback,
+    ): void {
+        for (const user of users) {
+            if (seenLogins.has(user.login)) continue;
+            seenLogins.add(user.login);
+
+            const totalRepos = user.repositories.totalCount ?? 0;
+            const origCount  = user.repositories.nodes.length;
+            const originality = totalRepos > 0 ? origCount / totalRepos : 0;
+
+            if (originality < MIN_ORIGINALITY && totalRepos > 5) {
+                onLog(`[GITHUB_GQL] ⏭️ @${user.login}: demasiados forks (originality ${(originality * 100).toFixed(0)}%)`);
+                continue;
+            }
+
+            const topRepos: GraphQLRepo[] = user.repositories.nodes.map((r: any) => ({
+                name:           r.name,
+                description:    r.description ?? null,
+                stargazerCount: r.stargazerCount ?? 0,
+                language:       r.primaryLanguage?.name ?? null,
+            }));
+
+            raw.push({
+                _id:             `gh_${user.login}`,
+                name:            user.name ?? user.login,
+                title:           null,
+                description:     user.bio ?? null,
+                location:        user.location ?? null,
+                email:           user.email ?? null,
+                profileUrl:      `https://github.com/${user.login}`,
+                github_username: user.login,
+                github_url:      `https://github.com/${user.login}`,
+                avatar_url:      user.avatarUrl ?? null,
+                followers:       user.followers.totalCount,
+                public_repos:    user.repositories.totalCount ?? 0,
+                topRepos,
+            });
+        }
+    }
+
+    /** Build a keyword synonym list for the given GitHub query. */
+    private buildGHSynonymList(query: string): string[] {
+        const lower = query.toLowerCase();
+        for (const [keyword, synonyms] of Object.entries(GH_KEYWORD_SYNONYMS)) {
+            if (lower.includes(keyword)) {
+                return [query, ...synonyms.filter(s => s !== lower)];
+            }
+        }
+        return [query];
     }
 
     // ── Scoring profile: include top-3 repo signals ───────────────────────────
