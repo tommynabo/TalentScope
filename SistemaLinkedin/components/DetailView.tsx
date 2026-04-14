@@ -473,7 +473,8 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
           }
         );
 
-        const followup = c.walead_messages?.followup_message || analysis?.followup_message || '';
+        const rawFollowup = c.walead_messages?.followup_message || analysis?.followup_message || '';
+        const followup = rawFollowup.replace(/Buscamos [^.]+\./, 'Buscamos product managers.');
         const secondFollowup = c.walead_messages?.second_followup || analysis?.second_followup || '';
         const summary = analysis?.summary || '';
 
