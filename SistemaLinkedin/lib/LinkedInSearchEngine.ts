@@ -853,7 +853,7 @@ export class LinkedInSearchEngine {
                                 "bottleneck": "Principal dolor o cuello de botella",
                                 "summary": "Resumen ejecutivo en 1 frase",
                                 "outreach_message": "Mensaje personalizado (<280 chars) directo y creativo para primer contacto",
-                                "icebreaker": "ICEBREAKER: Mensaje de invitación LINKEDIN máximo 200 caracteres. Menciona algo concreto del perfil (empresa actual, puesto o tecnología visible). Pide conectar. NUNCA uses 'N/A' ni inventes datos ausentes.",
+                                "icebreaker": "ICEBREAKER: Copia LITERALMENTE este texto, reemplazando solo [Nombre] por el nombre real: 'Hola [Nombre] — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${context.roleKeyword || 'product engineer'}. Me gustaría conectar.'",
                                 "followup_message": "FOLLOWUP: Copia LITERALMENTE este texto, reemplazando solo [Nombre] por el nombre real: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos ${context.roleKeyword || 'product engineers'}. ¿Te interesa que te pase el brief técnico?'",
                                 "second_followup": "SEGUNDO FOLLOWUP: Mensaje de seguimiento (300-500 chars) si no hay respuesta inicial. Proporciona más valor e información",
                                 "skills": ["Habilidad 1", "Habilidad 2"],
@@ -862,7 +862,7 @@ export class LinkedInSearchEngine {
 
                             IMPORTANTE:
                             - symmetry_score por defecto es 85, NO 75. Ajusta hacia arriba o abajo según las reglas anteriores.
-                            - ICEBREAKER debe ser casual, corto (máx 200 chars), pedir conexión en LinkedIn, NUNCA usar "N/A" ni inventar datos
+                            - ICEBREAKER debe ser EXACTAMENTE el texto indicado sin añadir ni quitar nada, solo sustituir [Nombre] por el nombre real del candidato.
                             - FOLLOWUP debe ser EXACTAMENTE el texto indicado sin añadir ni quitar nada, solo sustituir [Nombre] por el nombre real del candidato.
                             - SEGUNDO FOLLOWUP es para seguimiento después de X días sin respuesta, ofrece valor adicional
                             - Los 3 mensajes deben ser super personalizados basados en el perfil
