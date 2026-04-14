@@ -457,7 +457,7 @@ export const CampaignDashboard: React.FC<CampaignDashboardProps> = ({
         const firstName = nameParts[0] || '';
         const lastName = nameParts.slice(1).join(' ') || '';
 
-        const specialty = extractSpecialty(c.platform);
+        const specialty = campaign.searchTerms.keyword || extractSpecialty(c.platform);
         const personalized = generateOutreachMessages(
           c.name || '',
           specialty,

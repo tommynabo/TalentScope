@@ -16,7 +16,8 @@ export class MarketplaceCSVExport {
   static exportCandidatesSplit(
     raid: MarketplaceRaid,
     candidates: EnrichedCandidate[] = [],
-    selectedUser: OutreachUser = 'mauro'
+    selectedUser: OutreachUser = 'mauro',
+    keyword?: string
   ): string {
     const data = candidates.length > 0 ? candidates : raid.enrichedCandidates;
 
@@ -51,8 +52,8 @@ export class MarketplaceCSVExport {
         const firstName = nameParts[0] || '';
         const lastName = nameParts.slice(1).join(' ') || '';
 
-        // Extract specialty from candidate
-        const specialty = extractSpecialty(c.title);
+        // Extract specialty from candidate (prefer campaign keyword over candidate title)
+        const specialty = keyword || extractSpecialty(c.title);
 
         // Generate personalized messages based on selected user
         const personalized = generateOutreachMessages(
@@ -117,10 +118,11 @@ export class MarketplaceCSVExport {
   static exportCandidates(
     raid: MarketplaceRaid,
     candidates: EnrichedCandidate[] = [],
-    selectedUser: OutreachUser = 'mauro'
+    selectedUser: OutreachUser = 'mauro',
+    keyword?: string
   ): void {
     // Delegate to the new split export
-    this.exportCandidatesSplit(raid, candidates, selectedUser);
+    this.exportCandidatesSplit(raid, candidates, selectedUser, keyword);
   }
 
   /**

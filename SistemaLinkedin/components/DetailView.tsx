@@ -459,7 +459,7 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
       headers.join(','),
       ...filtered.map(c => {
         const analysis = parseAnalysis(c.ai_analysis);
-        const specialty = extractSpecialty(c.job_title, analysis?.skills);
+        const specialty = campaign.settings?.role_keyword || campaign.target_role || extractSpecialty(c.job_title, analysis?.skills);
         
         // Generate personalized messages based on selected user
         const personalized = generateOutreachMessages(
