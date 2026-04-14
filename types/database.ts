@@ -172,6 +172,11 @@ export interface GitHubFilterCriteria {
     min_spanish_language_confidence?: number; // 0-100 confidence threshold
 
     score_threshold?: number; // 0-100
+
+    // ICP / Outreach Context (stored with campaign)
+    role_keyword?: string;     // Job title keyword used in outreach messages
+    icp_description?: string;  // Full job description / Ideal Candidate Profile for AI context
+    skills?: string[];         // Additional skill tags for filtering context
 }
 
 export interface GitHubMetrics {

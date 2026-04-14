@@ -74,6 +74,11 @@ export interface CommunityFilterCriteria {
     requireSpanishSpeaker?: boolean;
     minSpanishConfidence?: number;   // 0-100
 
+    // ICP / Outreach Context
+    role_keyword?: string;     // Job title keyword used in outreach messages
+    icp_description?: string;  // Full job description / ICP for AI context
+    skills?: string[];         // Additional skill tags
+
     // Limits
     maxResults?: number;
     maxDaysOld?: number;             // Only members active in last N days

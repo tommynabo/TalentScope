@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { ArrowLeft, Save, Briefcase, Code, Brain, Target, Trash2, AlertTriangle, Users, Zap } from 'lucide-react';
+import { ArrowLeft, Save, Briefcase, Code, Brain, Target, Trash2, AlertTriangle, Users, Zap, FileText, X } from 'lucide-react';
 import { CampaignService } from '../lib/services';
 import { SearchFilterCriteria } from '../types/database';
 import { getDefaultFlutterFilters } from '../lib/scoring';
@@ -32,6 +32,24 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
         scoreThreshold: 70,
         highImportanceOnly: false
     });
+
+    // ICP / Outreach fields
+    const [roleKeyword, setRoleKeyword] = useState('');
+    const [icpDescription, setIcpDescription] = useState('');
+    const [miniSkills, setMiniSkills] = useState<string[]>([]);
+    const [miniSkillInput, setMiniSkillInput] = useState('');
+
+    const handleAddMiniSkill = () => {
+        const skill = miniSkillInput.trim();
+        if (skill && !miniSkills.includes(skill)) {
+            setMiniSkills([...miniSkills, skill]);
+            setMiniSkillInput('');
+        }
+    };
+
+    const handleRemoveMiniSkill = (skill: string) => {
+        setMiniSkills(miniSkills.filter(s => s !== skill));
+    };
 
     // Calculate score preview
     const scorePreview = useMemo(() => {
@@ -74,7 +92,10 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
                 score_threshold: advancedSettings.scoreThreshold,
                 high_importance_only: advancedSettings.highImportanceOnly,
                 keywords: advancedSettings.keywords,
-                language: advancedSettings.language
+                language: advancedSettings.language,
+                role_keyword: roleKeyword || basicData.role,
+                icp_description: icpDescription,
+                skills: miniSkills,
             };
 
             await CampaignService.create({
@@ -363,6 +384,66 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
                             </div>
                             <input type="checkbox" checked={advancedSettings.highImportanceOnly} onChange={e => setAdvancedSettings({ ...advancedSettings, highImportanceOnly: e.target.checked })} className="accent-purple-500 h-5 w-5" />
                         </label>
+                    </div>
+                </div>
+
+                {/* SECTION 7: ICP & Outreach Messages */}
+                <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-pink-400" /> ICP & Mensajes de Outreach
+                    </h3>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Keyword del puesto en mensajes</label>
+                            <input
+                                type="text"
+                                value={roleKeyword}
+                                onChange={e => setRoleKeyword(e.target.value)}
+                                placeholder={`ej: ${basicData.role || 'Product Manager'}`}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-pink-500 outline-none"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">Este título aparecerá en los mensajes de invitación generados por la IA. Si está vacío, se usa el Target Role.</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Descripción del puesto / ICP</label>
+                            <textarea
+                                value={icpDescription}
+                                onChange={e => setIcpDescription(e.target.value)}
+                                rows={8}
+                                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-pink-500 outline-none font-mono text-sm"
+                                placeholder="Pega aquí la oferta de trabajo o descripción del candidato ideal. La IA la usará para personalizar el scoring y los mensajes."
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-400 mb-2">Mini Skills adicionales</label>
+                            <div className="flex gap-2 mb-2">
+                                <input
+                                    type="text"
+                                    value={miniSkillInput}
+                                    onChange={e => setMiniSkillInput(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddMiniSkill(); } }}
+                                    placeholder="ej: A/B Testing, OKRs, PostHog..."
+                                    className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-pink-500 outline-none text-sm"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleAddMiniSkill}
+                                    className="px-4 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-sm transition-colors"
+                                >
+                                    Añadir
+                                </button>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {miniSkills.map(skill => (
+                                    <span key={skill} className="flex items-center gap-1 px-3 py-1.5 bg-pink-500/20 border border-pink-500/30 rounded-full text-sm text-pink-300">
+                                        {skill}
+                                        <button type="button" onClick={() => handleRemoveMiniSkill(skill)} className="hover:text-red-400 ml-1">
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </div>
 

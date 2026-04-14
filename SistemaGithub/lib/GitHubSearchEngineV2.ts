@@ -278,6 +278,8 @@ export class GitHubSearchEngine extends BaseSearchEngine<GitHubRawCandidate> {
                         bio: c.description,
                         languages: Array.from(new Set((c.allRepos ?? []).map((r: any) => r.language).filter(Boolean))),
                         topRepos: c.originalRepos?.slice(0, 5) ?? [],
+                        roleKeyword: (options as GitHubSearchOptions).githubFilters?.role_keyword,
+                        icpDescription: (options as GitHubSearchOptions).githubFilters?.icp_description,
                     });
                     return { ...c, contactEmail: contact.email, contactLinkedin: contact.linkedin, contactWebsite: contact.website, aiAnalysis };
                 } catch {

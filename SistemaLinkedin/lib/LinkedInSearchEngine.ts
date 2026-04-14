@@ -27,6 +27,10 @@ export class LinkedInSearchEngine {
     private abortController: AbortController | null = null;
     private unbreakableExecutor: UnbreakableExecutor | null = null;
 
+    // Campaign-level context for AI messages
+    private _roleKeyword = '';
+    private _icpDescription = '';
+
     constructor() {
         initializeUnbreakableMarker();
     }
@@ -52,6 +56,8 @@ export class LinkedInSearchEngine {
             filters?: SearchFilterCriteria;
             scoreThreshold?: number;
             campaignId?: string;
+            roleKeyword?: string;
+            icpDescription?: string;
         },
         onLog: LogCallback,
         onComplete: (candidates: Candidate[]) => void
@@ -61,6 +67,8 @@ export class LinkedInSearchEngine {
         this.abortController = new AbortController();
         this.apiKey = import.meta.env.VITE_APIFY_API_KEY || '';
         this.openaiKey = import.meta.env.VITE_OPENAI_API_KEY || '';
+        this._roleKeyword = options.roleKeyword || '';
+        this._icpDescription = options.icpDescription || '';
 
         // BUG FIX: Emit diagnostic logs immediately so the UI shows something right away
         onLog(`[LINKEDIN] 🚀 Motor de búsqueda iniciado.`);
@@ -398,7 +406,9 @@ export class LinkedInSearchEngine {
             role: candidate.job_title,
             snippet: `${candidate.job_title} at ${candidate.current_company}`,
             query: '',
-            maxAge: 30
+            maxAge: 30,
+            roleKeyword: this._roleKeyword,
+            icpDescription: this._icpDescription,
         });
 
         return {
@@ -688,7 +698,9 @@ export class LinkedInSearchEngine {
                             snippet: p.description,
                             query: currentQuery,
                             maxAge: options.maxAge,
-                            requireSpanish: options.language === 'Spanish'
+                            requireSpanish: options.language === 'Spanish',
+                            roleKeyword: this._roleKeyword,
+                            icpDescription: this._icpDescription,
                         });
 
                         processedCount++;
@@ -842,7 +854,7 @@ export class LinkedInSearchEngine {
                                 "summary": "Resumen ejecutivo en 1 frase",
                                 "outreach_message": "Mensaje personalizado (<280 chars) directo y creativo para primer contacto",
                                 "icebreaker": "ICEBREAKER: Mensaje de invitación LINKEDIN máximo 200 caracteres, super personalizado, menciona algo específico del perfil",
-                                "followup_message": "FOLLOWUP: Mensaje EXACTO que diga: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers en [stack específico extraído del perfil, ej: React/Node.js o Next.js/TypeScript]. ¿Te interesa que te pase el brief técnico?'",
+                                "followup_message": "FOLLOWUP: Mensaje EXACTO que diga: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos ${context.roleKeyword || 'product engineers'} con [característica específica extraída del perfil]. ¿Te interesa que te pase el brief técnico?'",
                                 "second_followup": "SEGUNDO FOLLOWUP: Mensaje de seguimiento (300-500 chars) si no hay respuesta inicial. Proporciona más valor e información",
                                 "skills": ["Habilidad 1", "Habilidad 2"],
                                 "symmetry_score": 85
@@ -851,10 +863,15 @@ export class LinkedInSearchEngine {
                             IMPORTANTE:
                             - symmetry_score por defecto es 85, NO 75. Ajusta hacia arriba o abajo según las reglas anteriores.
                             - ICEBREAKER debe ser casual, corto (máx 200 chars), pedir conexión en LinkedIn
-                            - FOLLOWUP debe usar EXACTAMENTE el formato solicitado con el nombre y stack del candidato.
+                            - FOLLOWUP debe usar EXACTAMENTE el formato solicitado con el nombre y característica del candidato.
                             - SEGUNDO FOLLOWUP es para seguimiento después de X días sin respuesta, ofrece valor adicional
                             - Los 3 mensajes deben ser super personalizados basados en el perfil
                             - If snippet implies user is > ${context.maxAge || 40} years old, PENALIZE SCORE (<50)
+                            ${context.icpDescription ? `
+                            === PERFIL BUSCADO (ICP) ===
+                            ${context.icpDescription.slice(0, 800)}
+                            Usa este perfil como referencia para evaluar la afinidad del candidato y personalizar los mensajes.
+                            ` : ''}
                             ${context.requireSpanish ? `- FILTRO IDIOMA OBLIGATORIO: Si el nombre, ubicación o texto del perfil NO muestran señales claras de hablar español (nombre hispano, ubicación en España/Latinoamérica, texto en español), PENALIZAR SCORE severamente (poner <30)
                             - TODOS los mensajes DEBEN estar escritos en español` : ''}`
                         },
@@ -880,7 +897,7 @@ export class LinkedInSearchEngine {
             const parsed = JSON.parse(cleanContent || '{}');
 
             parsed.icebreaker = parsed.icebreaker || `Hola ${context.name}, me encantaría conectar contigo.`;
-            parsed.followup_message = parsed.followup_message || `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers. ¿Te interesa que te pase el brief técnico?`;
+            parsed.followup_message = parsed.followup_message || `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos ${context.roleKeyword || 'product engineers'}. ¿Te interesa que te pase el brief técnico?`;
             parsed.second_followup = parsed.second_followup || `${context.name}, viendo tu trayectoria creemos que hay una gran alineación.`;
 
             return parsed;
@@ -893,7 +910,7 @@ export class LinkedInSearchEngine {
                 bottleneck: "Oportunidades personalizadas",
                 outreach_message: `¡Hola ${context.name}! Tenemos roles de alto nivel. https://symmetry.club/roles/product-engineer`,
                 icebreaker: `Hola ${context.name}, me encantaría conectar contigo. Tenemos roles exclusivos para profesionales como vos.`,
-                followup_message: `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers. ¿Te interesa que te pase el brief técnico?`,
+                followup_message: `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos ${context.roleKeyword || 'product engineers'}. ¿Te interesa que te pase el brief técnico?`,
                 second_followup: `${context.name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`,
                 skills: context.skills || ['N/A'],
                 symmetry_score: 82

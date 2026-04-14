@@ -317,7 +317,9 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
         filters: campaign.settings?.search_filters,
         scoreThreshold: campaign.settings?.score_threshold,
         campaignId: campaign.id, // For Unbreakable Execution Mode tracking
-        userId: campaign.user_id // For LinkedIn search tracking
+        userId: campaign.user_id, // For LinkedIn search tracking
+        roleKeyword: campaign.settings?.role_keyword || campaign.target_role || '',
+        icpDescription: campaign.settings?.icp_description || '',
       };
 
       await linkedInSearchEngine.startSearch(

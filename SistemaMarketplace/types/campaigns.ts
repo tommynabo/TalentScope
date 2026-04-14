@@ -24,6 +24,10 @@ export interface Campaign {
     upworkTests?: string[];
     // Fiverr específico
     fiverrlevel?: 'basic' | 'pro' | 'top-rated' | 'top-rated-plus';
+    // ICP / Outreach Context
+    role_keyword?: string;
+    icp_description?: string;
+    skills?: string[];
   };
 
   // Candidatos en esta campaña

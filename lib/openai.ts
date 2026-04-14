@@ -70,6 +70,11 @@ export const calculateSymmetryScore = async (profileText: string): Promise<{ sco
 export const generateCandidateAnalysis = async (profileData: any): Promise<any> => {
     if (!openaiApiKey) return null;
 
+    const roleKeyword = profileData.roleKeyword || 'product engineers';
+    const icpContext = profileData.icpDescription
+        ? `\n\nPerfil buscado (ICP):\n${profileData.icpDescription.slice(0, 600)}\nUsa este perfil como referencia para evaluar la afinidad del candidato y personalizar los mensajes.`
+        : '';
+
     try {
         const prompt = `
             You are an elite technical recruiter and psychologist. Analyze this GitHub candidate:
@@ -78,6 +83,7 @@ export const generateCandidateAnalysis = async (profileData: any): Promise<any> 
             Bio: ${profileData.bio || 'N/A'}
             Top Languages: ${profileData.languages?.join(', ') || 'N/A'}
             Repos: ${profileData.topRepos?.map((r: any) => r.name + ': ' + r.description).join('; ') || 'N/A'}
+            ${icpContext}
             
             Generate a deep psychometric and technical analysis for a "Ver" modal dashboard.
             
@@ -94,7 +100,7 @@ export const generateCandidateAnalysis = async (profileData: any): Promise<any> 
                 "analysis_sales_angle": "1 complete sentence hook.",
                 "analysis_bottleneck": "1 complete sentence on potential rejection reason.",
                 "outreach_icebreaker": "A hyper-personalized opening message referencing specific projects or skills. Start with 'Hola [name],' or similar. Max 2 sentences.",
-                "outreach_pitch": "A value proposition pitch explaining why this opportunity fits THEM. EXACTLY use this template: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers en [stack específico del perfil, ej: React/Node.js o Next.js/TypeScript]. ¿Te interesa que te pase el brief técnico?'",
+                "outreach_pitch": "A value proposition pitch explaining why this opportunity fits THEM. EXACTLY use this template: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos ${roleKeyword} con [característica específica del perfil]. ¿Te interesa que te pase el brief técnico?'",
                 "outreach_followup": "A soft follow-up message saying you wanted to touch base about opportunity. Max 1 sentence.",
                 "ai_summary": ["Bullet 1 (Strength)", "Bullet 2 (Achievement)", "Bullet 3 (Risk/Oddity)"]
             }
@@ -102,7 +108,7 @@ export const generateCandidateAnalysis = async (profileData: any): Promise<any> 
 
         const completion = await openai.chat.completions.create({
             messages: [
-                { role: "system", content: "You are an ELITE recruitment intelligence engine for Symmetry — a health & wellness app (400k+ monthly downloads). We hire Product Engineers (3–8 yrs exp) who build end-to-end: React/Next.js, Node.js, TypeScript, REST APIs. They must understand product impact and business metrics, not just write code. Penalize heavily: only certifications, no production projects, narrow specialists with no business context. Be concise, sharp, and insightful." },
+                { role: "system", content: "You are an ELITE recruitment intelligence engine for Symmetry — a health & wellness app (400k+ monthly downloads). We hire top talent who understand product impact and business metrics. Be concise, sharp, and insightful." },
                 { role: "user", content: prompt }
             ],
             model: "gpt-4-turbo",

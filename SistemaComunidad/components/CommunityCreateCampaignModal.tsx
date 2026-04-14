@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Plus, Hash, Globe, MessageSquare, Shield, Search, Sparkles } from 'lucide-react';
+import { X, Plus, Hash, Globe, MessageSquare, Shield, Search, Sparkles, FileText } from 'lucide-react';
 import { CommunityFilterCriteria, CommunityPlatform } from '../types/community';
 import { COMMUNITY_PRESETS, getPreset } from '../lib/communityPresets';
 
@@ -32,6 +32,20 @@ export const CommunityCreateCampaignModal: React.FC<CommunityCreateCampaignModal
     const [minActivity, setMinActivity] = useState(20);
     const [maxResults, setMaxResults] = useState(100);
     const [selectedPreset, setSelectedPreset] = useState<string>('');
+
+    // ICP / Outreach fields
+    const [roleKeyword, setRoleKeyword] = useState('');
+    const [icpDescription, setIcpDescription] = useState('');
+    const [miniSkills, setMiniSkills] = useState<string[]>([]);
+    const [miniSkillInput, setMiniSkillInput] = useState('');
+
+    const handleAddMiniSkill = () => {
+        const skill = miniSkillInput.trim();
+        if (skill && !miniSkills.includes(skill)) {
+            setMiniSkills([...miniSkills, skill]);
+            setMiniSkillInput('');
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -96,6 +110,9 @@ export const CommunityCreateCampaignModal: React.FC<CommunityCreateCampaignModal
             minActivityScore: minActivity,
             maxResults,
             maxDaysOld: 90,
+            role_keyword: roleKeyword || targetRole || undefined,
+            icp_description: icpDescription || undefined,
+            skills: miniSkills.length > 0 ? miniSkills : undefined,
         };
 
         onCreate(name, criteria);
@@ -313,6 +330,62 @@ export const CommunityCreateCampaignModal: React.FC<CommunityCreateCampaignModal
                                 <option value={200}>200</option>
                                 <option value={500}>500</option>
                             </select>
+                        </div>
+                    </div>
+
+                    {/* ICP & Mensajes de Outreach */}
+                    <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-xl border border-slate-700 flex-col items-start gap-3">
+                        <p className="flex items-center gap-2 text-sm font-medium text-white w-full">
+                            <FileText className="h-4 w-4 text-pink-400" />
+                            ICP & Mensajes de Outreach
+                        </p>
+                        <div className="w-full space-y-3">
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Keyword del puesto en mensajes</label>
+                                <input
+                                    type="text"
+                                    value={roleKeyword}
+                                    onChange={(e) => setRoleKeyword(e.target.value)}
+                                    placeholder={`ej: ${targetRole || 'Product Manager'}`}
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Descripción del puesto / ICP</label>
+                                <textarea
+                                    value={icpDescription}
+                                    onChange={(e) => setIcpDescription(e.target.value)}
+                                    rows={4}
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500"
+                                    placeholder="Pega aquí la oferta o descripción del candidato ideal."
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Mini Skills adicionales</label>
+                                <div className="flex gap-2 mb-2">
+                                    <input
+                                        type="text"
+                                        value={miniSkillInput}
+                                        onChange={(e) => setMiniSkillInput(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddMiniSkill(); } }}
+                                        placeholder="ej: A/B Testing, OKRs..."
+                                        className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-pink-500"
+                                    />
+                                    <button type="button" onClick={handleAddMiniSkill} className="px-3 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg text-white text-sm">
+                                        <Plus className="h-4 w-4" />
+                                    </button>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {miniSkills.map(skill => (
+                                        <span key={skill} className="flex items-center gap-1 px-3 py-1 bg-pink-500/20 border border-pink-500/30 rounded-full text-sm text-pink-300">
+                                            {skill}
+                                            <button type="button" onClick={() => setMiniSkills(miniSkills.filter(s => s !== skill))} className="hover:text-red-400">
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
                     </div>
 

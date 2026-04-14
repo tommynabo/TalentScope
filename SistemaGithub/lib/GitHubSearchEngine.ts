@@ -214,7 +214,9 @@ export class GitHubSearchEngine {
                 username: username,
                 bio: user.bio,
                 languages: Array.from(new Set(originalRepos.map(r => r.language).filter(Boolean))),
-                topRepos: originalRepos.slice(0, 5)
+                topRepos: originalRepos.slice(0, 5),
+                roleKeyword: criteria.role_keyword,
+                icpDescription: criteria.icp_description,
             });
 
             return {

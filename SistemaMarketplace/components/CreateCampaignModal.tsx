@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { X, Plus, Trash2, FileText } from 'lucide-react';
 import { Campaign } from '../types/campaigns';
 import { FreelancePlatform } from '../types/marketplace';
 
@@ -38,6 +38,20 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ isOpen
     setKeywords(keywords.filter(k => k !== keyword));
   };
 
+  // ICP / Outreach fields
+  const [roleKeyword, setRoleKeyword] = useState('');
+  const [icpDescription, setIcpDescription] = useState('');
+  const [miniSkills, setMiniSkills] = useState<string[]>([]);
+  const [miniSkillInput, setMiniSkillInput] = useState('');
+
+  const handleAddMiniSkill = () => {
+    const skill = miniSkillInput.trim();
+    if (skill && !miniSkills.includes(skill)) {
+      setMiniSkills([...miniSkills, skill]);
+      setMiniSkillInput('');
+    }
+  };
+
   const handleCreateCampaign = () => {
     if (!formData.name.trim() || keywords.length === 0) {
       alert('Rellena nombre y añade al menos un keyword');
@@ -60,6 +74,9 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ isOpen
         languages: [formData.language], // Include selected language for search
         upworkCategory: platform === 'Upwork' ? formData.upworkCategory : undefined,
         fiverrlevel: platform === 'Fiverr' ? formData.fiverrlevel : undefined,
+        role_keyword: roleKeyword || formData.name,
+        icp_description: icpDescription,
+        skills: miniSkills,
       },
       candidates: [],
       stats: {
@@ -332,6 +349,60 @@ export const CreateCampaignModal: React.FC<CreateCampaignModalProps> = ({ isOpen
               </div>
             </div>
           )}
+
+          {/* ICP & Mensajes de Outreach */}
+          <div className="space-y-4 p-4 bg-slate-800/30 border border-slate-700 rounded-lg">
+            <h3 className="flex items-center gap-2 font-semibold text-slate-200">
+              <FileText className="h-4 w-4 text-pink-400" />
+              ICP & Mensajes de Outreach
+            </h3>
+            <div>
+              <label className="block text-sm font-semibold text-slate-300 mb-2">Keyword del puesto en mensajes</label>
+              <input
+                type="text"
+                value={roleKeyword}
+                onChange={(e) => setRoleKeyword(e.target.value)}
+                placeholder="ej: Product Manager, Frontend Developer..."
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-300 mb-2">Descripción del puesto / ICP</label>
+              <textarea
+                value={icpDescription}
+                onChange={(e) => setIcpDescription(e.target.value)}
+                rows={5}
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white text-sm"
+                placeholder="Pega aquí la oferta de trabajo o descripción del candidato ideal."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-300 mb-2">Mini Skills adicionales</label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={miniSkillInput}
+                  onChange={(e) => setMiniSkillInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddMiniSkill(); } }}
+                  placeholder="ej: A/B Testing, OKRs, PostHog..."
+                  className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white text-sm"
+                />
+                <button type="button" onClick={handleAddMiniSkill} className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg text-sm">
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {miniSkills.map(skill => (
+                  <span key={skill} className="flex items-center gap-1 px-3 py-1 bg-pink-500/20 border border-pink-500/30 rounded-full text-sm text-pink-300">
+                    {skill}
+                    <button type="button" onClick={() => setMiniSkills(miniSkills.filter(s => s !== skill))} className="hover:text-red-400">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4">

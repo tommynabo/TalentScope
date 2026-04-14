@@ -477,6 +477,8 @@ export class GitHubGraphQLSearchEngine extends BaseSearchEngine<GitHubRawCandida
                         bio:      c.description,
                         languages: [...new Set((c.topRepos ?? []).map(r => r.language).filter(Boolean) as string[])],
                         topRepos:  c.topRepos ?? [],
+                        roleKeyword: (options as any).githubFilters?.role_keyword,
+                        icpDescription: (options as any).githubFilters?.icp_description,
                     });
                     return {
                         ...c,

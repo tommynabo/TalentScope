@@ -7,6 +7,10 @@ export class AIEnrichmentService {
   private modelId: string = 'gpt-4o-mini'; // Usa mini para mejor precio
   private contactResearch: ContactResearchService;
 
+  /** Optional campaign context — set before calling enrichBatch/enrichCandidate */
+  public roleKeyword: string = 'product engineers';
+  public icpDescription: string = '';
+
   constructor(openaiApiKey: string, apifyApiKey: string = import.meta.env.VITE_APIFY_API_KEY) {
     if (!openaiApiKey) {
       throw new Error('OpenAI API key is required');
@@ -100,8 +104,12 @@ export class AIEnrichmentService {
   }
 
   private generateEnrichmentPrompt(candidate: ScrapedCandidate, portfolios: { websites: string[]; portfolioContent: string }): string {
+    const roleKw = this.roleKeyword || 'product engineers';
+    const icpBlock = this.icpDescription
+      ? `\n════════════════════════════════════════════════════════════════════════\n🎯 PERFIL BUSCADO (ICP)\n════════════════════════════════════════════════════════════════════════\n${this.icpDescription.slice(0, 600)}\n\nUsa este perfil para evaluar la afinidad del candidato y personalizar los mensajes.\n`
+      : '';
     return `You are an expert recruiter and talent analyst. Analyze this freelancer profile DEEPLY and provide REAL, DATA-DRIVEN insights.
-
+${icpBlock}
 ════════════════════════════════════════════════════════════════════════
 📋 UPWORK PROFILE DATA
 ════════════════════════════════════════════════════════════════════════
@@ -176,7 +184,7 @@ Think about their actual situation, NOT generic advice:
 ### 7. OUTREACH MESSAGES (WALEAD MESSAGES)
 Craft 2 short verification messages targeting the candidate, strictly applying the "Sales Angle" you defined above.
 - Message 1 (Icebreaker): A very short, punchy, cold invite message. Less than 2 sentences. Make it engaging, informal but professional, without being overly wordy. 
-- Message 2 (Follow-up): EXACTLY this template: "Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers en [stack específico extraído del perfil]. ¿Te interesa que te pase el brief técnico?"
+- Message 2 (Follow-up): EXACTLY this template: "Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos ${roleKw} con [característica específica extraída del perfil]. ¿Te interesa que te pase el brief técnico?"
 
 ════════════════════════════════════════════════════════════════════════
 📝 RESPONSE FORMAT - JSON ONLY
@@ -209,7 +217,7 @@ Respond ONLY with valid JSON (no markdown, no explanations). Every field must be
   "bottleneck": "PRIMARY: [main limiting factor with evidence]. SECONDARY: [if applicable]. IMPACT: [how it's limiting growth]. FIXABLE: [yes/no and how].",
   "walead_messages": {
     "icebreaker": "[Mensaje muy corto tipo invitación inicial que aplique el sales angle]",
-    "followup_message": "Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers en [stack específico]. ¿Te interesa que te pase el brief técnico?"
+    "followup_message": "Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos ${roleKw} con [característica específica]. ¿Te interesa que te pase el brief técnico?"
   }
 }
 
