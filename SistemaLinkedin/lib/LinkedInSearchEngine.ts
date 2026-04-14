@@ -853,7 +853,7 @@ export class LinkedInSearchEngine {
                                 "bottleneck": "Principal dolor o cuello de botella",
                                 "summary": "Resumen ejecutivo en 1 frase",
                                 "outreach_message": "Mensaje personalizado (<280 chars) directo y creativo para primer contacto",
-                                "followup_message": "FOLLOWUP: Copia LITERALMENTE este texto, reemplazando solo [Nombre] por el nombre real: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos ${context.roleKeyword || 'product managers'}. ¿Te interesa que te pase el brief técnico?'",
+                                "followup_message": "FOLLOWUP: Copia LITERALMENTE este texto, reemplazando solo [Nombre] por el nombre real: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product managers. ¿Te interesa que te pase el brief técnico?'",
                                 "second_followup": "SEGUNDO FOLLOWUP: Mensaje de seguimiento (300-500 chars) si no hay respuesta inicial. Proporciona más valor e información",
                                 "skills": ["Habilidad 1", "Habilidad 2"],
                                 "symmetry_score": 85
@@ -895,7 +895,7 @@ export class LinkedInSearchEngine {
             const parsed = JSON.parse(cleanContent || '{}');
 
             parsed.icebreaker = `Hola ${context.name.split(' ')[0]} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${context.roleKeyword || 'product engineer'}. Me gustaría conectar.`;
-            parsed.followup_message = parsed.followup_message || `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos ${context.roleKeyword || 'product managers'}. ¿Te interesa que te pase el brief técnico?`;
+            parsed.followup_message = parsed.followup_message || `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product managers. ¿Te interesa que te pase el brief técnico?`;
             parsed.second_followup = parsed.second_followup || `${context.name}, viendo tu trayectoria creemos que hay una gran alineación.`;
 
             return parsed;
@@ -908,7 +908,7 @@ export class LinkedInSearchEngine {
                 bottleneck: "Oportunidades personalizadas",
                 outreach_message: `¡Hola ${context.name}! Tenemos roles de alto nivel. https://symmetry.club/roles/product-engineer`,
                 icebreaker: `Hola ${context.name.split(' ')[0]} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${context.roleKeyword || 'product engineer'}. Me gustaría conectar.`,
-                followup_message: `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos ${context.roleKeyword || 'product managers'}. ¿Te interesa que te pase el brief técnico?`,
+                followup_message: `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product managers. ¿Te interesa que te pase el brief técnico?`,
                 second_followup: `${context.name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`,
                 skills: context.skills || [],
                 symmetry_score: 82
