@@ -27,27 +27,27 @@ export function generateOutreachMessages(
   // Template messages by user
   const templates = {
     mauro: {
-      icebreaker: `Hola ${name} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia en ${specialty}. Me gustaría conectar.`,
+      icebreaker: `Hola ${name} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${specialty}. Me gustaría conectar.`,
       followup: `${name}, tras revisar tu perfil sabemos que eres el perfil ideal. ¿Podríamos agendar una llamada?`,
       second: `${name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`
     },
     nyo: {
-      icebreaker: `Hola ${name} — soy Nyo, recruiter de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia en ${specialty}. Me gustaría conectar.`,
+      icebreaker: `Hola ${name} — soy Nyo, recruiter de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${specialty}. Me gustaría conectar.`,
       followup: `${name}, tras revisar tu perfil sabemos que eres el perfil ideal. ¿Podríamos agendar una llamada?`,
       second: `${name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`
     },
     miguel: {
-      icebreaker: `Hola ${name} — soy Miguel, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia en ${specialty}. Me gustaría conectar.`,
+      icebreaker: `Hola ${name} — soy Miguel, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${specialty}. Me gustaría conectar.`,
       followup: `${name}, tras revisar tu perfil sabemos que eres el perfil ideal. ¿Podríamos agendar una llamada?`,
       second: `${name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`
     },
     liam: {
-      icebreaker: `Hola ${name} — soy Liam, recruiter de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia en ${specialty}. Me gustaría conectar.`,
+      icebreaker: `Hola ${name} — soy Liam, recruiter de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${specialty}. Me gustaría conectar.`,
       followup: `${name}, tras revisar tu perfil sabemos que eres el perfil ideal. ¿Podríamos agendar una llamada?`,
       second: `${name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`
     },
     josue: {
-      icebreaker: `Hola ${name} — soy Josue, recruiter de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia en ${specialty}. Me gustaría conectar.`,
+      icebreaker: `Hola ${name} — soy Josue, recruiter de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${specialty}. Me gustaría conectar.`,
       followup: `${name}, tras revisar tu perfil sabemos que eres el perfil ideal. ¿Podríamos agendar una llamada?`,
       second: `${name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`
     }
