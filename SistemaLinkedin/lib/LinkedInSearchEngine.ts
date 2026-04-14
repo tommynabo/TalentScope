@@ -853,7 +853,6 @@ export class LinkedInSearchEngine {
                                 "bottleneck": "Principal dolor o cuello de botella",
                                 "summary": "Resumen ejecutivo en 1 frase",
                                 "outreach_message": "Mensaje personalizado (<280 chars) directo y creativo para primer contacto",
-                                "icebreaker": "ICEBREAKER: Copia LITERALMENTE este texto, reemplazando solo [Nombre] por el nombre real: 'Hola [Nombre] — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${context.roleKeyword || 'product engineer'}. Me gustaría conectar.'",
                                 "followup_message": "FOLLOWUP: Copia LITERALMENTE este texto, reemplazando solo [Nombre] por el nombre real: 'Gracias por aceptar [Nombre]. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos ${context.roleKeyword || 'product engineers'}. ¿Te interesa que te pase el brief técnico?'",
                                 "second_followup": "SEGUNDO FOLLOWUP: Mensaje de seguimiento (300-500 chars) si no hay respuesta inicial. Proporciona más valor e información",
                                 "skills": ["Habilidad 1", "Habilidad 2"],
@@ -862,7 +861,6 @@ export class LinkedInSearchEngine {
 
                             IMPORTANTE:
                             - symmetry_score por defecto es 85, NO 75. Ajusta hacia arriba o abajo según las reglas anteriores.
-                            - ICEBREAKER debe ser EXACTAMENTE el texto indicado sin añadir ni quitar nada, solo sustituir [Nombre] por el nombre real del candidato.
                             - FOLLOWUP debe ser EXACTAMENTE el texto indicado sin añadir ni quitar nada, solo sustituir [Nombre] por el nombre real del candidato.
                             - SEGUNDO FOLLOWUP es para seguimiento después de X días sin respuesta, ofrece valor adicional
                             - Los 3 mensajes deben ser super personalizados basados en el perfil
@@ -896,7 +894,7 @@ export class LinkedInSearchEngine {
 
             const parsed = JSON.parse(cleanContent || '{}');
 
-            parsed.icebreaker = parsed.icebreaker || `Hola ${context.name}, me encantaría conectar contigo.`;
+            parsed.icebreaker = `Hola ${context.name.split(' ')[0]} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${context.roleKeyword || 'product engineer'}. Me gustaría conectar.`;
             parsed.followup_message = parsed.followup_message || `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos ${context.roleKeyword || 'product engineers'}. ¿Te interesa que te pase el brief técnico?`;
             parsed.second_followup = parsed.second_followup || `${context.name}, viendo tu trayectoria creemos que hay una gran alineación.`;
 
@@ -909,7 +907,7 @@ export class LinkedInSearchEngine {
                 sales_angle: "Roles de alto impacto",
                 bottleneck: "Oportunidades personalizadas",
                 outreach_message: `¡Hola ${context.name}! Tenemos roles de alto nivel. https://symmetry.club/roles/product-engineer`,
-                icebreaker: `Hola ${context.name}, me encantaría conectar contigo. Tenemos roles exclusivos para profesionales como vos.`,
+                icebreaker: `Hola ${context.name.split(' ')[0]} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${context.roleKeyword || 'product engineer'}. Me gustaría conectar.`,
                 followup_message: `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos ${context.roleKeyword || 'product engineers'}. ¿Te interesa que te pase el brief técnico?`,
                 second_followup: `${context.name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`,
                 skills: context.skills || ['N/A'],
