@@ -341,6 +341,12 @@ export class LinkedInSearchEngine {
         }
     }
 
+    private isPMRole(role: string): boolean {
+        const lower = role.toLowerCase();
+        return /\bproduct\s*manager\b|\bproduct\s*owner\b|\b\bpm\b/.test(lower) ||
+               lower.includes('product manager') || lower.includes('product owner');
+    }
+
     private getQueryVariation(baseQuery: string, attempt: number, seenNames: string[]): string {
         // Attempt 1: always use the exact campaign query unmodified
         if (attempt === 1) return baseQuery;
@@ -372,21 +378,54 @@ export class LinkedInSearchEngine {
 
         let variation: string;
 
-        // ─── RELAXATION LEVEL 1 (attempts 2-5): exact campaign role + rotating city ─
-        // Wide funnel: bring volume, let Scoring AI reject the non-fits
-        if (attempt <= 5) {
-            variation = `"${campaignRole}" ${city}`;
-        }
-        // ─── RELAXATION LEVEL 2 (attempts 6-10): drop strict role quotes ──────────
-        // More Google results because phrase-exact-match is removed
-        else if (attempt <= 10) {
-            const lastWord = campaignRole.split(' ').filter(w => w.length > 3).pop() || campaignRole;
-            variation = `(${campaignRole} OR "${lastWord} Developer" OR "${lastWord} Engineer") ${city}`;
-        }
-        // ─── RELAXATION LEVEL 3 (attempts 11+): keyword only, maximum breadth ──────
-        else {
-            const keyword = campaignRole.split(' ').filter(w => w.length > 3).pop() || campaignRole;
-            variation = `${keyword} developer ${city}`;
+        if (this.isPMRole(campaignRole)) {
+            // ─── PM ROLE: queries focused on B2C / mobile / consumer experience ─────
+            // Level 1 (attempts 2-5): exact role + B2C/mobile context signal + city
+            if (attempt <= 5) {
+                const b2cSignals = [
+                    '("mobile app" OR "consumer" OR "B2C")',
+                    '("growth" OR "retention" OR "engagement")',
+                    '("app móvil" OR "consumer product" OR "mobile")',
+                    '("user acquisition" OR "activación" OR "retención")',
+                ];
+                const signal = b2cSignals[(attempt - 2) % b2cSignals.length];
+                variation = `"Product Manager" ${signal} ${city}`;
+            }
+            // Level 2 (attempts 6-10): broader PM terms with consumer/startup signals
+            else if (attempt <= 10) {
+                const broadSignals = [
+                    '("mobile" OR "app" OR "consumer")',
+                    '("startup" OR "scale-up" OR "growth")',
+                    '("B2C" OR "fintech" OR "healthtech" OR "edtech")',
+                    '("product" OR "UX" OR "usuarios")',
+                    '("retención" OR "engagement" OR "onboarding")',
+                ];
+                const signal = broadSignals[(attempt - 6) % broadSignals.length];
+                variation = `("Product Manager" OR "PM") ${signal} ${city}`;
+            }
+            // Level 3 (attempts 11+): maximum breadth — any PM with app/consumer signal
+            else {
+                const keywords = ['mobile app', 'consumer product', 'B2C', 'growth product'];
+                const kw = keywords[(attempt - 11) % keywords.length];
+                variation = `product manager "${kw}" ${city}`;
+            }
+        } else {
+            // ─── RELAXATION LEVEL 1 (attempts 2-5): exact campaign role + rotating city ─
+            // Wide funnel: bring volume, let Scoring AI reject the non-fits
+            if (attempt <= 5) {
+                variation = `"${campaignRole}" ${city}`;
+            }
+            // ─── RELAXATION LEVEL 2 (attempts 6-10): drop strict role quotes ──────────
+            // More Google results because phrase-exact-match is removed
+            else if (attempt <= 10) {
+                const lastWord = campaignRole.split(' ').filter(w => w.length > 3).pop() || campaignRole;
+                variation = `(${campaignRole} OR "${lastWord} Developer" OR "${lastWord} Engineer") ${city}`;
+            }
+            // ─── RELAXATION LEVEL 3 (attempts 11+): keyword only, maximum breadth ──────
+            else {
+                const keyword = campaignRole.split(' ').filter(w => w.length > 3).pop() || campaignRole;
+                variation = `${keyword} developer ${city}`;
+            }
         }
 
         if (exclusions) {
@@ -811,7 +850,70 @@ export class LinkedInSearchEngine {
                     messages: [
                         {
                             role: 'system',
-                            content: `Eres un Tech Recruiter de ÉLITE para Symmetry (•400k descargas/mes). Tu misión: encontrar Product Engineers con impacto real en producción.
+                            content: this.isPMRole(context.roleKeyword || '')
+                                ? `Eres un Talent Recruiter de ÉLITE para Symmetry (app de fitness/bienestar con +400k descargas/mes). Tu misión: encontrar Product Managers con experiencia en apps de consumo (B2C), especialmente mobile.
+
+                            === PERFIL OBJETIVO — PRODUCT MANAGER B2C/MOBILE ===
+                            Experiencia: 3-10 años en producto. Foco: apps móviles, consumer products, plataformas B2C.
+                            Entienden adquisición, activación, retención y engagement. Han escalado productos con usuarios reales.
+
+                            ═══ SISTEMA DE ANCLAJE DE PUNTUACIÓN (ANCHOR SYSTEM) ═══
+                            REGLA BASE: Si el candidato menciona mobile app / consumer product / B2C / growth / engagement / retención / user acquisition Y su perfil indica que habla español o está en España/Latinoamérica → su puntuación BASE es 85.
+                            DESDE ESE 85, SUMA puntos (hasta 100) si:
+                            - Métricas reales de producto: MAU, descargas, retención, DAU, churn (suman +5 a +10)
+                            - Experiencia en apps móviles publicadas (App Store / Play Store) (+8)
+                            - Background en growth, activación, retención o engagement (+5)
+                            - Experiencia en startups o scale-ups con usuarios reales (+5)
+                            - Productos consumer con volumen: +50k usuarios o descargas (+5)
+                            - Foco en UX, experiencia de usuario, diseño de producto (+3)
+                            SOLO RESTA puntos (por debajo de 80) si el perfil es EXPLÍCITAMENTE:
+                            - PM de SaaS B2B sin experiencia en producto consumer
+                            - Perfil corporativo o consultoría sin producto real construido
+                            - Rol técnico (engineering manager, scrum master puro) sin foco en usuario
+                            - Sin evidencia de haber escalado un producto con usuarios reales
+                            NO USES 75 como valor por defecto. Un PM ambiguo que menciona mobile, consumer o app vale 85.
+
+                            ✅ GREEN FLAGS (suman desde el 85):
+                            - App móvil con métricas reales (MAU, downloads, retención) (+10)
+                            - Consumer/B2C product con usuarios reales (+8)
+                            - Growth, activación, retención, engagement como background (+5)
+                            - Startup o scale-up con tracción real (+5)
+                            - Apps publicadas en stores, con reseñas o descargas (+5)
+                            - UX-driven, data-driven, enfoque en el usuario final (+3)
+
+                            🚫 RED FLAGS — BAJA SCORE (por debajo de 80):
+                            - PM de SaaS B2B sin producto consumer → 50-65
+                            - Perfil corporativo/consultoría sin producto real → 50-65
+                            - Technical PM sin foco en usuario (tipo engineering mgr) → 60
+                            - AUTO-FAIL (<40): Solo enterprise software, sin app o consumer product alguna vez
+
+                            Analiza el perfil y devuelve ÚNICAMENTE JSON con este formato:
+                            {
+                                "psychological_profile": "Perfil psicológico en 1 frase",
+                                "business_moment": "Momento actual en 1 frase",
+                                "sales_angle": "Mejor acercamiento en 1 frase",
+                                "bottleneck": "Principal dolor o cuello de botella",
+                                "summary": "Resumen ejecutivo en 1 frase",
+                                "outreach_message": "Mensaje personalizado (<280 chars) directo y creativo para primer contacto",
+                                "followup_message": "Mensaje de seguimiento tras aceptar conexión (max 300 chars)",
+                                "second_followup": "Mensaje de seguimiento (300-500 chars) si no hay respuesta inicial. Proporciona más valor e información",
+                                "skills": ["Habilidad 1", "Habilidad 2"],
+                                "symmetry_score": 85
+                            }
+
+                            IMPORTANTE:
+                            - symmetry_score por defecto es 85, NO 75. Ajusta según las reglas del anchor system.
+                            - Los mensajes deben ser personalizados para PMs de producto consumer/mobile.
+                            - Menciona Symmetry como app de fitness/bienestar con tracción real.
+                            - If snippet implies user is > ${context.maxAge || 40} years old, PENALIZE SCORE (<50)
+                            ${context.icpDescription ? `
+                            === PERFIL BUSCADO (ICP) ===
+                            ${context.icpDescription.slice(0, 800)}
+                            Usa este perfil como referencia para evaluar la afinidad del candidato y personalizar los mensajes.
+                            ` : ''}
+                            ${context.requireSpanish ? `- FILTRO IDIOMA OBLIGATORIO: Si el nombre, ubicación o texto del perfil NO muestran señales claras de hablar español (nombre hispano, ubicación en España/Latinoamérica, texto en español), PENALIZAR SCORE severamente (poner <30)
+                            - TODOS los mensajes DEBEN estar escritos en español` : ''}`
+                                : `Eres un Tech Recruiter de ÉLITE para Symmetry (•400k descargas/mes). Tu misión: encontrar Product Engineers con impacto real en producción.
 
                             === PERFIL OBJETIVO ===
                             Experiencia: 3-8 años en producción. Stack core: React/Next.js, Node.js, TypeScript, APIs REST.
@@ -894,24 +996,39 @@ export class LinkedInSearchEngine {
 
             const parsed = JSON.parse(cleanContent || '{}');
 
-            parsed.icebreaker = `Hola ${context.name.split(' ')[0]} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${context.roleKeyword || 'product engineer'}. Me gustaría conectar.`;
-            parsed.followup_message = `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product managers. ¿Te interesa que te pase el brief técnico?`;
-            parsed.second_followup = parsed.second_followup || `${context.name}, viendo tu trayectoria creemos que hay una gran alineación.`;
+            if (this.isPMRole(context.roleKeyword || '')) {
+                parsed.icebreaker = `Hola ${context.name.split(' ')[0]} — soy Mauro, cofundador de Symmetry (app de fitness con +400k descargas/mes). Vi tu experiencia en producto consumer y creo que hay fit. Me gustaría conectar.`;
+                parsed.followup_message = `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry — app de bienestar B2C con fuerte tracción mobile. Buscamos un PM con experiencia en consumer apps. ¿Te interesa que te cuente más?`;
+                parsed.second_followup = parsed.second_followup || `${context.name}, creo que tu experiencia en producto consumer encaja muy bien con lo que estamos construyendo en Symmetry. ¿Tienes 15 min para una llamada rápida?`;
+            } else {
+                parsed.icebreaker = `Hola ${context.name.split(' ')[0]} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${context.roleKeyword || 'product engineer'}. Me gustaría conectar.`;
+                parsed.followup_message = `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product managers. ¿Te interesa que te pase el brief técnico?`;
+                parsed.second_followup = parsed.second_followup || `${context.name}, viendo tu trayectoria creemos que hay una gran alineación.`;
+            }
 
             return parsed;
         } catch (e: any) {
+            const isPM = this.isPMRole(context.roleKeyword || '');
             return {
                 summary: "Análisis rápido disponible",
                 psychological_profile: "Profesional activo",
                 business_moment: "En demanda",
-                sales_angle: "Roles de alto impacto",
+                sales_angle: isPM ? "PM con foco en consumer/mobile" : "Roles de alto impacto",
                 bottleneck: "Oportunidades personalizadas",
-                outreach_message: `¡Hola ${context.name}! Tenemos roles de alto nivel. https://symmetry.club/roles/product-engineer`,
-                icebreaker: `Hola ${context.name.split(' ')[0]} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${context.roleKeyword || 'product engineer'}. Me gustaría conectar.`,
-                followup_message: `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product managers. ¿Te interesa que te pase el brief técnico?`,
-                second_followup: `${context.name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`,
+                outreach_message: isPM
+                    ? `¡Hola ${context.name}! Escalamos Symmetry (+400k descargas) y buscamos un PM con experiencia en consumer apps. ¿Conectamos?`
+                    : `¡Hola ${context.name}! Tenemos roles de alto nivel. https://symmetry.club/roles/product-engineer`,
+                icebreaker: isPM
+                    ? `Hola ${context.name.split(' ')[0]} — soy Mauro, cofundador de Symmetry (app de fitness con +400k descargas/mes). Vi tu experiencia en producto consumer y creo que hay fit. Me gustaría conectar.`
+                    : `Hola ${context.name.split(' ')[0]} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${context.roleKeyword || 'product engineer'}. Me gustaría conectar.`,
+                followup_message: isPM
+                    ? `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry — app de bienestar B2C con fuerte tracción mobile. Buscamos un PM con experiencia en consumer apps. ¿Te interesa que te cuente más?`
+                    : `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product managers. ¿Te interesa que te pase el brief técnico?`,
+                second_followup: isPM
+                    ? `${context.name}, creo que tu experiencia en producto consumer encaja muy bien con lo que estamos construyendo en Symmetry. ¿Tienes 15 min para una llamada rápida?`
+                    : `${context.name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`,
                 skills: context.skills || [],
-                symmetry_score: 82
+                symmetry_score: isPM ? 85 : 82
             };
         }
     }
