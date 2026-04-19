@@ -803,7 +803,7 @@ export class SearchEngine {
                                 "outreach_message": "Mensaje personalizado (<280 chars) directo y creativo para primer contacto",
                                 "icebreaker": "ICEBREAKER: Mensaje de invitación LINKEDIN máximo 200 caracteres, super personalizado, menciona algo específico del perfil",
                                 "followup_message": "FOLLOWUP: Mensaje más completo (300-400 chars) para enviar después de aceptar la conexión. Profesional y genuino",
-                                "second_followup": "SEGUNDO FOLLOWUP: Mensaje de seguimiento (300-500 chars) si no hay respuesta inicial. Proporciona más valor e información",
+                                "second_followup": "Mensaje de seguimiento (300-500 chars) si no hay respuesta inicial. Proporciona más valor e información",
                                 "skills": ["Habilidad 1", "Habilidad 2"],
                                 "symmetry_score": 75
                             }

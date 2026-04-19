@@ -854,7 +854,7 @@ export class LinkedInSearchEngine {
                                 "summary": "Resumen ejecutivo en 1 frase",
                                 "outreach_message": "Mensaje personalizado (<280 chars) directo y creativo para primer contacto",
                                 "followup_message": "Mensaje de seguimiento tras aceptar conexión (max 300 chars)",
-                                "second_followup": "SEGUNDO FOLLOWUP: Mensaje de seguimiento (300-500 chars) si no hay respuesta inicial. Proporciona más valor e información",
+                                "second_followup": "Mensaje de seguimiento (300-500 chars) si no hay respuesta inicial. Proporciona más valor e información",
                                 "skills": ["Habilidad 1", "Habilidad 2"],
                                 "symmetry_score": 85
                             }
