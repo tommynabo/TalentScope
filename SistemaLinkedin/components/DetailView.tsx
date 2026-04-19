@@ -474,7 +474,9 @@ const DetailView: React.FC<DetailViewProps> = ({ campaign: initialCampaign, onBa
         );
 
         const rawFollowup = c.walead_messages?.followup_message || analysis?.followup_message || '';
-        const followup = rawFollowup.replace(/Buscamos [^.]+\./, 'Buscamos product managers.');
+        const isPMCampaign = /product\s*manager|\bpm\b|product\s*owner/i.test(specialty);
+        const roleLabel = isPMCampaign ? 'product managers' : 'product engineers';
+        const followup = rawFollowup.replace(/Buscamos [^.]+\./, `Buscamos ${roleLabel}.`);
         const secondFollowup = c.walead_messages?.second_followup || analysis?.second_followup || '';
         const summary = analysis?.summary || '';
 

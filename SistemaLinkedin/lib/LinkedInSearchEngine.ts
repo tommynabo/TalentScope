@@ -1002,7 +1002,7 @@ export class LinkedInSearchEngine {
                 parsed.second_followup = parsed.second_followup || `${context.name}, creo que tu experiencia en producto consumer encaja muy bien con lo que estamos construyendo en Symmetry. ¿Tienes 15 min para una llamada rápida?`;
             } else {
                 parsed.icebreaker = `Hola ${context.name.split(' ')[0]} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${context.roleKeyword || 'product engineer'}. Me gustaría conectar.`;
-                parsed.followup_message = `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product managers. ¿Te interesa que te pase el brief técnico?`;
+                parsed.followup_message = `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers. ¿Te interesa que te pase el brief técnico?`;
                 parsed.second_followup = parsed.second_followup || `${context.name}, viendo tu trayectoria creemos que hay una gran alineación.`;
             }
 
@@ -1023,7 +1023,7 @@ export class LinkedInSearchEngine {
                     : `Hola ${context.name.split(' ')[0]} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${context.roleKeyword || 'product engineer'}. Me gustaría conectar.`,
                 followup_message: isPM
                     ? `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry — app de bienestar B2C con fuerte tracción mobile. Buscamos un PM con experiencia en consumer apps. ¿Te interesa que te cuente más?`
-                    : `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product managers. ¿Te interesa que te pase el brief técnico?`,
+                    : `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers. ¿Te interesa que te pase el brief técnico?`,
                 second_followup: isPM
                     ? `${context.name}, creo que tu experiencia en producto consumer encaja muy bien con lo que estamos construyendo en Symmetry. ¿Tienes 15 min para una llamada rápida?`
                     : `${context.name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`,
