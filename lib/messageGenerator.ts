@@ -3,7 +3,7 @@
  * Generates personalized icebreaker messages based on selected user (Mauro or Nyo)
  */
 
-export type OutreachUser = 'mauro' | 'nyo' | 'miguel' | 'liam' | 'josue' | 'juandiego';
+export type OutreachUser = 'mauro' | 'nyo' | 'miguel' | 'liam' | 'josue' | 'juandiego' | 'iker';
 
 export interface OutreachMessages {
   icebreaker: string;
@@ -53,6 +53,11 @@ export function generateOutreachMessages(
     },
     juandiego: {
       icebreaker: `Hola ${name} — soy Juan Diego, recruiter de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${specialty}. Me gustaría conectar.`,
+      followup: `${name}, tras revisar tu perfil sabemos que eres el perfil ideal. ¿Podríamos agendar una llamada?`,
+      second: `${name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`
+    },
+    iker: {
+      icebreaker: `Hola ${name} — soy Iker, recruiter de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${specialty}. Me gustaría conectar.`,
       followup: `${name}, tras revisar tu perfil sabemos que eres el perfil ideal. ¿Podríamos agendar una llamada?`,
       second: `${name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`
     }
