@@ -380,13 +380,13 @@ export class LinkedInSearchEngine {
 
         if (this.isPMRole(campaignRole)) {
             // ─── PM ROLE: queries focused on B2C / mobile / consumer experience ─────
-            // Level 1 (attempts 2-5): exact role + B2C/mobile context signal + city
+            // Level 1 (attempts 2-5): exact role + mobile consumer signal + city (priority: mobile consumer first)
             if (attempt <= 5) {
                 const b2cSignals = [
-                    '("mobile app" OR "consumer" OR "B2C")',
-                    '("growth" OR "retention" OR "engagement")',
-                    '("app móvil" OR "consumer product" OR "mobile")',
-                    '("user acquisition" OR "activación" OR "retención")',
+                    '("iOS app" OR "Android app" OR "consumer mobile")',
+                    '("mobile app" OR "consumer app" OR "B2C mobile")',
+                    '("app móvil" OR "consumer product" OR "mobile consumer")',
+                    '("React Native" OR "Flutter" OR "consumer app")',
                 ];
                 const signal = b2cSignals[(attempt - 2) % b2cSignals.length];
                 variation = `"Product Manager" ${signal} ${city}`;
@@ -853,39 +853,48 @@ export class LinkedInSearchEngine {
                             content: this.isPMRole(context.roleKeyword || '')
                                 ? `Eres un Talent Recruiter de ÉLITE para Symmetry (app de fitness/bienestar con +400k descargas/mes). Tu misión: encontrar Product Managers con experiencia en apps de consumo (B2C), especialmente mobile.
 
-                            === PERFIL OBJETIVO — PRODUCT MANAGER B2C/MOBILE ===
-                            Experiencia: 3-10 años en producto. Foco: apps móviles, consumer products, plataformas B2C.
-                            Entienden adquisición, activación, retención y engagement. Han escalado productos con usuarios reales.
+                            === PERFIL OBJETIVO — PRODUCT MANAGER MOBILE CONSUMER ===
+                            Experiencia: 3-8 años en producto. Foco PRIORITARIO: apps móviles consumer (iOS/Android). Edad máxima: 30 años.
+                            Entienden adquisición, activación, retención y engagement en productos con usuarios reales.
 
-                            ═══ SISTEMA DE ANCLAJE DE PUNTUACIÓN (ANCHOR SYSTEM) ═══
-                            REGLA BASE: Si el candidato menciona mobile app / consumer product / B2C / growth / engagement / retención / user acquisition Y su perfil indica que habla español o está en España/Latinoamérica → su puntuación BASE es 85.
-                            DESDE ESE 85, SUMA puntos (hasta 100) si:
-                            - Métricas reales de producto: MAU, descargas, retención, DAU, churn (suman +5 a +10)
-                            - Experiencia en apps móviles publicadas (App Store / Play Store) (+8)
-                            - Background en growth, activación, retención o engagement (+5)
-                            - Experiencia en startups o scale-ups con usuarios reales (+5)
-                            - Productos consumer con volumen: +50k usuarios o descargas (+5)
-                            - Foco en UX, experiencia de usuario, diseño de producto (+3)
-                            SOLO RESTA puntos (por debajo de 80) si el perfil es EXPLÍCITAMENTE:
-                            - PM de SaaS B2B sin experiencia en producto consumer
-                            - Perfil corporativo o consultoría sin producto real construido
-                            - Rol técnico (engineering manager, scrum master puro) sin foco en usuario
-                            - Sin evidencia de haber escalado un producto con usuarios reales
-                            NO USES 75 como valor por defecto. Un PM ambiguo que menciona mobile, consumer o app vale 85.
+                            ═══ SISTEMA DE TIERS DE INDUSTRIA (ORDEN DE PRIORIDAD ESTRICTO) ═══
+                            PASO 1: Clasifica al candidato en uno de estos 4 tiers. PASO 2: Aplica el score BASE del tier. PASO 3: Suma green flags sólo si el tier lo permite.
 
-                            ✅ GREEN FLAGS (suman desde el 85):
-                            - App móvil con métricas reales (MAU, downloads, retención) (+10)
-                            - Consumer/B2C product con usuarios reales (+8)
+                            🥇 TIER 1 — MOBILE CONSUMER (BASE: 92) ← EL PERFIL IDEAL
+                            Señales: apps iOS/Android publicadas, fitness app, gaming mobile, social app, healthtech mobile, consumer mobile, React Native o Flutter con usuarios reales, app en App Store / Play Store con descargas/reseñas.
+                            DESDE 92, SUMA si:
+                            - Métricas reales: MAU, DAU, descargas, retención, churn (+5 a +8)
+                            - App publicada con volumen real (+50k usuarios o descargas) (+5)
+                            - Growth, activación, retención, engagement como core del rol (+5)
+                            - Startup o scale-up mobile con tracción real (+3)
+                            - UX-driven, diseño de producto, experiencia del usuario final (+3)
+
+                            🥈 TIER 2 — B2C SOFTWARE GENERAL (BASE: 85)
+                            Señales: consumer web, marketplace B2C, plataforma digital consumer, B2C SaaS, fintech consumer, edtech consumer, healthtech web.
+                            DESDE 85, SUMA sólo si tiene señales adicionales de mobile consumer o métricas reales de usuarios.
+
+                            🥉 TIER 3 — B2B SOFTWARE (BASE: 58, máximo alcanzable: 65)
+                            Señales: SaaS B2B, herramientas para empresas, dev tools, software de gestión B2B, internal tools, plataformas para negocios (no para usuarios finales consumidores).
+                            Aunque tenga otras señales positivas, NO puede superar 65.
+
+                            ❌ TIER 4 — ENTERPRISE (AUTO-FAIL: score < 30 SIN EXCEPCIÓN)
+                            Señales: SAP, Salesforce, Oracle, software para grandes corporaciones, CRM enterprise, gobierno, banca corporativa, ERP, IT enterprise.
+                            RECHAZO INMEDIATO — score < 30 aunque tenga cualquier otra característica positiva.
+
+                            NO USES 75 como valor por defecto. Determina el tier primero, luego aplica el score BASE del tier correspondiente.
+
+                            ✅ GREEN FLAGS (aplican SÓLO en Tier 1 y Tier 2, suman desde el BASE):
+                            - App móvil consumer publicada con métricas reales (MAU, downloads, retención) (+8)
+                            - Productos con usuarios finales reales y volumen medible (+5)
                             - Growth, activación, retención, engagement como background (+5)
-                            - Startup o scale-up con tracción real (+5)
-                            - Apps publicadas en stores, con reseñas o descargas (+5)
+                            - Startup o scale-up con tracción real de usuarios (+5)
                             - UX-driven, data-driven, enfoque en el usuario final (+3)
 
-                            🚫 RED FLAGS — BAJA SCORE (por debajo de 80):
-                            - PM de SaaS B2B sin producto consumer → 50-65
-                            - Perfil corporativo/consultoría sin producto real → 50-65
-                            - Technical PM sin foco en usuario (tipo engineering mgr) → 60
-                            - AUTO-FAIL (<40): Solo enterprise software, sin app o consumer product alguna vez
+                            🚫 RED FLAGS — FUERZAN TIER INFERIOR:
+                            - PM de SaaS B2B sin experiencia en producto consumer → forzar Tier 3 (58-65)
+                            - Perfil corporativo/consultoría sin producto real → Tier 3 o Tier 4
+                            - Technical PM / Engineering Manager sin foco en usuario → Tier 3 (55-62)
+                            - Solo enterprise software → Tier 4, AUTO-FAIL (<30)
 
                             Analiza el perfil y devuelve ÚNICAMENTE JSON con este formato:
                             {
@@ -902,10 +911,10 @@ export class LinkedInSearchEngine {
                             }
 
                             IMPORTANTE:
-                            - symmetry_score por defecto es 85, NO 75. Ajusta según las reglas del anchor system.
+                            - symmetry_score BASE depende del tier: Tier 1 = 92, Tier 2 = 85, Tier 3 = 58-65, Tier 4 = <30. NO uses 75 como default.
                             - Los mensajes deben ser personalizados para PMs de producto consumer/mobile.
                             - Menciona Symmetry como app de fitness/bienestar con tracción real.
-                            - If snippet implies user is > ${context.maxAge || 40} years old, PENALIZE SCORE (<50)
+                            - FILTRO EDAD OBLIGATORIO: Si el perfil sugiere que la persona tiene MÁS DE ${context.maxAge || 30} AÑOS (señales de inferencia: más de 8 años de experiencia profesional total, graduación universitaria antes de 2016, primera experiencia laboral antes de 2016-2017, menciona haber trabajado más de una década), RECHAZAR AUTOMÁTICAMENTE — score < 25 (AUTO-FAIL absoluto, sin excepción, independientemente de sus skills o tier de industria)
                             ${context.icpDescription ? `
                             === PERFIL BUSCADO (ICP) ===
                             ${context.icpDescription.slice(0, 800)}
