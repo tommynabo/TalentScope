@@ -57,6 +57,12 @@ export const UserSelectionModal: React.FC<UserSelectionModalProps> = ({
       name: 'Iker',
       title: 'Recruiter de Symmetry',
       color: 'from-indigo-500 to-indigo-600'
+    },
+    {
+      id: 'diegomoreno',
+      name: 'Diego Moreno',
+      title: 'Fundador de Symmetry',
+      color: 'from-amber-500 to-amber-600'
     }
   ];
 
