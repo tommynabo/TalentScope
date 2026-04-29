@@ -63,6 +63,18 @@ export const UserSelectionModal: React.FC<UserSelectionModalProps> = ({
       name: 'Diego Moreno',
       title: 'Fundador de Symmetry',
       color: 'from-amber-500 to-amber-600'
+    },
+    {
+      id: 'pablo',
+      name: 'Pablo',
+      title: 'Recruiter de Symmetry',
+      color: 'from-cyan-500 to-cyan-600'
+    },
+    {
+      id: 'ivan',
+      name: 'Iván',
+      title: 'Recruiter de Symmetry',
+      color: 'from-lime-500 to-lime-600'
     }
   ];
 
@@ -76,7 +88,7 @@ export const UserSelectionModal: React.FC<UserSelectionModalProps> = ({
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-slate-950 border border-slate-800 rounded-lg shadow-2xl max-w-md w-full animate-in fade-in scale-95 duration-300">
+        <div className="bg-slate-950 border border-slate-800 rounded-lg shadow-2xl max-w-2xl w-full animate-in fade-in scale-95 duration-300">
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-slate-800">
             <div>
@@ -92,7 +104,7 @@ export const UserSelectionModal: React.FC<UserSelectionModalProps> = ({
           </div>
 
           {/* Content */}
-          <div className="p-6 space-y-3">
+          <div className="p-6 grid grid-cols-2 gap-3">
             {users.map((user) => (
               <button
                 key={user.id}
