@@ -150,17 +150,27 @@ export class LinkedInSearchEngine {
         return savedCandidates;
     }
 
-    /** Fetch existing candidates with a hard timeout so Supabase latency never hangs the search */
-    private async fetchDeduplicationDataSafe(onLog: LogCallback): Promise<{ existingEmails: Set<string>; existingLinkedin: Set<string> }> {
+    /**
+     * Fetch candidates to exclude from the current search.
+     * When a campaignId is provided, only candidates already in THAT campaign
+     * are excluded — allowing the same profile to be added to other campaigns.
+     * Falls back to the full global table when no campaignId is given.
+     */
+    private async fetchDeduplicationDataSafe(onLog: LogCallback, campaignId?: string): Promise<{ existingEmails: Set<string>; existingLinkedin: Set<string> }> {
         onLog(`[DEDUP] 🔍 Cargando base de datos para evitar duplicados...`);
         try {
+            const fetchFn = campaignId
+                ? deduplicationService.fetchCampaignCandidates(campaignId)
+                : deduplicationService.fetchExistingCandidates();
+
             const result = await Promise.race([
-                deduplicationService.fetchExistingCandidates(),
+                fetchFn,
                 new Promise<never>((_, reject) =>
                     setTimeout(() => reject(new Error('DEDUP_TIMEOUT')), 15000)
                 )
             ]);
-            onLog(`[DEDUP] ✅ ${result.existingEmails.size} emails y ${result.existingLinkedin.size} perfiles conocidos ignorados.`);
+            const scope = campaignId ? 'en esta campaña' : 'en total';
+            onLog(`[DEDUP] ✅ ${result.existingEmails.size} emails y ${result.existingLinkedin.size} perfiles conocidos ${scope} ignorados.`);
             return result;
         } catch (err: any) {
             if (err.message === 'DEDUP_TIMEOUT') {
@@ -189,7 +199,7 @@ export class LinkedInSearchEngine {
         }
 
         try {
-            const { existingEmails, existingLinkedin } = await this.fetchDeduplicationDataSafe(onLog);
+            const { existingEmails, existingLinkedin } = await this.fetchDeduplicationDataSafe(onLog, options.campaignId);
 
             const uniqueCandidates = await this.searchLinkedIn(
                 query,
@@ -225,13 +235,13 @@ export class LinkedInSearchEngine {
     ) {
         try {
             // BUG FIX: use the safe version with 15s timeout (same as slow path)
-            const { existingEmails, existingLinkedin } = await this.fetchDeduplicationDataSafe(onLog);
+            const { existingEmails, existingLinkedin } = await this.fetchDeduplicationDataSafe(onLog, options.campaignId);
 
             const acceptedCandidates: Candidate[] = [];
             // Scale retries based on target: at least 30, up to 100 for large searches
             const MAX_RETRIES = Math.min(100, Math.max(30, Math.ceil(maxResults / 5)));
-            // Allow more consecutive dup attempts before early-exit for larger targets
-            const MAX_CONSEC_DUPS = maxResults > 50 ? 5 : 3;
+            // Allow 5 consecutive dup attempts before early-exit (was 3 for small targets)
+            const MAX_CONSEC_DUPS = 5;
             let attempt = 0;
             const seenProfileNames: string[] = [];
             let consecutiveDupAttempts = 0; // EARLY EXIT
@@ -610,14 +620,17 @@ export class LinkedInSearchEngine {
         const acceptedCandidates: Candidate[] = [];
         // Scale retries based on target: at least 30, up to 100 for large searches
         const MAX_RETRIES = Math.min(100, Math.max(30, Math.ceil(maxResults / 5)));
-        // Allow more consecutive dup attempts before early-exit for larger targets
-        const MAX_CONSEC_DUPS = maxResults > 50 ? 5 : 3;
+        // Allow 5 consecutive dup attempts before early-exit (was 3 for small targets)
+        const MAX_CONSEC_DUPS = 5;
         let attempt = 0;
         const seenProfileNames: string[] = [];
         const seenUrls = new Set<string>();
         let consecutiveDupAttempts = 0; // EARLY EXIT: cuenta intentos consecutivos 100% duplicados
         let zeroApifyAttempts = 0;      // ANTI-LOOP: abort if Apify returns 0 profiles repeatedly
         const MAX_ZERO_APIFY = 5;       // max consecutive zero-result Apify calls before aborting
+        // PAGE CYCLING: when we keep hitting duplicates, go deeper into Google results
+        let currentPage = 1;
+        const MAX_PAGES = 5;
 
         const startTime = performance.now();
 
@@ -640,13 +653,13 @@ export class LinkedInSearchEngine {
                 
                 const searchInput = {
                     queries: `${siteOperator} ${currentQuery} ${langKeywords}`,
-                    maxPagesPerQuery: 1,
+                    maxPagesPerQuery: currentPage,
                     resultsPerPage: resultsPerPage,
                     languageCode: options.language === 'Spanish' ? 'es' : 'en',
                     countryCode: options.language === 'Spanish' ? 'es' : 'us',
                 };
 
-                onLog(`[LINKEDIN] 📊 1 página × ${resultsPerPage} resultados (modo rápido ~8s)...`);
+                onLog(`[LINKEDIN] 📊 ${currentPage} página(s) × ${resultsPerPage} resultados (modo rápido ~8s)...`);
                 const results = await this.callApifyActor(GOOGLE_SEARCH_SCRAPER, searchInput, onLog);
 
                 let allResults: any[] = [];
@@ -691,6 +704,11 @@ export class LinkedInSearchEngine {
 
                 if (newProfiles.length === 0) {
                     consecutiveDupAttempts++;
+                    // Advance to the next Google page to surface unseen results
+                    if (currentPage < MAX_PAGES) {
+                        currentPage++;
+                        onLog(`[LINKEDIN] 📄 Avanzando a página ${currentPage} de Google para evitar duplicados...`);
+                    }
                     if (consecutiveDupAttempts >= MAX_CONSEC_DUPS) {
                         onLog(`[EARLY-EXIT] 🛑 ${MAX_CONSEC_DUPS} intentos consecutivos con 100% duplicados. El nicho actual está agotado.`);
                         break;
@@ -701,6 +719,7 @@ export class LinkedInSearchEngine {
 
                 // Reset del contador al encontrar perfiles nuevos
                 consecutiveDupAttempts = 0;
+                currentPage = 1; // Reset page when we find fresh profiles
 
                 const BATCH_SIZE = 8;
                 let processedCount = 0;
