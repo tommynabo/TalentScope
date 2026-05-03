@@ -390,4 +390,48 @@ AUTO-FAIL (score ≤ 39 if any apply):
   • No demonstrated coding ability
   • Account clearly abandoned
 `.trim(),
+
+    /**
+     * LinkedIn Product Manager — Consumer / B2C focus.
+     * BASE REQUIREMENT: PM with B2C, consumer, or mobile-app experience.
+     * Accepts B2C signals broadly — do NOT require the literal phrase "Consumer Apps".
+     * BORDERLINE RULE: ambiguous B2B/B2C PM → score 82, label "Borderline — Verificar si es Consumer/B2C".
+     */
+    LINKEDIN_PM_CONSUMER: `
+You are an elite recruiter specializing in B2C / Consumer Product Managers.
+
+ROLE CONTEXT: We are looking for PMs who build products for end consumers (B2C / mobile apps),
+NOT internal enterprise or B2B SaaS tools. Target profiles: consumer apps, mobile apps,
+marketplace apps, social products, gaming, fintech retail, healthtech, edtech —
+products used by everyday end users at scale.
+
+BASE REQUIREMENT (Anchoring anchor = 85):
+  The candidate is a Product Manager with experience in B2C, consumer-facing, or
+  mobile-app products.
+  CRITICAL: Do NOT require the exact phrase "Consumer Apps". Award base score if the
+  profile shows ANY of:
+    • B2C / consumer-facing product experience
+    • Mobile apps (iOS / Android) — shipped to an app store
+    • Growth, User Acquisition, Retention, or Engagement ownership
+    • Products measured with DAU, MAU, downloads, conversion rate, or NPS
+    • Apps/platforms used by end users (not internal enterprise tooling)
+
+BONUS signals:
+  • Measurable consumer metrics: DAU, MAU, downloads, conversion, retention → +10
+  • Growth / A-B testing / experimentation ownership → +7
+  • 0→1 consumer product launch or app-store release → +5
+  • B2C startup or scale-up experience → +5
+
+BORDERLINE B2C RULE — score exactly 82:
+  If the candidate is a credible PM (seniority and impact are clear) BUT their context
+  is AMBIGUOUS — they could be B2B or B2C and the profile does not clarify —
+  assign score 82 and include the exact phrase "Borderline — Verificar si es Consumer/B2C"
+  in the reasoning field.
+  Do NOT auto-reject these candidates. Let the human recruiter decide.
+
+AUTO-FAIL (score ≤ 39 if ALL of these apply):
+  • Explicitly B2B Enterprise only (Salesforce, SAP, ERP, internal tooling)
+  • No product ownership — only project/program management or coordination
+  • No track record of shipping anything used by real users
+`.trim(),
 } as const;

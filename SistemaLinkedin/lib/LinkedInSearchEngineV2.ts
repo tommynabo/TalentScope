@@ -73,6 +73,21 @@ const KEYWORD_SYNONYMS: Record<string, string[]> = {
     'mobile':    ['Mobile Developer', 'iOS Developer', 'Android Developer', 'React Native Engineer'],
     'fullstack': ['Full Stack Developer', 'Full-Stack Engineer', 'Software Engineer', 'Web Developer'],
     'python':    ['Python Developer', 'Python Engineer', 'Data Engineer', 'Backend Python'],
+    // ── Product Manager / B2C cluster ────────────────────────────────────────
+    // Key uses 'product' so lower.includes('product') matches "Product Manager",
+    // "Product" and any variant. Synonyms rotate through B2C / consumer contexts.
+    'product': [
+        'Product Manager Consumer',
+        'Product Manager B2C',
+        'Product Manager Mobile Apps',
+        'Growth Product Manager',
+        'PM iOS Android',
+        'Product Manager Apps',
+        'Consumer Product Manager',
+        'Product Manager Growth',
+        'Head of Product Consumer',
+        'CPO B2C',
+    ],
 };
 
 /** Maximum total fetch-expand attempts before giving up. */
@@ -103,6 +118,9 @@ export class LinkedInSearchEngineV2 extends BaseSearchEngine<LinkedInRawCandidat
     protected get engineName()   { return 'LINKEDIN'; }
     protected get platformLabel(){ return 'LinkedIn'; }
 
+    /** Stores the active query so getSystemPrompt() can return the right persona. */
+    private _baseQuery = '';
+
     // ── Expose platform-specific start method (backward-compatible API) ──────
 
     public async startSearch(
@@ -112,6 +130,9 @@ export class LinkedInSearchEngineV2 extends BaseSearchEngine<LinkedInRawCandidat
         onLog: LogCallback,
         onComplete: (candidates: Candidate[]) => void,
     ): Promise<void> {
+        // Store before execute() so getSystemPrompt() picks up the right persona.
+        this._baseQuery = query;
+
         onLog(`[LINKEDIN] 🚀 Motor de búsqueda iniciado.`);
         onLog(`[LINKEDIN] 🎯 Objetivo: ${maxResults} candidatos para "${query}"`);
 
@@ -137,6 +158,11 @@ export class LinkedInSearchEngineV2 extends BaseSearchEngine<LinkedInRawCandidat
     }
 
     protected getSystemPrompt(): string {
+        const lower = this._baseQuery.toLowerCase();
+        // Route Product Manager campaigns to the B2C-aware persona.
+        if (lower.includes('product manager') || lower.includes('product') || /\bpm\b/.test(lower)) {
+            return SYSTEM_PROMPTS.LINKEDIN_PM_CONSUMER;
+        }
         return SYSTEM_PROMPTS.SYMMETRY_PRODUCT_ENGINEER;
     }
 
@@ -292,6 +318,35 @@ export class LinkedInSearchEngineV2 extends BaseSearchEngine<LinkedInRawCandidat
      */
     private buildSynonymList(baseQuery: string): string[] {
         const lower = baseQuery.toLowerCase();
+
+        // ── Product Manager / B2C special handling ────────────────────────────
+        // Detect "product manager", "product", or standalone "pm" in the query.
+        // When detected, inject B2C-context Dorks at the HEAD of the rotation so
+        // the engine exhausts the richest B2C queries before falling back to
+        // generic synonyms.  The explicit Google-Dork variants ensure Apify
+        // finds candidates who never wrote "Consumer Apps" verbatim.
+        const isPMQuery =
+            lower.includes('product manager') ||
+            lower.includes('product') ||
+            /\bpm\b/.test(lower);
+
+        if (isPMQuery) {
+            const b2cDorks = [
+                `"Product Manager" "B2C"`,
+                `"Product Manager" "Mobile App"`,
+                `"Product Manager" "Consumer"`,
+                `"Product Manager" "iOS"`,
+                `"Product Manager" "Android"`,
+                `"Product Manager" "Growth"`,
+                `"Product Manager" "User Acquisition"`,
+                `"Product Manager" "Retention"`,
+                `"Product Manager" "DAU" OR "MAU"`,
+                `"PM" "B2C" OR "Consumer" OR "Mobile"`,
+            ];
+            const dictSynonyms = KEYWORD_SYNONYMS['product'] ?? [];
+            return [baseQuery, ...b2cDorks, ...dictSynonyms];
+        }
+
         for (const [keyword, synonyms] of Object.entries(KEYWORD_SYNONYMS)) {
             if (lower.includes(keyword)) {
                 // Put the original query first, then all synonyms

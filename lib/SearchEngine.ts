@@ -575,11 +575,12 @@ export class SearchEngine {
                 const langKeywords = options.language === 'Spanish' ? '(España OR Spanish OR Español)' : '';
 
                 // OPTIMIZED: 1 page = fastest Apify run (~8s vs ~46s with 3 pages)
-                // Request 50 results per page to cast wider net for quality filtering
+                // Raised to 150 results per page to feed enough raw volume into the
+                // AI scoring funnel and guarantee ≥50 net leads after filtering.
                 const searchInput = {
                     queries: `${siteOperator} ${currentQuery} ${langKeywords}`,
                     maxPagesPerQuery: 1,
-                    resultsPerPage: 50,
+                    resultsPerPage: 150,
                     languageCode: options.language === 'Spanish' ? 'es' : 'en',
                     countryCode: options.language === 'Spanish' ? 'es' : 'us',
                 };
