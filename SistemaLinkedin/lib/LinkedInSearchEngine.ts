@@ -909,6 +909,16 @@ export class LinkedInSearchEngine {
                             - Startup o scale-up con tracción real de usuarios (+5)
                             - UX-driven, data-driven, enfoque en el usuario final (+3)
 
+                            ⚠️ TIER BORDERLINE — AMBIGÜEDAD B2C (score EXACTAMENTE 82):
+                            Si el candidato tiene historial sólido como PM (seniority real, ownership de producto,
+                            métricas o launches demostrables) PERO no puedes determinar con certeza si su
+                            producto era consumer/B2C o B2B — el contexto simplemente no está claro:
+                              → Asigna score EXACTAMENTE 82
+                              → En el campo "summary" incluye OBLIGATORIAMENTE: "Borderline — Verificar si es Consumer/B2C"
+                              → NO uses 58 (ese es para B2B confirmado). 82 permite que el reclutador decida.
+                            Aplica SÓLO cuando: (a) el PM tiene seniority y track record real Y (b) la industry es ambigua.
+                            NO apliques si el perfil es explícitamente B2B SaaS (Tier 3) o Enterprise (Tier 4).
+
                             🚫 RED FLAGS — FUERZAN TIER INFERIOR:
                             - PM de SaaS B2B sin experiencia en producto consumer → forzar Tier 3 (58-65)
                             - Perfil corporativo/consultoría sin producto real → Tier 3 o Tier 4

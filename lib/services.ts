@@ -40,10 +40,15 @@ export const CandidateService = {
             if (findError) throw findError;
 
             if (existing) {
-                // Existe → actualizar y devolver
+                // Existe → actualizar y devolver.
+                // IMPORTANT: strip `id` from the payload before UPDATE.
+                // If candidateData carries a freshly-generated id (different from the
+                // stored one), Postgres would try to mutate the PK, which violates the
+                // FK constraint on campaign_candidates.candidate_id.
+                const { id: _discardedId, ...updatePayload } = candidateData as any;
                 const { data, error } = await supabase
                     .from('candidates')
-                    .update(candidateData)
+                    .update(updatePayload)
                     .eq('linkedin_url', linkedinUrl)
                     .select()
                     .single();
