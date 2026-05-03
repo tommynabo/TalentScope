@@ -744,7 +744,7 @@ export class LinkedInSearchEngine {
                             const langCheck = isLikelySpanishSpeaker(name, role, snippet, extractedLocation);
                             if (!langCheck.isSpanish) {
                                 processedCount++;
-                                onLog(`[LANG-FILTER] ❌ ${name} no parece hispanohablante (señales: ${langCheck.signals.length === 0 ? 'ninguna' : langCheck.signals.join(', ')})`);
+                                onLog(`[LANG-FILTER] ❌ ${name} no parece hispanohablante (conf: ${langCheck.confidence}, señales: ${langCheck.signals.length === 0 ? 'ninguna' : langCheck.signals.join(', ')})`);
                                 return null;
                             }
                         }

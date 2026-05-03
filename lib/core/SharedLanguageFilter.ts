@@ -36,6 +36,31 @@ const SPANISH_FIRST_NAMES = new Set([
     // Extra (known false negatives)
     'armando', 'agustín', 'agustin', 'benjamín', 'benjamin', 'edgar', 'emerson', 'erik',
     'israel', 'alonso', 'kike', 'pelayo', 'nazar',
+    // Biblical / evangelical names widely used in LATAM
+    'levi', 'leví', 'josue', 'josué', 'isaias', 'isaías', 'efrain', 'efraín',
+    'abner', 'absalon', 'adan', 'adán', 'caleb', 'elias', 'elías', 'eliezer',
+    'ezequiel', 'gedeon', 'gedeón', 'gideon', 'habacuc', 'jeremias', 'jeremías',
+    'moises', 'moisés', 'nehemias', 'nehemías', 'noé', 'noe', 'samuel', 'salomon',
+    'salomón', 'tobias', 'tobías', 'zadquiel',
+    // Colloquial/diminutive forms common in Spain & LATAM
+    'paco', 'pepe', 'nacho', 'chema', 'txema', 'dani', 'fran', 'alex', 'yago',
+    'blas', 'sixto', 'chelo', 'tito', 'chino', 'nano', 'nene', 'pipe', 'pipe',
+    // Variants missed in normalization
+    'german', 'germán', 'ruben', 'rubén', 'cesar', 'césar', 'victor', 'víctor',
+    'hector', 'héctor', 'nestor', 'néstor', 'oscar', 'óscar', 'ulises', 'lazaro',
+    'lázaro', 'augusto', 'aurelio', 'braulio', 'cirilo', 'cornelio', 'crispin',
+    'crispín', 'dacil', 'dácil', 'desiderio', 'dimas', 'donato', 'eladio', 'eloy',
+    'fulgencio', 'galo', 'genaro', 'germinal', 'hilario', 'honorio', 'jacinto',
+    'leandro', 'leovigildo', 'macedonio', 'maximo', 'máximo', 'melchor', 'metodio',
+    'modesto', 'nazario', 'onesimo', 'onésimo', 'panfilo', 'panfilo', 'porfirio',
+    'primitivo', 'quirino', 'régulo', 'regulo', 'restituto', 'saturnino', 'telesforo',
+    'torcuato', 'tranquilino', 'urbano', 'wenceslao', 'zenon', 'zenón', 'zotero',
+    // Additional female names
+    'itzel', 'ximena', 'yareli', 'yatziri', 'zulem', 'zulema', 'dulce', 'yaritza',
+    'wendy', 'yessenia', 'yeraldin', 'yeraldinne', 'dayana', 'dayanna', 'yolanda',
+    'yareli', 'yazmin', 'yazmin', 'yessenia', 'yulieth', 'yurany', 'magaly', 'xiomara',
+    'jocelyn', 'marleny', 'mireya', 'nallely', 'yanira', 'sayda', 'sulma', 'yadira',
+    'yamileth', 'yaneth', 'yarely', 'yarlin', 'yeimi', 'yenny', 'yolanda', 'yurani',
     // Female
     'adriana', 'alejandra', 'alicia', 'ana', 'andrea', 'ángela', 'angela', 'beatriz', 'camila',
     'carla', 'carmen', 'carolina', 'catalina', 'cecilia', 'claudia', 'constanza', 'cristina',
@@ -87,6 +112,25 @@ const SPANISH_SURNAMES = new Set([
     'moya', 'naranjo', 'narváez', 'narvaez', 'oliva', 'orozco', 'pardo', 'pastor', 'pedraza',
     'plaza', 'portillo', 'pozo', 'prada', 'quesada', 'roca', 'rubio', 'saenz', 'sainz',
     'segura', 'sevilla', 'soler', 'tejada', 'toro', 'val', 'villar', 'vizoso', 'yáñez', 'yanez',
+    // Cono Sur & Centroamérica (subrepresentados en versión anterior)
+    'corbacho', 'lacuesta', 'uzcategui', 'uzcátegui', 'elosua', 'elosúa', 'trives',
+    'piñon', 'sacasa', 'lacunza', 'lazcano', 'belaunde', 'benavides', 'covarrubias',
+    'ibacache', 'jaramillo', 'landaeta', 'mancilla', 'maturana', 'quezada', 'retamal',
+    'riveros', 'ugarte', 'vilches', 'zárate', 'zarate', 'zeballos', 'amarilla',
+    'benitez', 'benítez', 'cantero', 'colman', 'colmán', 'enciso', 'fretes', 'gamarra',
+    'maciel', 'olmedo', 'rolón', 'rolon', 'samaniego',
+    // Additional Spain (Valencia, Cataluña, Aragón)
+    'correa', 'coronel', 'domene', 'escudero', 'esteve', 'fajardo', 'feliu', 'figueras',
+    'guardiola', 'guillen', 'guillén', 'iborra', 'iranzo', 'jorda', 'jordá',
+    'labrador', 'lafuente', 'lahoz', 'latorre', 'llorca', 'llorente', 'lluch',
+    'maestre', 'marco', 'marti', 'martí', 'mas', 'masip', 'millan', 'millán',
+    'miralles', 'miro', 'miró', 'moliner', 'monfort', 'montiel', 'morant',
+    'mulet', 'noguera', 'novella', 'oller', 'orellana', 'palau', 'peral', 'perea',
+    'pons', 'pont', 'porcar', 'prats', 'puchol', 'puertas', 'roig', 'roman', 'ros',
+    'rosello', 'roselló', 'sabater', 'selles', 'sellés', 'sempere', 'sendra',
+    'sepulveda', 'sepúlveda', 'soldevila', 'soriano', 'sospedra', 'tarazona',
+    'tormo', 'tortosa', 'ubeda', 'úbeda', 'vallés', 'valles', 'valls', 'verdejo',
+    'verdú', 'vilar', 'vilarroya', 'villalba',
 ]);
 
 // ─── Spanish-speaking locations ───────────────────────────────────────────────
@@ -166,6 +210,24 @@ export function hasSpanishName(fullName: string): { match: boolean; matchedParts
     const parts = norm.split(/\s+/).filter(p => p.length > 1);
     const matchedParts = parts.filter(p => SPANISH_FIRST_NAMES.has(p) || SPANISH_SURNAMES.has(p));
     return { match: matchedParts.length > 0, matchedParts };
+}
+
+/**
+ * Signal 4 — Patronymic suffix detection.
+ *
+ * Iberian patronymic surnames (González, Martínez, Rodríguez, Hernández,
+ * Sánchez, Ruiz, Díaz, Ortiz, Pérez, Jiménez, Gutiérrez, Muñoz, etc.) end
+ * in the suffixes -ez, -az, -iz, -oz after diacritic normalization.
+ * This pattern is almost exclusively Iberian; false-positive rate on
+ * English/French/German/other names is extremely low.
+ *
+ * Min length = 4 prevents matching short tokens like "oz", "az", "iz".
+ */
+export function hasPatronymicSuffix(fullName: string): { match: boolean; matchedParts: string[] } {
+    if (!fullName) return { match: false, matchedParts: [] };
+    const parts = normalize(fullName).split(/\s+/).filter(p => p.length >= 4);
+    const matched = parts.filter(p => /[aeio]z$/.test(p));
+    return { match: matched.length > 0, matchedParts: matched };
 }
 
 /**
@@ -257,6 +319,28 @@ export function isLikelySpanishSpeaker(
                 break;
             }
         }
+    }
+
+    // Signal 4 – Patronymic suffix (-ez/-az/-iz/-oz) (+40)
+    // Iberian patronymics end in these suffixes after diacritic normalization.
+    // False-positive rate on non-Hispanic names is extremely low.
+    if (!nameResult.match) {
+        // Only run when name dict didn’t already score to avoid double-counting.
+        const patronymic = hasPatronymicSuffix(name);
+        if (patronymic.match) {
+            confidence += 40;
+            signals.push(`patronimico:${patronymic.matchedParts.join(',')}`);
+        }
+    }
+
+    // Signal 5 – Structural bonus: ≥3 word name with any positive Hispanic signal (+15)
+    // Hispanic naming convention = Nombre Apellido1 Apellido2.
+    // If we already have ≥20 pts AND the name has 3+ words, the multi-surname
+    // structure adds corroborating evidence even without a dict match.
+    const wordCount = name.trim().split(/\s+/).filter(Boolean).length;
+    if (wordCount >= 3 && confidence >= 20) {
+        confidence += 15;
+        signals.push('estructura_nombre_compuesto');
     }
 
     confidence = Math.min(confidence, 100);
