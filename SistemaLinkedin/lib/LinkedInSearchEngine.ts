@@ -357,6 +357,13 @@ export class LinkedInSearchEngine {
                lower.includes('product manager') || lower.includes('product owner');
     }
 
+    private isDesignerRole(role: string): boolean {
+        const lower = role.toLowerCase();
+        return lower.includes('designer') || lower.includes('ui/ux') ||
+               lower.includes('ux') || lower.includes('ui ') ||
+               lower.includes('diseñador');
+    }
+
     private getQueryVariation(baseQuery: string, attempt: number, seenNames: string[]): string {
         // Attempt 1: always use the exact campaign query unmodified
         if (attempt === 1) return baseQuery;
@@ -1038,35 +1045,48 @@ export class LinkedInSearchEngine {
                 parsed.icebreaker = `Hola ${context.name.split(' ')[0]} — soy Mauro, cofundador de Symmetry (app de fitness con +400k descargas/mes). Vi tu experiencia en producto consumer y creo que hay fit. Me gustaría conectar.`;
                 parsed.followup_message = `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry — app de bienestar B2C con fuerte tracción mobile. Buscamos un PM con experiencia en consumer apps. ¿Te interesa que te cuente más?`;
                 parsed.second_followup = parsed.second_followup || `${context.name}, creo que tu experiencia en producto consumer encaja muy bien con lo que estamos construyendo en Symmetry. ¿Tienes 15 min para una llamada rápida?`;
+            } else if (this.isDesignerRole(context.roleKeyword || '')) {
+                parsed.icebreaker = `Hola ${context.name.split(' ')[0]} — soy Mauro, cofundador de Symmetry (app de fitness #1 en Salud y Bienestar, +2M descargas). Vi tu trabajo en diseño mobile y creo que hay fit. Me gustaría conectar.`;
+                parsed.followup_message = `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+2M descargas) y equipo de diseño pequeño. Buscamos UI/UX Designers con experiencia en apps móviles. ¿Te interesa que te pase el brief?`;
+                parsed.second_followup = parsed.second_followup || `${context.name}, creo que tu experiencia en diseño mobile encaja muy bien con lo que estamos construyendo en Symmetry. ¿Tienes 15 min para una llamada rápida?`;
             } else {
                 parsed.icebreaker = `Hola ${context.name.split(' ')[0]} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${context.roleKeyword || 'product engineer'}. Me gustaría conectar.`;
-                parsed.followup_message = `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers. ¿Te interesa que te pase el brief técnico?`;
+                parsed.followup_message = `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. ¿Te interesa que te pase el brief técnico?`;
                 parsed.second_followup = parsed.second_followup || `${context.name}, viendo tu trayectoria creemos que hay una gran alineación.`;
             }
 
             return parsed;
         } catch (e: any) {
             const isPM = this.isPMRole(context.roleKeyword || '');
+            const isDesigner = this.isDesignerRole(context.roleKeyword || '');
             return {
                 summary: "Análisis rápido disponible",
                 psychological_profile: "Profesional activo",
                 business_moment: "En demanda",
-                sales_angle: isPM ? "PM con foco en consumer/mobile" : "Roles de alto impacto",
+                sales_angle: isPM ? "PM con foco en consumer/mobile" : isDesigner ? "UI/UX Designer mobile apps" : "Roles de alto impacto",
                 bottleneck: "Oportunidades personalizadas",
                 outreach_message: isPM
                     ? `¡Hola ${context.name}! Escalamos Symmetry (+400k descargas) y buscamos un PM con experiencia en consumer apps. ¿Conectamos?`
-                    : `¡Hola ${context.name}! Tenemos roles de alto nivel. https://symmetry.club/roles/product-engineer`,
+                    : isDesigner
+                    ? `¡Hola ${context.name}! Escalamos Symmetry (+2M descargas) y buscamos UI/UX Designers con experiencia en apps móviles. ¿Conectamos?`
+                    : `¡Hola ${context.name}! Tenemos roles de alto nivel en Symmetry. ¿Conectamos?`,
                 icebreaker: isPM
                     ? `Hola ${context.name.split(' ')[0]} — soy Mauro, cofundador de Symmetry (app de fitness con +400k descargas/mes). Vi tu experiencia en producto consumer y creo que hay fit. Me gustaría conectar.`
+                    : isDesigner
+                    ? `Hola ${context.name.split(' ')[0]} — soy Mauro, cofundador de Symmetry (app de fitness #1 en Salud y Bienestar, +2M descargas). Vi tu trabajo en diseño mobile y creo que hay fit. Me gustaría conectar.`
                     : `Hola ${context.name.split(' ')[0]} — soy Mauro, fundador de Symmetry (una app de fitness con fuerte crecimiento) y vi tu experiencia como ${context.roleKeyword || 'product engineer'}. Me gustaría conectar.`,
                 followup_message: isPM
                     ? `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry — app de bienestar B2C con fuerte tracción mobile. Buscamos un PM con experiencia en consumer apps. ¿Te interesa que te cuente más?`
-                    : `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. Buscamos product engineers. ¿Te interesa que te pase el brief técnico?`,
+                    : isDesigner
+                    ? `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+2M descargas) y equipo de diseño pequeño. Buscamos UI/UX Designers con experiencia en apps móviles. ¿Te interesa que te pase el brief?`
+                    : `Gracias por aceptar ${context.name.split(' ')[0]}. Estamos escalando Symmetry, una app de salud y bienestar con mucha tracción (+400k descargas/mes) y equipo de producto pequeño. ¿Te interesa que te pase el brief técnico?`,
                 second_followup: isPM
                     ? `${context.name}, creo que tu experiencia en producto consumer encaja muy bien con lo que estamos construyendo en Symmetry. ¿Tienes 15 min para una llamada rápida?`
+                    : isDesigner
+                    ? `${context.name}, creo que tu experiencia en diseño mobile encaja muy bien con lo que estamos construyendo en Symmetry. ¿Tienes 15 min para una llamada rápida?`
                     : `${context.name}, viendo tu trayectoria creemos que hay una gran alineación. Te compartimos una oportunidad que podría ser perfect fit para ti.`,
                 skills: context.skills || [],
-                symmetry_score: isPM ? 85 : 82
+                symmetry_score: isPM ? 85 : isDesigner ? 85 : 82
             };
         }
     }
