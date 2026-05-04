@@ -88,6 +88,21 @@ const KEYWORD_SYNONYMS: Record<string, string[]> = {
         'Head of Product Consumer',
         'CPO B2C',
     ],
+    // ── UI/UX Designer / Mobile-first cluster ────────────────────────────────
+    // Key uses 'designer' so lower.includes('designer') matches "UI/UX Designer",
+    // "UX Designer", "UI Designer", etc. Synonyms target mobile/consumer contexts.
+    'designer': [
+        'UI/UX Designer Mobile',
+        'Product Designer Mobile',
+        'UX Designer iOS Android',
+        'UI Designer App',
+        'Mobile App Designer',
+        'UX Designer Consumer App',
+        'Product Designer Consumer',
+        'UX Lead Mobile',
+        'Design Lead Mobile',
+        'Mobile UX Designer',
+    ],
 };
 
 /** Maximum total fetch-expand attempts before giving up. */
@@ -162,6 +177,10 @@ export class LinkedInSearchEngineV2 extends BaseSearchEngine<LinkedInRawCandidat
         // Route Product Manager campaigns to the B2C-aware persona.
         if (lower.includes('product manager') || lower.includes('product') || /\bpm\b/.test(lower)) {
             return SYSTEM_PROMPTS.LINKEDIN_PM_CONSUMER;
+        }
+        // Route UI/UX Designer campaigns to the mobile-designer persona.
+        if (lower.includes('designer') || lower.includes('ui/ux') || lower.includes('ux') || lower.includes('diseñador')) {
+            return SYSTEM_PROMPTS.LINKEDIN_UIUX_DESIGNER;
         }
         return SYSTEM_PROMPTS.SYMMETRY_PRODUCT_ENGINEER;
     }
@@ -345,6 +364,33 @@ export class LinkedInSearchEngineV2 extends BaseSearchEngine<LinkedInRawCandidat
             ];
             const dictSynonyms = KEYWORD_SYNONYMS['product'] ?? [];
             return [baseQuery, ...b2cDorks, ...dictSynonyms];
+        }
+
+        // ── UI/UX Designer / Mobile special handling ─────────────────────────
+        // Detect 'ui/ux', 'ux', 'designer', or 'diseñador' in the query.
+        // Inject mobile-consumer design Dorks at the HEAD of the rotation.
+        const isDesignerQuery =
+            lower.includes('ui/ux') ||
+            lower.includes('ux designer') ||
+            lower.includes('ui designer') ||
+            lower.includes('designer') ||
+            lower.includes('diseñador');
+
+        if (isDesignerQuery) {
+            const mobileDorks = [
+                `"UI/UX Designer" "Mobile"`,
+                `"UI/UX Designer" "Figma"`,
+                `"UI/UX Designer" "iOS"`,
+                `"UX Designer" "B2C"`,
+                `"Product Designer" "Mobile App"`,
+                `"UI Designer" "App" "Figma"`,
+                `"UX Designer" "Consumer"`,
+                `"Mobile Designer" "Design System"`,
+                `"UI/UX" "Startup" "App"`,
+                `"Product Designer" "Fitness" OR "Health" OR "Wellness"`,
+            ];
+            const dictSynonyms = KEYWORD_SYNONYMS['designer'] ?? [];
+            return [baseQuery, ...mobileDorks, ...dictSynonyms];
         }
 
         for (const [keyword, synonyms] of Object.entries(KEYWORD_SYNONYMS)) {

@@ -333,6 +333,52 @@ export function getScoreLabel(normalizedScore: number): string {
   return 'Below Threshold ❌';
 }
 
+export function getDefaultUIUXDesignerFilters(): SearchFilterCriteria {
+  return {
+    // Demographics
+    min_age: 20,
+    max_age: 35,
+    has_engineering_degree: false,
+    engineering_match: 'nice_to_have',
+
+    // Technical (XX = 2pts each)
+    // has_published_apps → designer has shipped a real mobile app
+    has_published_apps: true,
+    published_apps_match: 'required',
+
+    // has_core_stack_exp → proxy for Figma mastery; AI prompt validates detail
+    has_core_stack_exp: true,
+    core_stack_match: 'required',
+
+    // Portfolio is non-negotiable for designers
+    has_portfolio_online: true,
+    portfolio_match: 'required',
+
+    // Open source is not relevant for UI/UX designers
+    open_source_contributor: false,
+    open_source_match: 'nice_to_have',
+
+    // Entrepreneurship
+    startup_early_stage_exp: true,
+    startup_match: 'preferred',
+
+    founded_business: false,
+    founded_match: 'nice_to_have',
+
+    // Complementary (X = 1pt each)
+    backend_knowledge: 'none',
+    backend_match: 'nice_to_have',
+
+    // Primary skill — required
+    ui_ux_awareness: true,
+    ui_ux_match: 'required',
+
+    // ICP mandatory: "Uso activo de la IA a gran escala en su trabajo diario"
+    ai_experience: true,
+    ai_match: 'preferred',
+  };
+}
+
 export function getDefaultFlutterFilters(): SearchFilterCriteria {
   return {
     // Demographics
