@@ -333,47 +333,252 @@ export function getScoreLabel(normalizedScore: number): string {
   return 'Below Threshold ❌';
 }
 
+// ============= UI/UX DESIGNER SCORING =============
+//
+// Mirrors the Product Engineer scoring structure exactly.
+//
+// Max Score: 15 points
+// Threshold: 12 points (normalized to 80/100) — Quality-first standard
+//
+// Criteria breakdown:
+// - Age (18-35): 1pt
+// - Design Background (degree or equivalent): 1pt
+// - Shipped Mobile App (App Store / Play Store): 2pts (XX)
+// - Figma Mastery (advanced Figma skills): 2pts (XX)
+// - Mobile Portfolio with Case Studies: 2pts (XX)
+// - Design System / Public Design Contribution: 2pts (XX)
+// - Startup Early Stage: 2pts (XX)
+// - Founded Business: 1pt
+// - Engineering Collaboration / Handoff: 1pt
+// - AI in Design Workflow: 1pt
+
+export function calculateUIUXDesignerScore(
+  candidate: Candidate,
+  criteria: SearchFilterCriteria
+): { score: number; breakdown: ScoreBreakdown; passes_threshold: boolean } {
+
+  const breakdown: ScoreBreakdown = {
+    age: 0,
+    education: 0,
+    published_apps: 0,
+    core_stack: 0,     // repurposed: Figma Mastery
+    portfolio: 0,
+    open_source: 0,    // repurposed: Design System / public design portfolio
+    startup: 0,
+    founder: 0,
+    backend: 0,        // repurposed: Engineering Collaboration / Handoff
+    ui_ux: 0,          // repurposed: AI in Design Workflow
+    ai: 0,             // not used separately — folded into ui_ux slot
+    total: 0,
+    normalized: 0,
+    passes_threshold: false
+  };
+
+  // 1. Age (0-1pt) — 18-35 (wider than PE, designers often take longer to build portfolio)
+  const candidateAge = extractAge(candidate);
+  if (candidateAge && candidateAge >= criteria.min_age && candidateAge <= criteria.max_age) {
+    breakdown.age = 1;
+  }
+
+  // 2. Design / Related Background (0-1pt)
+  if (hasDesignBackground(candidate)) {
+    breakdown.education = 1;
+  }
+
+  // 3. Shipped Mobile App on App Store / Play Store (0-2pts) — CORE REQUIREMENT
+  if (criteria.has_published_apps && hasMobileAppShipped(candidate)) {
+    breakdown.published_apps = 2;
+  }
+
+  // 4. Figma Mastery — advanced Figma / professional design tooling (0-2pts)
+  if (criteria.has_core_stack_exp && hasFigmaMastery(candidate)) {
+    breakdown.core_stack = 2;
+  }
+
+  // 5. Mobile Portfolio with Case Studies (0-2pts)
+  if (criteria.has_portfolio_online && hasMobilePortfolio(candidate)) {
+    breakdown.portfolio = 2;
+  }
+
+  // 6. Design System / Public Design Contribution (0-2pts)
+  if (criteria.open_source_contributor && hasDesignSystemWork(candidate)) {
+    breakdown.open_source = 2;
+  }
+
+  // 7. Early-Stage Startup Experience (0-2pts)
+  if (criteria.startup_early_stage_exp && hasStartupExperience(candidate)) {
+    breakdown.startup = 2;
+  }
+
+  // 8. Founded Business / Product / Design Agency (0-1pt)
+  if (criteria.founded_business && hasFoundedBusiness(candidate)) {
+    breakdown.founder = 1;
+  }
+
+  // 9. Engineering Collaboration / Handoff (0-1pt)
+  if (hasEngineeringCollab(candidate)) {
+    breakdown.backend = 1;
+  }
+
+  // 10. AI in Design Workflow (0-1pt)
+  if (criteria.ai_experience && hasAIInDesign(candidate)) {
+    breakdown.ui_ux = 1;
+  }
+
+  // 11. (slot kept for parity — unused, always 0)
+  breakdown.ai = 0;
+
+  breakdown.total =
+    breakdown.age +
+    breakdown.education +
+    breakdown.published_apps +
+    breakdown.core_stack +
+    breakdown.portfolio +
+    breakdown.open_source +
+    breakdown.startup +
+    breakdown.founder +
+    breakdown.backend +
+    breakdown.ui_ux +
+    breakdown.ai;
+
+  breakdown.normalized = Math.round((breakdown.total / 15) * 100);
+  breakdown.passes_threshold = breakdown.total >= 12;
+
+  return {
+    score: breakdown.total,
+    breakdown,
+    passes_threshold: breakdown.passes_threshold
+  };
+}
+
+// ── UI/UX Designer helpers ──────────────────────────────────────────────────
+
+function hasDesignBackground(candidate: Candidate): boolean {
+  if (!candidate.education) return false;
+  const designKeywords = [
+    'design', 'diseño', 'multimedia', 'communication', 'comunicación',
+    'arts', 'arte', 'visual', 'hci', 'human-computer', 'interaction',
+    'ux', 'ui', 'advertising', 'publicidad', 'architecture', 'arquitectura',
+    // also accept engineering/CS — designers with tech backgrounds are a bonus
+    'engineering', 'computer science', 'informática', 'software', 'ingeniería'
+  ];
+  const lower = candidate.education.toLowerCase();
+  return designKeywords.some(kw => lower.includes(kw));
+}
+
+function hasMobileAppShipped(candidate: Candidate): boolean {
+  const text = [candidate.ai_analysis, candidate.job_title, candidate.location]
+    .filter(Boolean).join(' ').toLowerCase();
+
+  const mobileStoreKeywords = [
+    'app store', 'google play', 'play store',
+    'published app', 'shipped app', 'launched app',
+    'ios app', 'android app', 'mobile app',
+    'disponible en', 'available on',
+    'iphone', 'ipad', 'android'
+  ];
+  return mobileStoreKeywords.some(kw => text.includes(kw));
+}
+
+function hasFigmaMastery(candidate: Candidate): boolean {
+  const skillsText = (candidate.skills ?? []).join(' ').toLowerCase();
+  const analysisLower = candidate.ai_analysis?.toLowerCase() ?? '';
+
+  const figmaKeywords = [
+    'figma', 'sketch', 'adobe xd', 'framer',
+    'design system', 'auto-layout', 'autolayout',
+    'prototype', 'prototyping', 'wireframe',
+    'component library', 'design token'
+  ];
+  return figmaKeywords.some(kw => skillsText.includes(kw) || analysisLower.includes(kw));
+}
+
+function hasMobilePortfolio(candidate: Candidate): boolean {
+  const analysisLower = candidate.ai_analysis?.toLowerCase() ?? '';
+  const portfolioKeywords = [
+    'portfolio', 'behance', 'dribbble', 'case study', 'case studies',
+    'notion', 'personal site', 'website', '.com',
+    'ui kit', 'design work', 'mobile screens', 'app design',
+    'ux flow', 'user flow', 'onboarding flow', 'paywall'
+  ];
+  return portfolioKeywords.some(kw => analysisLower.includes(kw));
+}
+
+function hasDesignSystemWork(candidate: Candidate): boolean {
+  const text = [candidate.ai_analysis, ...(candidate.skills ?? [])].join(' ').toLowerCase();
+  const dsKeywords = [
+    'design system', 'component library', 'ui kit', 'design tokens',
+    'style guide', 'pattern library', 'figma library',
+    'storybook', 'behance', 'dribbble', 'open-source design'
+  ];
+  return dsKeywords.some(kw => text.includes(kw));
+}
+
+function hasEngineeringCollab(candidate: Candidate): boolean {
+  const text = [candidate.ai_analysis, ...(candidate.skills ?? [])].join(' ').toLowerCase();
+  const handoffKeywords = [
+    'zeplin', 'lottie', 'rive', 'after effects', 'handoff', 'hand-off',
+    'design specs', 'developer handoff', 'qa review', 'design qa',
+    'collaborate with engineer', 'collaborate with dev',
+    'worked with dev', 'worked alongside eng'
+  ];
+  return handoffKeywords.some(kw => text.includes(kw));
+}
+
+function hasAIInDesign(candidate: Candidate): boolean {
+  const text = [candidate.ai_analysis, ...(candidate.skills ?? [])].join(' ').toLowerCase();
+  const aiDesignKeywords = [
+    'midjourney', 'dall-e', 'stable diffusion', 'galileo',
+    'framer ai', 'ai design', 'generative ui', 'copilot design',
+    'ai tools', 'chatgpt', 'claude', 'llm', 'ai workflow',
+    'artificial intelligence', 'machine learning'
+  ];
+  return aiDesignKeywords.some(kw => text.includes(kw));
+}
+
+// ── End UI/UX Designer helpers ──────────────────────────────────────────────
+
 export function getDefaultUIUXDesignerFilters(): SearchFilterCriteria {
   return {
     // Demographics
-    min_age: 20,
+    min_age: 18,
     max_age: 35,
-    has_engineering_degree: false,
+    has_engineering_degree: false,   // not required — design background is enough
     engineering_match: 'nice_to_have',
 
-    // Technical (XX = 2pts each)
-    // has_published_apps → designer has shipped a real mobile app
+    // Technical XX (2pts each)
+    // has_published_apps → shipped real mobile app (App Store / Play Store)
     has_published_apps: true,
     published_apps_match: 'required',
 
-    // has_core_stack_exp → proxy for Figma mastery; AI prompt validates detail
+    // has_core_stack_exp → Figma mastery (advanced Figma + professional tooling)
     has_core_stack_exp: true,
     core_stack_match: 'required',
 
-    // Portfolio is non-negotiable for designers
+    // Mobile portfolio with case studies — non-negotiable
     has_portfolio_online: true,
     portfolio_match: 'required',
 
-    // Open source is not relevant for UI/UX designers
-    open_source_contributor: false,
-    open_source_match: 'nice_to_have',
+    // Design System / public design portfolio — preferred but not hard-required
+    open_source_contributor: true,
+    open_source_match: 'preferred',
 
-    // Entrepreneurship
+    // Entrepreneurship XX
     startup_early_stage_exp: true,
     startup_match: 'preferred',
 
     founded_business: false,
     founded_match: 'nice_to_have',
 
-    // Complementary (X = 1pt each)
-    backend_knowledge: 'none',
+    // Complementary X (1pt each)
+    backend_knowledge: 'none',       // handoff is scored via hasEngineeringCollab()
     backend_match: 'nice_to_have',
 
-    // Primary skill — required
+    // ui_ux_awareness slot reused for AI-in-design
     ui_ux_awareness: true,
-    ui_ux_match: 'required',
+    ui_ux_match: 'preferred',
 
-    // ICP mandatory: "Uso activo de la IA a gran escala en su trabajo diario"
+    // ICP: active AI usage in daily design workflow
     ai_experience: true,
     ai_match: 'preferred',
   };

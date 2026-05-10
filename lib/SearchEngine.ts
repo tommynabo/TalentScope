@@ -1,6 +1,6 @@
 
 import { Candidate, SearchFilterCriteria, GitHubFilterCriteria, GitHubCandidate } from '../types/database';
-import { calculateFlutterDeveloperScore } from './scoring';
+import { calculateFlutterDeveloperScore, calculateUIUXDesignerScore } from './scoring';
 import { deduplicationService } from './deduplication';
 import { SearchService } from './search';
 import { normalizeLinkedInUrl } from './normalization';
@@ -286,14 +286,25 @@ export class SearchEngine {
                     uniqueCandidates.map(c => this.enrichCandidateWithAnalysis(c))
                 );
 
-                // Apply Flutter Developer scoring if filter criteria provided
+                // Apply role-appropriate scoring if filter criteria provided
                 let scoredCandidates = analyzedCandidates;
                 if (options.filters) {
-                    onLog(`[SCORING] 📊 Aplicando filtro Flutter Developer...`);
-                    
+                    const queryLower = query.toLowerCase();
+                    const isUIUX = queryLower.includes('ui/ux') || queryLower.includes('ux designer') ||
+                        queryLower.includes('ui designer') || queryLower.includes('designer') ||
+                        queryLower.includes('diseñador');
+
+                    if (isUIUX) {
+                        onLog(`[SCORING] 📊 Aplicando filtro UI/UX Designer (Mobile-first)...`);
+                    } else {
+                        onLog(`[SCORING] 📊 Aplicando filtro Product Engineer...`);
+                    }
+
                     scoredCandidates = analyzedCandidates
                         .map(candidate => {
-                            const scoring = calculateFlutterDeveloperScore(candidate, options.filters!);
+                            const scoring = isUIUX
+                                ? calculateUIUXDesignerScore(candidate, options.filters!)
+                                : calculateFlutterDeveloperScore(candidate, options.filters!);
                             return {
                                 ...candidate,
                                 symmetry_score: scoring.breakdown.normalized,
@@ -302,7 +313,7 @@ export class SearchEngine {
                         })
                         .filter(c => c.symmetry_score >= (options.scoreThreshold || 80))
                         .sort((a, b) => (b.symmetry_score || 0) - (a.symmetry_score || 0));
-                    
+
                     onLog(`[SCORING] ✅ ${scoredCandidates.length} candidatos cumplen threshold de ${options.scoreThreshold || 80}/100`);
                 }
 

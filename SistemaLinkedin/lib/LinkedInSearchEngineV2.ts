@@ -90,18 +90,19 @@ const KEYWORD_SYNONYMS: Record<string, string[]> = {
     ],
     // ── UI/UX Designer / Mobile-first cluster ────────────────────────────────
     // Key uses 'designer' so lower.includes('designer') matches "UI/UX Designer",
-    // "UX Designer", "UI Designer", etc. Synonyms target mobile/consumer contexts.
+    // "UX Designer", "UI Designer", etc. Synonyms strictly target mobile/consumer
+    // contexts to avoid pulling in web/B2B/software-only designers.
     'designer': [
-        'UI/UX Designer Mobile',
-        'Product Designer Mobile',
+        'UI/UX Designer Mobile App',
         'UX Designer iOS Android',
-        'UI Designer App',
-        'Mobile App Designer',
-        'UX Designer Consumer App',
-        'Product Designer Consumer',
-        'UX Lead Mobile',
-        'Design Lead Mobile',
         'Mobile UX Designer',
+        'UI/UX Designer App Store',
+        'Product Designer Consumer App',
+        'UX Designer B2C App',
+        'UI Designer iOS Figma',
+        'UX Designer Startup Mobile',
+        'Design Lead Mobile App',
+        'UI/UX Designer Health Fitness App',
     ],
 };
 
@@ -377,17 +378,22 @@ export class LinkedInSearchEngineV2 extends BaseSearchEngine<LinkedInRawCandidat
             lower.includes('diseñador');
 
         if (isDesignerQuery) {
+            // Mobile-first dorks — prioritise candidates with shipped mobile apps.
+            // Intentionally excludes generic "Product Designer" dork to avoid
+            // pulling in web/B2B-only designers who pass by title alone.
             const mobileDorks = [
-                `"UI/UX Designer" "Mobile"`,
-                `"UI/UX Designer" "Figma"`,
-                `"UI/UX Designer" "iOS"`,
-                `"UX Designer" "B2C"`,
-                `"Product Designer" "Mobile App"`,
-                `"UI Designer" "App" "Figma"`,
-                `"UX Designer" "Consumer"`,
-                `"Mobile Designer" "Design System"`,
-                `"UI/UX" "Startup" "App"`,
-                `"Product Designer" "Fitness" OR "Health" OR "Wellness"`,
+                `"UI/UX Designer" "iOS" "App Store"`,
+                `"UX Designer" "Android" "Google Play"`,
+                `"UI/UX Designer" "Mobile" "Figma"`,
+                `"Product Designer" "Consumer App" "Figma"`,
+                `"Mobile UX Designer" "Startup"`,
+                `"UX Designer" "B2C" "Mobile"`,
+                `"UI Designer" "iOS" "Design System"`,
+                `"UX Designer" "Health" OR "Fitness" OR "Wellness"`,
+                `"UI/UX" "App Store" "Startup"`,
+                `"Mobile Designer" "Figma" "Shipped"`,
+                `"Product Designer" "iOS" "Android" "Figma"`,
+                `"UX Designer" "Fintech" "Mobile"`,
             ];
             const dictSynonyms = KEYWORD_SYNONYMS['designer'] ?? [];
             return [baseQuery, ...mobileDorks, ...dictSynonyms];
