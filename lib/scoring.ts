@@ -385,9 +385,12 @@ export function calculateUIUXDesignerScore(
     breakdown.education = 1;
   }
 
-  // 3. Shipped Mobile App on App Store / Play Store (0-2pts) — CORE REQUIREMENT
-  if (criteria.has_published_apps && hasMobileAppShipped(candidate)) {
-    breakdown.published_apps = 2;
+  // 3. Shipped Mobile Apps — TIERED (0 / 1 / 2pts)
+  //    0pts: no mobile evidence
+  //    1pt : single app shipped (needs strong signals elsewhere to pass threshold)
+  //    2pts: multiple apps shipped — the quality bar we are targeting
+  if (criteria.has_published_apps) {
+    breakdown.published_apps = countMobileAppsShipped(candidate);
   }
 
   // 4. Figma Mastery — advanced Figma / professional design tooling (0-2pts)
@@ -466,18 +469,56 @@ function hasDesignBackground(candidate: Candidate): boolean {
   return designKeywords.some(kw => lower.includes(kw));
 }
 
-function hasMobileAppShipped(candidate: Candidate): boolean {
-  const text = [candidate.ai_analysis, candidate.job_title, candidate.location]
+/**
+ * Returns 0, 1, or 2 based on the strength of the mobile-app-shipping signal.
+ *   2 — strong evidence of MULTIPLE distinct shipped apps (track record)
+ *   1 — evidence of a single shipped app
+ *   0 — no credible mobile shipping evidence
+ */
+function countMobileAppsShipped(candidate: Candidate): 0 | 1 | 2 {
+  const text = [candidate.ai_analysis, candidate.job_title]
     .filter(Boolean).join(' ').toLowerCase();
 
-  const mobileStoreKeywords = [
+  if (!text) return 0;
+
+  // Strong multi-app signals: explicit plural/quantity language
+  const multiAppPatterns = [
+    /\d+\s+apps?/,                          // "3 apps", "5 apps"
+    /multiple\s+apps?/,
+    /several\s+apps?/,
+    /various\s+apps?/,
+    /two\s+apps?/,
+    /three\s+apps?/,
+    /portfolio\s+of\s+apps?/,
+    /launched\s+\d+/,
+    /shipped\s+\d+/,
+    /published\s+\d+/,
+    /designed\s+\d+\s+apps?/,
+  ];
+  if (multiAppPatterns.some(re => re.test(text))) return 2;
+
+  // Contextual multi-app: multiple store/product keywords found together
+  const storeHits = [
+    'app store', 'google play', 'play store'
+  ].filter(kw => text.includes(kw)).length;
+  if (storeHits >= 2) return 2; // mentions both stores → likely multiple products
+
+  // Multiple distinct iOS/Android product signals in same profile
+  const mobileProductHits = [
+    'ios app', 'android app', 'iphone app', 'ipad app', 'mobile app'
+  ].filter(kw => text.includes(kw)).length;
+  if (mobileProductHits >= 2) return 2;
+
+  // Single-app signals
+  const singleAppKeywords = [
     'app store', 'google play', 'play store',
     'published app', 'shipped app', 'launched app',
     'ios app', 'android app', 'mobile app',
-    'disponible en', 'available on',
-    'iphone', 'ipad', 'android'
+    'iphone', 'ipad', 'disponible en', 'available on'
   ];
-  return mobileStoreKeywords.some(kw => text.includes(kw));
+  if (singleAppKeywords.some(kw => text.includes(kw))) return 1;
+
+  return 0;
 }
 
 function hasFigmaMastery(candidate: Candidate): boolean {

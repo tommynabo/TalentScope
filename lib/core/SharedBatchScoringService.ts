@@ -449,27 +449,36 @@ We hire UI/UX Designers (2–8 yrs experience) who design end-to-end consumer mo
 onboarding, paywalls, retention flows, Design Systems. They must understand product metrics and
 business impact — not just craft beautiful screens. Mobile experience is NON-NEGOTIABLE.
 
-BASE REQUIREMENT (Anchoring anchor = 85):
-  The candidate has designed AND shipped at least one mobile app (iOS or Android, available
-  on the App Store or Google Play) AND demonstrates advanced Figma skills (auto-layout,
-  reusable components, variables, shared libraries, high-fidelity prototyping).
-  CRITICAL: Do NOT require the exact phrase "mobile" or "consumer app". Award base score if the
-  profile shows ANY of:
-    • Shipped mobile app available on App Store / Google Play
-    • UI/UX work on iOS or Android products
-    • High-fidelity Figma prototypes or Design System ownership
-    • Portfolio with real mobile app screens, flows, or case studies
-    • Experience designing onboarding, paywalls, or conversion-critical flows for real users
-    • Product Designer role at a B2C company with a mobile product
+We are looking for designers with a PROVEN TRACK RECORD of shipping multiple mobile apps —
+not someone who touched one app once. Consistency and depth of mobile portfolio is the primary
+quality signal.
 
-BONUS signals (additive — apply freely, do NOT double-cap):
-  • Design System creation or ownership at scale (tokens, components, guidelines, multi-platform) → +8
+BASE REQUIREMENT — TWO-TIER ANCHOR:
+  STRONG BASE (anchor = 85): The candidate has designed AND shipped ≥2 distinct mobile apps
+  (iOS or Android, on the App Store or Google Play) AND demonstrates advanced Figma skills.
+  WEAK BASE (anchor = 75): The candidate has shipped exactly 1 mobile app with clear UX
+  ownership AND demonstrates advanced Figma skills. Can still pass, but needs strong bonus
+  signals to reach 85+.
+  NO BASE (score freely 0–69): Only one brief mobile touchpoint, or mobile context is unclear.
+
+  CRITICAL: Do NOT require the exact phrase "mobile" or "consumer app". Infer mobile track record
+  from ANY of:
+    • Multiple apps on App Store / Google Play (look for plural mentions, distinct product names)
+    • Work history showing 2+ companies/products with iOS or Android design
+    • Portfolio with multiple distinct mobile app case studies
+    • Experience as Lead / Senior designer on mobile products over multiple years
+    • Design System built for a mobile product used at scale
+
+BONUS signals (additive — apply freely):
+  • 3 or more distinct shipped mobile apps → +10
+  • 2 distinct shipped mobile apps (if not already counted in base) → +6
+  • Design System creation or ownership at scale (tokens, components, guidelines) → +8
   • Paywall, onboarding, or monetisation flow design with measurable impact → +7
-  • Consumer app verticals: fitness, health, wellness, lifestyle, fintech, social → +6
   • Active AI tooling use in daily design workflow (Midjourney, Galileo, Framer AI, etc.) → +5
   • Motion design: Lottie, Rive, Principle, After Effects — production use → +5
   • Superwall, RevenueCat, or similar subscription/paywall tooling → +4
   • Early-stage startup experience (seed / Series A-B, joined <50 employees) → +4
+  • Consumer verticals: fitness, health, wellness, lifestyle, fintech, social → +4
   • Founded or co-founded a product, app, or design agency → +3
   • Direct engineering collaboration: delivery specs, Zeplin/Lottie handoff, QA reviews → +3
 
