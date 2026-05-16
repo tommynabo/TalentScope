@@ -357,6 +357,17 @@ export function calculateUIUXDesignerScore(
   criteria: SearchFilterCriteria
 ): { score: number; breakdown: ScoreBreakdown; passes_threshold: boolean } {
 
+  // Guard: if this is clearly an engineer/developer profile, score 0 immediately.
+  // Developers who "also do design" are not what we're looking for.
+  if (isEngineerProfile(candidate)) {
+    const empty: ScoreBreakdown = {
+      age: 0, education: 0, published_apps: 0, core_stack: 0, portfolio: 0,
+      open_source: 0, startup: 0, founder: 0, backend: 0, ui_ux: 0, ai: 0,
+      total: 0, normalized: 0, passes_threshold: false
+    };
+    return { score: 0, breakdown: empty, passes_threshold: false };
+  }
+
   const breakdown: ScoreBreakdown = {
     age: 0,
     education: 0,
@@ -470,10 +481,41 @@ function hasDesignBackground(candidate: Candidate): boolean {
 }
 
 /**
- * Returns 0, 1, or 2 based on the strength of the mobile-app-shipping signal.
- *   2 — strong evidence of MULTIPLE distinct shipped apps (track record)
- *   1 — evidence of a single shipped app
- *   0 — no credible mobile shipping evidence
+ * Detects if a candidate is primarily an engineer/developer (not a designer).
+ * Engineers who "also did UI" are excluded from the Product Designer pipeline.
+ */
+function isEngineerProfile(candidate: Candidate): boolean {
+  const title = (candidate.job_title ?? '').toLowerCase();
+  const skills = (candidate.skills ?? []).join(' ').toLowerCase();
+  const analysis = (candidate.ai_analysis ?? '').toLowerCase();
+
+  // Hard engineer title signals — these people are developers, not designers
+  const engineerTitleKeywords = [
+    'ios developer', 'android developer', 'mobile developer',
+    'flutter developer', 'react native developer', 'software engineer',
+    'software developer', 'frontend developer', 'front-end developer',
+    'backend developer', 'back-end developer', 'full stack developer',
+    'fullstack developer', 'full-stack developer', 'mobile engineer',
+    'ios engineer', 'android engineer', 'app developer'
+  ];
+  if (engineerTitleKeywords.some(t => title.includes(t))) return true;
+
+  // Heavy developer language in skills without any design tool to compensate
+  const devLanguages = ['swift', 'kotlin', 'objective-c', 'dart', 'flutter'];
+  const designTools  = ['figma', 'sketch', 'adobe xd', 'framer', 'principle'];
+  const hasDevLanguage  = devLanguages.some(l => skills.includes(l) || analysis.includes(l));
+  const hasDesignTool   = designTools.some(t => skills.includes(t) || analysis.includes(t));
+  if (hasDevLanguage && !hasDesignTool) return true;
+
+  return false;
+}
+
+/**
+ * Returns 0, 1, or 2 based on DESIGN-context mobile shipping evidence.
+ * Only awards points when the signal clearly belongs to a designer, not a developer.
+ *   2 — strong design-context evidence of multiple shipped mobile products
+ *   1 — design-context evidence of one shipped mobile product
+ *   0 — no credible designer mobile evidence (or evidence is developer-only)
  */
 function countMobileAppsShipped(candidate: Candidate): 0 | 1 | 2 {
   const text = [candidate.ai_analysis, candidate.job_title]
@@ -481,42 +523,34 @@ function countMobileAppsShipped(candidate: Candidate): 0 | 1 | 2 {
 
   if (!text) return 0;
 
-  // Strong multi-app signals: explicit plural/quantity language
-  const multiAppPatterns = [
-    /\d+\s+apps?/,                          // "3 apps", "5 apps"
-    /multiple\s+apps?/,
-    /several\s+apps?/,
-    /various\s+apps?/,
-    /two\s+apps?/,
-    /three\s+apps?/,
-    /portfolio\s+of\s+apps?/,
-    /launched\s+\d+/,
-    /shipped\s+\d+/,
-    /published\s+\d+/,
-    /designed\s+\d+\s+apps?/,
+  // Design-specific mobile shipping signals — these belong to designers, not developers
+  const designMobileSignals = [
+    'designed the app',
+    'designed mobile app',
+    'ux for the app',
+    'product design for',
+    'designed onboarding',
+    'designed paywall',
+    'designed the mobile',
+    'mobile design portfolio',
+    'mobile app design',
+    'ui design for',
+    'ux design for',
+    'case study',
+    'case studies',
+    'behance',
+    'dribbble',
   ];
-  if (multiAppPatterns.some(re => re.test(text))) return 2;
 
-  // Contextual multi-app: multiple store/product keywords found together
-  const storeHits = [
-    'app store', 'google play', 'play store'
-  ].filter(kw => text.includes(kw)).length;
-  if (storeHits >= 2) return 2; // mentions both stores → likely multiple products
+  const designHits = designMobileSignals.filter(kw => text.includes(kw)).length;
+  if (designHits >= 3) return 2; // multiple strong design signals → track record
+  if (designHits >= 1) return 1; // at least one clear design-context signal
 
-  // Multiple distinct iOS/Android product signals in same profile
-  const mobileProductHits = [
-    'ios app', 'android app', 'iphone app', 'ipad app', 'mobile app'
-  ].filter(kw => text.includes(kw)).length;
-  if (mobileProductHits >= 2) return 2;
-
-  // Single-app signals
-  const singleAppKeywords = [
-    'app store', 'google play', 'play store',
-    'published app', 'shipped app', 'launched app',
-    'ios app', 'android app', 'mobile app',
-    'iphone', 'ipad', 'disponible en', 'available on'
-  ];
-  if (singleAppKeywords.some(kw => text.includes(kw))) return 1;
+  // Weaker mobile signals — still contextual, but need design tool context too
+  const weakMobileWithDesignContext =
+    (text.includes('mobile') || text.includes('ios') || text.includes('android')) &&
+    (text.includes('figma') || text.includes('prototype') || text.includes('design system'));
+  if (weakMobileWithDesignContext) return 1;
 
   return 0;
 }

@@ -88,21 +88,22 @@ const KEYWORD_SYNONYMS: Record<string, string[]> = {
         'Head of Product Consumer',
         'CPO B2C',
     ],
-    // ── UI/UX Designer / Mobile-first cluster ────────────────────────────────
-    // Key uses 'designer' so lower.includes('designer') matches "UI/UX Designer",
-    // "UX Designer", "UI Designer", etc. Synonyms strictly target mobile/consumer
-    // contexts to avoid pulling in web/B2B/software-only designers.
+    // ── Product Designer / Mobile-first cluster ──────────────────────────────
+    // Key uses 'designer' so lower.includes('designer') matches "Product Designer",
+    // "UX Designer", "UI/UX Designer", etc.
+    // IMPORTANT: NO iOS/Android/App Store/Google Play terms — those attract developers.
+    // Signal is Figma + design portfolio + consumer product context.
     'designer': [
-        'UI/UX Designer Mobile App',
-        'UX Designer iOS Android',
-        'Mobile UX Designer',
-        'UI/UX Designer App Store',
+        'Product Designer Mobile',
+        'Product Designer Figma',
+        'UX Designer Figma Mobile',
+        'Senior Product Designer',
         'Product Designer Consumer App',
-        'UX Designer B2C App',
-        'UI Designer iOS Figma',
-        'UX Designer Startup Mobile',
-        'Design Lead Mobile App',
-        'UI/UX Designer Health Fitness App',
+        'UI/UX Designer Figma',
+        'Product Designer Design System',
+        'UX Designer Startup Figma',
+        'Mobile Product Designer',
+        'Product Designer Health Fitness',
     ],
 };
 
@@ -378,25 +379,24 @@ export class LinkedInSearchEngineV2 extends BaseSearchEngine<LinkedInRawCandidat
             lower.includes('diseñador');
 
         if (isDesignerQuery) {
-            // Mobile-first dorks — prioritise candidates with shipped mobile apps.
-            // Intentionally excludes generic "Product Designer" dork to avoid
-            // pulling in web/B2B-only designers who pass by title alone.
-            const mobileDorks = [
-                `"UI/UX Designer" "iOS" "App Store"`,
-                `"UX Designer" "Android" "Google Play"`,
-                `"UI/UX Designer" "Mobile" "Figma"`,
+            // Figma-centric dorks — signal is design tools + portfolio, NOT iOS/Android.
+            // Zero iOS/Android/App Store/Google Play terms to avoid pulling developers.
+            const designDorks = [
+                `"Product Designer" "Figma" "Mobile"`,
+                `"UX Designer" "Figma" "Mobile"`,
+                `"Product Designer" "Design System" "Mobile"`,
+                `"UI/UX Designer" "Figma" "Onboarding"`,
                 `"Product Designer" "Consumer App" "Figma"`,
-                `"Mobile UX Designer" "Startup"`,
-                `"UX Designer" "B2C" "Mobile"`,
-                `"UI Designer" "iOS" "Design System"`,
-                `"UX Designer" "Health" OR "Fitness" OR "Wellness"`,
-                `"UI/UX" "App Store" "Startup"`,
-                `"Mobile Designer" "Figma" "Shipped"`,
-                `"Product Designer" "iOS" "Android" "Figma"`,
-                `"UX Designer" "Fintech" "Mobile"`,
+                `"UX Designer" "Figma" "Startup"`,
+                `"Product Designer" "Figma" "Health" OR "Fitness"`,
+                `"UI/UX Designer" "Figma" "Portfolio"`,
+                `"Senior Product Designer" "Mobile"`,
+                `"Product Designer" "Paywall" OR "Onboarding"`,
+                `"UX Designer" "Design System" "Figma"`,
+                `"Product Designer" "Lottie" OR "Rive"`,
             ];
             const dictSynonyms = KEYWORD_SYNONYMS['designer'] ?? [];
-            return [baseQuery, ...mobileDorks, ...dictSynonyms];
+            return [baseQuery, ...designDorks, ...dictSynonyms];
         }
 
         for (const [keyword, synonyms] of Object.entries(KEYWORD_SYNONYMS)) {
