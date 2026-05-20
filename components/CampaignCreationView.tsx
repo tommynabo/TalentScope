@@ -20,6 +20,7 @@ const ROLE_PRESETS = {
         coreStackLabel: 'Flutter / Dart Experience',
         backendLabel: 'Backend Knowledge (SDK: Firebase, Supabase…)',
         uiUxLabel: 'UX/UI Design Awareness',
+        scoreThreshold: 70,
     },
     backend: {
         label: 'Backend Product Engineer',
@@ -29,6 +30,7 @@ const ROLE_PRESETS = {
         coreStackLabel: 'Core Stack: Node.js + TypeScript + PostgreSQL/Supabase',
         backendLabel: 'Mobile SDK Integrations (RevenueCat, Superwall, Segment…)',
         uiUxLabel: 'Product Mindset / Feature Ownership',
+        scoreThreshold: 80,
     },
     uiux: {
         label: 'UI/UX Designer',
@@ -38,6 +40,7 @@ const ROLE_PRESETS = {
         coreStackLabel: 'Core Tools: Figma + Prototyping + Design System',
         backendLabel: 'Technical / Dev Handoff Awareness',
         uiUxLabel: 'UX Research / User Testing',
+        scoreThreshold: 80,
     },
 } as const;
 
@@ -60,11 +63,12 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
     // Form State - Scoring filter criteria (initialized per preset)
     const [filterCriteria, setFilterCriteria] = useState<SearchFilterCriteria>(getDefaultFlutterFilters());
 
-    // When preset changes, update role and reset filter criteria
+    // When preset changes, update role, reset filter criteria, and adjust threshold
     const handlePresetChange = (preset: RolePreset) => {
         setRolePreset(preset);
         setBasicData(prev => ({ ...prev, role: ROLE_PRESETS[preset].role }));
         setFilterCriteria(ROLE_PRESETS[preset].getDefaults());
+        setAdvancedSettings(prev => ({ ...prev, scoreThreshold: ROLE_PRESETS[preset].scoreThreshold }));
     };
 
     // Advanced settings

@@ -861,12 +861,23 @@ function hasMobileSDKIntegrationExp(candidate: Candidate): boolean {
 
 function hasProductMindset(candidate: Candidate): boolean {
   const text = (candidate.ai_analysis ?? '').toLowerCase();
+  // Strong signals only — generic backend verbs ('launched', 'deploy') removed
+  // to avoid false positives on infrastructure/enterprise engineers.
+  // Added Spanish equivalents since AI analyses are generated in Spanish.
   const keywords = [
-    'ownership', 'feature owner', 'shipped feature', 'end-to-end',
-    'product thinking', 'product engineer', 'product mindset',
-    'autonomy', 'autonomía', 'side project', 'built from scratch',
-    'launched', 'release', 'deploy', 'technical ownership',
-    'producto propio', 'feature completa', 'built end'
+    // English — explicit product ownership language
+    'feature owner', 'shipped feature', 'end-to-end', 'product thinking',
+    'product engineer', 'product mindset', 'technical ownership',
+    'owns the feature', 'owned the feature', 'full ownership',
+    // Spanish — product ownership signals
+    'dueño del feature', 'dueño de la feature', 'ownership del producto',
+    'ingeniero de producto', 'enfoque de producto', 'mentalidad de producto',
+    'impacto en el producto', 'impacto en el negocio', 'autonomía técnica',
+    'responsabilidad end-to-end', 'entregó la feature', 'lanzó el feature',
+    'proyecto propio', 'producto propio', 'app propia', 'side project',
+    'emprendimiento propio', 'producto real', 'usuarios reales',
+    // Role title signals (title contains "product engineer")
+    'product engineer', 'backend product'
   ];
   return keywords.some(kw => text.includes(kw));
 }

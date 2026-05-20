@@ -544,6 +544,17 @@ BONUS signals:
   • Open-source backend project with community traction → +4
   • Early-stage startup (seed / Series A) → +4
 
+SCORE CALIBRATION GUIDE (apply consistently):
+  • Backend engineer with explicit product ownership + consumer app context → 85–95
+  • Backend engineer with some product signals but unclear ownership → 75–84
+  • Generic backend engineer (enterprise / consulting / no ownership evidence) → 65–72
+  • Infrastructure / DevOps / platform engineer without product features → 55–64
+  • Frontend or mobile developer with backend side projects only → 50–60
+
+  CRITICAL: A candidate whose analysis notes they "need to develop product skills" or
+  "lacks connection to the user/product" should score in the 65–72 range, NOT above 75.
+  Do NOT reward technical depth alone — product ownership is a hard requirement.
+
 AUTO-FAIL (score ≤ 39 if ANY apply):
   • Pure frontend or mobile developer with zero backend ownership
   • Only internal enterprise / B2B tooling — never consumer-facing
