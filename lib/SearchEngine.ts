@@ -352,39 +352,83 @@ export class SearchEngine {
         }
     }
 
-    private getQueryVariation(baseQuery: string, attempt: number, seenNames: string[]): string {
-        // Extract core keywords from the query for remixing
-        const coreTerms = baseQuery.replace(/[()]/g, ' ').split(/\s+/).filter(w => w.length > 2);
-        const core = coreTerms.slice(0, 3).join(' ');
+    /**
+     * Returns true for profiles that are clearly NOT software engineers:
+     * recruiters, HR, talent acquisition, sales, marketing, etc.
+     * Used to reject profiles before wasting an OpenAI call.
+     */
+    private isClearlyNonEngineer(role: string): boolean {
+        const r = role.toLowerCase();
+        const nonEngineerTerms = [
+            'recruiter', 'headhunter', 'head hunter', 'cazatalentos',
+            'talent acquisition', 'talent sourcer', 'talent partner',
+            'hr manager', 'hr specialist', 'hr director', 'human resources',
+            'people ops', 'people operations', 'people partner', 'people manager',
+            'hiring manager', 'staffing', 'reclutador', 'reclutamiento',
+            'account manager', 'account executive', 'sales manager', 'sales director',
+            'business development', 'bdm', 'marketing manager', 'marketing director',
+            'customer success', 'community manager',
+        ];
+        return nonEngineerTerms.some(term => r.includes(term));
+    }
 
-        // Build exclusion string from previously seen profiles (limit to avoid Google query max length)
+    private getQueryVariation(baseQuery: string, attempt: number, seenNames: string[]): string {
+        const lower = baseQuery.toLowerCase();
+
+        // Build exclusion string from previously seen profiles
         const exclusions = seenNames
-            .slice(-12)
+            .slice(-8)
             .map(name => {
                 const parts = name.replace(/[^a-zA-ZÀ-ÿ\s]/g, '').trim().split(/\s+/);
-                // Use first name only (shorter, avoids special chars issues)
                 return parts[0] && parts[0].length > 2 ? `-"${parts[0]}"` : '';
             })
             .filter(Boolean)
             .join(' ');
 
-        // Truly diverse query variations that access different parts of Google's index
+        // ── Backend Product Engineer — engineer-specific variations ──────────
+        // Avoid generic terms ('head', 'lead', 'CTO') that attract recruiters.
+        const isBackend = lower.includes('backend') || lower.includes('back-end');
+        if (isBackend) {
+            const cities = ['Madrid', 'Barcelona', 'Ciudad de México', 'Buenos Aires', 'Bogotá', 'Santiago', 'Lima', 'Montevideo', 'Remoto'];
+            const city = cities[(attempt - 2) % cities.length] ?? 'España';
+            const backendVariations = [
+                baseQuery,                                                               // 1
+                `"Backend Engineer" "Node.js" "TypeScript" "${city}"`,                 // 2
+                `"Software Engineer" "Node.js" "PostgreSQL" "${city}"`,                // 3
+                `"Backend Developer" "TypeScript" startup "${city}"`,                  // 4
+                `"Senior Backend" "TypeScript" "${city}"`,                             // 5
+                `"Full Stack" "Node.js" "PostgreSQL" "${city}"`,                       // 6
+                `"Backend Engineer" "Supabase" OR "Firebase" "${city}"`,               // 7
+                `"Software Engineer" "REST API" "Node.js" "${city}"`,                  // 8
+                `"Backend Developer" "consumer" OR "B2C" "${city}"`,                   // 9
+                `backend engineer "TypeScript" "${city}"`,                             // 10
+                `"Node.js" engineer "PostgreSQL" "${city}"`,                           // 11
+                `"Backend" engineer "API" "TypeScript" "${city}"`,                     // 12
+            ];
+            const variation = backendVariations[Math.min(attempt - 1, backendVariations.length - 1)];
+            if (attempt > 1 && exclusions) {
+                const candidate = `${variation} ${exclusions}`;
+                return candidate.length > 250 ? variation : candidate;
+            }
+            return variation;
+        }
+
+        // ── Generic fallback for Flutter / UI-UX / other roles ───────────────
+        const coreTerms = baseQuery.replace(/[()]/g, ' ').split(/\s+/).filter(w => w.length > 2);
+        const core = coreTerms.slice(0, 3).join(' ');
+
         const variations = [
-            baseQuery, // Original
-            `"${core}" Spain OR España`, // Quoted match + geography
-            `${core} startup OR scaleup`, // Startup ecosystem
-            `${core} freelance OR contractor OR autónomo`, // Freelancers 
-            `${core} remote OR remoto`, // Remote workers
-            `"senior" ${core}`, // Senior prefix (different ranking)
-            `"head" OR "lead" OR "principal" ${coreTerms[0] || core}`, // Leadership
-            `"CTO" OR "VP" OR "director" ${coreTerms[0] || core}`, // C-level
-            `${coreTerms[0] || core} "full stack" OR "backend" OR "frontend"`, // Stack angles
-            `${core} Barcelona OR Madrid OR Valencia OR Sevilla`, // City-specific
+            baseQuery,
+            `"${core}" Spain OR España`,
+            `${core} startup OR scaleup`,
+            `${core} freelance OR contractor OR autónomo`,
+            `${core} remote OR remoto`,
+            `"senior" ${core}`,
+            `"${coreTerms[0] || core}" developer engineer`,
+            `${core} Barcelona OR Madrid OR Valencia OR Sevilla`,
         ];
 
         const variation = variations[Math.min(attempt - 1, variations.length - 1)];
-        
-        // Append exclusions for attempts > 1
         if (attempt > 1 && exclusions) {
             return `${variation} ${exclusions}`;
         }
@@ -589,12 +633,12 @@ export class SearchEngine {
             try {
                 const siteOperator = 'site:linkedin.com/in';
                 const langKeywords = options.language === 'Spanish' ? '(España OR Spanish OR Español)' : '';
+                // Negative operators: keep non-engineering profiles out of Google results.
+                // This saves OpenAI calls and prevents false positives at the source.
+                const nonEngineerExclusions = '-recruiter -headhunter -"talent acquisition" -"people partner" -staffing -reclutador';
 
-                // OPTIMIZED: 1 page = fastest Apify run (~8s vs ~46s with 3 pages)
-                // Raised to 150 results per page to feed enough raw volume into the
-                // AI scoring funnel and guarantee ≥50 net leads after filtering.
                 const searchInput = {
-                    queries: `${siteOperator} ${currentQuery} ${langKeywords}`,
+                    queries: `${siteOperator} ${currentQuery} ${langKeywords} ${nonEngineerExclusions}`,
                     maxPagesPerQuery: 1,
                     resultsPerPage: 150,
                     languageCode: options.language === 'Spanish' ? 'es' : 'en',
@@ -662,6 +706,14 @@ export class SearchEngine {
 
                         const name = p.title.split('-')[0].trim() || 'Candidato';
                         const role = p.title.split('-')[1]?.trim() || currentQuery;
+
+                        // ── ROLE PRE-FILTER ──────────────────────────────────────────────
+                        // Reject headhunters / HR / non-engineers BEFORE calling OpenAI.
+                        // Saves API cost and prevents false 80+ scores for non-engineers.
+                        if (this.isClearlyNonEngineer(role)) {
+                            onLog(`[ROLE-FILTER] ❌ ${name} rechazado — rol no-ingeniero: "${role}"`);
+                            return null;
+                        }
 
                         const analysis = await this.generateAIAnalysis({
                             name,
@@ -759,6 +811,12 @@ export class SearchEngine {
     }
 
 
+    /** Returns true when the search query targets a backend engineering role. */
+    private isBackendQuery(query: string): boolean {
+        const q = query.toLowerCase();
+        return q.includes('backend') || q.includes('back-end') || q.includes('back end');
+    }
+
     private async generateAIAnalysis(context: any): Promise<any> {
         if (!this.openaiKey) return {
             summary: "Análisis no disponible (Sin API Key)",
@@ -770,26 +828,67 @@ export class SearchEngine {
             icebreaker: `Hola ${context.name}, me encantaría conectar. Tenemos roles top para ti.`,
             followup_message: `Vimos tu perfil y creemos que eres exactamente lo que buscamos. ¿Podríamos charlar?`,
             skills: [],
-            symmetry_score: 75 // Default decent score
+            symmetry_score: 0 // No real analysis available — scoring step will compute the actual value
         };
 
-        try {
-            // Create controller for timeout (6 seconds - gpt-4o-mini is fast)
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const isBackend = this.isBackendQuery(context.query || '');
 
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.openaiKey}`
-                },
-                body: JSON.stringify({
-                    model: 'gpt-4o-mini',
-                    messages: [
-                        {
-                            role: 'system',
-                            content: `Eres un Tech Recruiter de ÉLITE para Symmetry (•400k descargas/mes). Tu misión: CALIDAD SOBRE VOLUMEN. Solo apruebas "Product Engineers" — no meros ejecutores de tareas técnicas.
+        // ── Backend Product Engineer prompt ─────────────────────────────────────
+        const backendSystemPrompt = `Eres un Tech Recruiter de ÉLITE para Symmetry (app de fitness/bienestar con +400k descargas/mes).
+Tu misión: identificar Backend Product Engineers con experiencia en apps de consumo (B2C). CALIDAD SOBRE VOLUMEN.
+
+=== PERFIL OBJETIVO — BACKEND PRODUCT ENGINEER ===
+Stack core: Node.js + TypeScript + PostgreSQL/Supabase. APIs REST/GraphQL. Consumer-facing apps.
+Entienden producto, usuario Y negocio. Ownership end-to-end de features. Experiencia: 3-8 años en producción.
+
+❌ RECHAZO INMEDIATO (score = 10, SIN EXCEPCIÓN):
+- Recruiters, headhunters, talent acquisition, HR, people ops, staffing
+- Sales manager, account manager, account executive, business development
+- Marketing manager, community manager, customer success
+- Cualquier perfil que NO escribe código profesionalmente
+→ Si el título del perfil contiene cualquiera de los términos anteriores, asigna score = 10 y summary = "RECHAZADO: perfil no-ingeniero".
+
+=== CALIBRACIÓN DE PUNTUACIÓN ===
+• Backend con ownership de producto + app consumer real → 85-95
+• Backend con algunas señales de producto, ownership poco claro → 75-84
+• Backend genérico (enterprise/consulting/sin ownership) → 60-72
+• DevOps/infraestructura/plataforma sin features de producto → 50-60
+• CRÍTICO: análisis que dice "necesita desarrollar habilidades de producto" → máximo 72, NO arriba de 75
+• CRÍTICO: perfil ambiguo sin señales claras de backend → 60, NO 75 por defecto
+
+✅ GREEN FLAGS (suman desde el base):
+- Node.js + TypeScript + PostgreSQL/Supabase en producción (+10)
+- Ownership end-to-end de features con usuarios reales (+8)
+- Consumer app publicada (App Store / Play Store) (+5)
+- SDK de monetización: RevenueCat, Superwall, Stripe (+5)
+- Startup / scale-up con tracción real de usuarios (+5)
+- GitHub activo con repos de backend (+3)
+- Experiencia con IA: OpenAI API, LangChain, pipelines de datos (+3)
+
+🚫 RED FLAGS — fuerzan tier inferior:
+- Solo formación teórica o bootcamp sin proyectos reales en producción → 30-45
+- Solo herramientas B2B/enterprise sin contexto consumer → máximo 65
+- Sin evidencia de código en producción → máximo 50
+
+Devuelve ÚNICAMENTE JSON con este formato:
+{
+    "psychological_profile": "Perfil psicológico en 1 frase",
+    "business_moment": "Momento actual en 1 frase",
+    "sales_angle": "Mejor acercamiento en 1 frase",
+    "bottleneck": "Principal dolor o cuello de botella",
+    "summary": "Resumen ejecutivo en 1 frase",
+    "outreach_message": "Mensaje personalizado (<280 chars) directo y creativo para primer contacto sobre el rol backend",
+    "icebreaker": "Mensaje de invitación LINKEDIN máximo 200 caracteres, menciona el stack backend específico del candidato",
+    "followup_message": "Mensaje de seguimiento (300-400 chars) tras aceptar conexión, menciona Symmetry y el rol backend",
+    "second_followup": "Mensaje de seguimiento (300-500 chars) si no hay respuesta, proporciona más contexto técnico",
+    "skills": ["Skill 1", "Skill 2"],
+    "symmetry_score": 75
+}
+
+IMPORTANTE: Si el snippet indica que el usuario tiene > ${context.maxAge || 40} años, PENALIZAR SCORE (<50).`;
+
+        // ── Generic Product Engineer prompt (Flutter / UI-UX / other) ───────────
+        const genericSystemPrompt = `Eres un Tech Recruiter de ÉLITE para Symmetry (•400k descargas/mes). Tu misión: CALIDAD SOBRE VOLUMEN. Solo apruebas "Product Engineers" — no meros ejecutores de tareas técnicas.
 
                             === PERFIL OBJETIVO (extraído del documento Lead Ideal) ===
                             Experiencia: 3-8 años en producción. Stack core: React/Next.js, Node.js, TypeScript, APIs REST.
@@ -830,7 +929,25 @@ export class SearchEngine {
                             - FOLLOWUP profesional, describe oportunidad sin vender directamente
                             - SEGUNDO FOLLOWUP para seguimiento sin respuesta, ofrece valor adicional
                             - Los 3 mensajes super personalizados basados en el perfil
-                            - Si el snippet indica que el usuario tiene > ${context.maxAge || 40} años, PENALIZAR SCORE (<50)`
+                            - Si el snippet indica que el usuario tiene > ${context.maxAge || 40} años, PENALIZAR SCORE (<50)`;
+
+        try {
+            // Create controller for timeout (6 seconds - gpt-4o-mini is fast)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.openaiKey}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4o-mini',
+                    messages: [
+                        {
+                            role: 'system',
+                            content: isBackend ? backendSystemPrompt : genericSystemPrompt
                         },
                         { role: 'user', content: JSON.stringify(context) }
                     ],
