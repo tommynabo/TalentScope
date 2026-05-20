@@ -1,6 +1,6 @@
 
 import { Candidate, SearchFilterCriteria, GitHubFilterCriteria, GitHubCandidate } from '../types/database';
-import { calculateFlutterDeveloperScore, calculateUIUXDesignerScore } from './scoring';
+import { calculateFlutterDeveloperScore, calculateUIUXDesignerScore, calculateBackendEngineerScore } from './scoring';
 import { deduplicationService } from './deduplication';
 import { SearchService } from './search';
 import { normalizeLinkedInUrl } from './normalization';
@@ -293,9 +293,12 @@ export class SearchEngine {
                     const isUIUX = queryLower.includes('ui/ux') || queryLower.includes('ux designer') ||
                         queryLower.includes('ui designer') || queryLower.includes('designer') ||
                         queryLower.includes('diseñador');
+                    const isBackend = queryLower.includes('backend');
 
                     if (isUIUX) {
                         onLog(`[SCORING] 📊 Aplicando filtro UI/UX Designer (Mobile-first)...`);
+                    } else if (isBackend) {
+                        onLog(`[SCORING] 📊 Aplicando filtro Backend Product Engineer...`);
                     } else {
                         onLog(`[SCORING] 📊 Aplicando filtro Product Engineer...`);
                     }
@@ -304,7 +307,9 @@ export class SearchEngine {
                         .map(candidate => {
                             const scoring = isUIUX
                                 ? calculateUIUXDesignerScore(candidate, options.filters!)
-                                : calculateFlutterDeveloperScore(candidate, options.filters!);
+                                : isBackend
+                                    ? calculateBackendEngineerScore(candidate, options.filters!)
+                                    : calculateFlutterDeveloperScore(candidate, options.filters!);
                             return {
                                 ...candidate,
                                 symmetry_score: scoring.breakdown.normalized,

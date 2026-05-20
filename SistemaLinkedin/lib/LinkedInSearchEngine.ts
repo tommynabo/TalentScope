@@ -1,6 +1,6 @@
 
 import { Candidate, SearchFilterCriteria } from '../../types/database';
-import { calculateFlutterDeveloperScore } from '../../lib/scoring';
+import { calculateFlutterDeveloperScore, calculateUIUXDesignerScore, calculateBackendEngineerScore } from '../../lib/scoring';
 import { deduplicationService } from '../../lib/deduplication';
 import { SearchService } from '../../lib/search';
 import { normalizeLinkedInUrl } from '../../lib/normalization';
@@ -306,11 +306,19 @@ export class LinkedInSearchEngine {
 
                 let scoredCandidates = analyzedCandidates;
                 if (options.filters) {
-                    onLog(`[SCORING] 📊 Aplicando filtro Flutter Developer...`);
+                    const roleRef = query.toLowerCase();
+                    const isUIUX = this.isDesignerRole(roleRef);
+                    const isBackend = roleRef.includes('backend');
+                    const roleLabel = isUIUX ? 'UI/UX Designer' : isBackend ? 'Backend Product Engineer' : 'Flutter Developer';
+                    onLog(`[SCORING] 📊 Aplicando filtro ${roleLabel}...`);
 
                     scoredCandidates = analyzedCandidates
                         .map(candidate => {
-                            const scoring = calculateFlutterDeveloperScore(candidate, options.filters!);
+                            const scoring = isUIUX
+                                ? calculateUIUXDesignerScore(candidate, options.filters!)
+                                : isBackend
+                                    ? calculateBackendEngineerScore(candidate, options.filters!)
+                                    : calculateFlutterDeveloperScore(candidate, options.filters!);
                             return {
                                 ...candidate,
                                 symmetry_score: scoring.breakdown.normalized,

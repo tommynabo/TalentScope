@@ -68,7 +68,18 @@ const LOCATION_POOL = [
 const KEYWORD_SYNONYMS: Record<string, string[]> = {
     'flutter':   ['Flutter Developer', 'Mobile Developer Flutter', 'Flutter Engineer', 'Dart Developer', 'Cross-Platform Mobile'],
     'react':     ['React Developer', 'React.js Engineer', 'Frontend Engineer React', 'React Native Developer'],
-    'backend':   ['Backend Developer', 'Server-Side Engineer', 'Node.js Developer', 'API Developer'],
+    'backend':   [
+        'Backend Product Engineer',
+        'Backend Engineer Node.js',
+        'Backend Developer TypeScript',
+        'Server-Side Engineer Consumer App',
+        'Node.js Developer TypeScript',
+        'API Engineer PostgreSQL',
+        'Backend Engineer Supabase',
+        'Backend Engineer RevenueCat',
+        'Full Stack Engineer Backend',
+        'Software Engineer Backend Consumer',
+    ],
     'frontend':  ['Frontend Developer', 'UI Engineer', 'Web Developer', 'JavaScript Developer'],
     'mobile':    ['Mobile Developer', 'iOS Developer', 'Android Developer', 'React Native Engineer'],
     'fullstack': ['Full Stack Developer', 'Full-Stack Engineer', 'Software Engineer', 'Web Developer'],
@@ -176,8 +187,12 @@ export class LinkedInSearchEngineV2 extends BaseSearchEngine<LinkedInRawCandidat
 
     protected getSystemPrompt(): string {
         const lower = this._baseQuery.toLowerCase();
+        // Route Backend Engineer campaigns (check BEFORE 'product' to avoid false PM match).
+        if (lower.includes('backend')) {
+            return SYSTEM_PROMPTS.LINKEDIN_BACKEND_ENGINEER;
+        }
         // Route Product Manager campaigns to the B2C-aware persona.
-        if (lower.includes('product manager') || lower.includes('product') || /\bpm\b/.test(lower)) {
+        if (lower.includes('product manager') || /\bpm\b/.test(lower)) {
             return SYSTEM_PROMPTS.LINKEDIN_PM_CONSUMER;
         }
         // Route UI/UX Designer campaigns to the mobile-designer persona.
