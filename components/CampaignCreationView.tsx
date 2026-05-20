@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { ArrowLeft, Save, Briefcase, Code, Brain, Target, Trash2, AlertTriangle, Users, Zap, FileText, X } from 'lucide-react';
 import { CampaignService } from '../lib/services';
 import { SearchFilterCriteria } from '../types/database';
-import { getDefaultFlutterFilters } from '../lib/scoring';
+import { getDefaultFlutterFilters, getDefaultUIUXDesignerFilters, getDefaultBackendEngineerFilters } from '../lib/scoring';
 import Toast from './Toast';
 
 interface CampaignCreationViewProps {
@@ -11,19 +11,61 @@ interface CampaignCreationViewProps {
     onCampaignCreated: () => void;
 }
 
+const ROLE_PRESETS = {
+    flutter: {
+        label: 'Flutter Developer',
+        role: 'Flutter Developer',
+        getDefaults: getDefaultFlutterFilters,
+        publishedAppsLabel: 'Published Apps (iOS/Android)',
+        coreStackLabel: 'Flutter / Dart Experience',
+        backendLabel: 'Backend Knowledge (SDK: Firebase, Supabase…)',
+        uiUxLabel: 'UX/UI Design Awareness',
+    },
+    backend: {
+        label: 'Backend Product Engineer',
+        role: 'Backend Product Engineer',
+        getDefaults: getDefaultBackendEngineerFilters,
+        publishedAppsLabel: 'Backend/APIs in Production',
+        coreStackLabel: 'Core Stack: Node.js + TypeScript + PostgreSQL/Supabase',
+        backendLabel: 'Mobile SDK Integrations (RevenueCat, Superwall, Segment…)',
+        uiUxLabel: 'Product Mindset / Feature Ownership',
+    },
+    uiux: {
+        label: 'UI/UX Designer',
+        role: 'UI/UX Designer',
+        getDefaults: getDefaultUIUXDesignerFilters,
+        publishedAppsLabel: 'Published Apps / Live Designs',
+        coreStackLabel: 'Core Tools: Figma + Prototyping + Design System',
+        backendLabel: 'Technical / Dev Handoff Awareness',
+        uiUxLabel: 'UX Research / User Testing',
+    },
+} as const;
+
+type RolePreset = keyof typeof ROLE_PRESETS;
+
 const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onCampaignCreated }) => {
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState({ show: false, message: '' });
 
+    // Role preset selector
+    const [rolePreset, setRolePreset] = useState<RolePreset>('flutter');
+
     // Form State - Basic Info
     const [basicData, setBasicData] = useState({
         title: '',
-        role: 'Flutter Developer',
+        role: ROLE_PRESETS.flutter.role,
         platform: 'LinkedIn',
     });
 
-    // Form State - NEW Flutter Developer Filters
+    // Form State - Scoring filter criteria (initialized per preset)
     const [filterCriteria, setFilterCriteria] = useState<SearchFilterCriteria>(getDefaultFlutterFilters());
+
+    // When preset changes, update role and reset filter criteria
+    const handlePresetChange = (preset: RolePreset) => {
+        setRolePreset(preset);
+        setBasicData(prev => ({ ...prev, role: ROLE_PRESETS[preset].role }));
+        setFilterCriteria(ROLE_PRESETS[preset].getDefaults());
+    };
 
     // Advanced settings
     const [advancedSettings, setAdvancedSettings] = useState({
@@ -103,7 +145,7 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
                 target_role: basicData.role,
                 platform: basicData.platform as any,
                 status: 'Running',
-                description: `Flutter Developer campaign with advanced filtering criteria.`,
+                description: `${basicData.role} campaign with advanced filtering criteria.`,
                 settings: settings
             });
 
@@ -140,7 +182,7 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
                     <ArrowLeft className="h-4 md:h-5 w-4 md:w-5" />
                 </button>
                 <div className="flex-1">
-                    <h1 className="text-lg md:text-xl lg:text-2xl font-bold text-white tracking-tight">New Campaign - Flutter Developer</h1>
+                    <h1 className="text-lg md:text-xl lg:text-2xl font-bold text-white tracking-tight">New Campaign — {ROLE_PRESETS[rolePreset].label}</h1>
                     <p className="text-slate-400 text-xs md:text-sm">Configure advanced search criteria with 11-point scoring system.</p>
                 </div>
                 <button
@@ -157,6 +199,29 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                         <Briefcase className="h-5 w-5 text-cyan-400" /> Basic Information
                     </h3>
+
+                    {/* Role Preset Selector */}
+                    <div className="mb-5">
+                        <label className="block text-sm font-medium text-slate-400 mb-2">Role Preset</label>
+                        <div className="flex flex-wrap gap-2">
+                            {(Object.keys(ROLE_PRESETS) as RolePreset[]).map(preset => (
+                                <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => handlePresetChange(preset)}
+                                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
+                                        rolePreset === preset
+                                            ? 'bg-cyan-600 border-cyan-500 text-white shadow-md shadow-cyan-900/30'
+                                            : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-cyan-600 hover:text-white'
+                                    }`}
+                                >
+                                    {ROLE_PRESETS[preset].label}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1.5">Selecting a preset auto-fills the scoring criteria below.</p>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-slate-400 mb-1">Campaign Title *</label>
@@ -247,17 +312,17 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
                     <div className="space-y-3">
                         <label className="flex items-center justify-between p-3 bg-slate-950/50 rounded-xl border border-slate-800 cursor-pointer hover:border-emerald-500/50 transition-colors">
                             <div>
-                                <span className="text-slate-200 font-medium">Published Apps (iOS/Android)</span>
+                                <span className="text-slate-200 font-medium">{ROLE_PRESETS[rolePreset].publishedAppsLabel}</span>
                                 <span className="text-xs text-slate-500 ml-2">2 points</span>
                             </div>
                             <input type="checkbox" checked={filterCriteria.has_published_apps} onChange={e => setFilterCriteria({ ...filterCriteria, has_published_apps: e.target.checked })} className="accent-emerald-500 h-5 w-5" />
                         </label>
                         <label className="flex items-center justify-between p-3 bg-slate-950/50 rounded-xl border border-slate-800 cursor-pointer hover:border-emerald-500/50 transition-colors">
                             <div>
-                                <span className="text-slate-200 font-medium">Flutter / Dart Experience</span>
+                                <span className="text-slate-200 font-medium">{ROLE_PRESETS[rolePreset].coreStackLabel}</span>
                                 <span className="text-xs text-slate-500 ml-2">2 points</span>
                             </div>
-                            <input type="checkbox" checked={filterCriteria.has_flutter_dart_exp} onChange={e => setFilterCriteria({ ...filterCriteria, has_flutter_dart_exp: e.target.checked })} className="accent-emerald-500 h-5 w-5" />
+                            <input type="checkbox" checked={filterCriteria.has_core_stack_exp} onChange={e => setFilterCriteria({ ...filterCriteria, has_core_stack_exp: e.target.checked })} className="accent-emerald-500 h-5 w-5" />
                         </label>
                         <label className="flex items-center justify-between p-3 bg-slate-950/50 rounded-xl border border-slate-800 cursor-pointer hover:border-emerald-500/50 transition-colors">
                             <div>
@@ -308,7 +373,7 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
                     
                     <div className="space-y-3">
                         <div>
-                            <label className="block text-sm font-medium text-slate-400 mb-2">Backend Knowledge</label>
+                            <label className="block text-sm font-medium text-slate-400 mb-2">{ROLE_PRESETS[rolePreset].backendLabel}</label>
                             <select
                                 value={filterCriteria.backend_knowledge}
                                 onChange={e => setFilterCriteria({ ...filterCriteria, backend_knowledge: e.target.value as any })}
@@ -322,7 +387,7 @@ const CampaignCreationView: React.FC<CampaignCreationViewProps> = ({ onBack, onC
                         </div>
                         <label className="flex items-center justify-between p-3 bg-slate-950/50 rounded-xl border border-slate-800 cursor-pointer hover:border-yellow-500/50 transition-colors">
                             <div>
-                                <span className="text-slate-200 font-medium">UX/UI Design Awareness</span>
+                                <span className="text-slate-200 font-medium">{ROLE_PRESETS[rolePreset].uiUxLabel}</span>
                                 <span className="text-xs text-slate-500 ml-2">1 point</span>
                             </div>
                             <input type="checkbox" checked={filterCriteria.ui_ux_awareness} onChange={e => setFilterCriteria({ ...filterCriteria, ui_ux_awareness: e.target.checked })} className="accent-yellow-500 h-5 w-5" />

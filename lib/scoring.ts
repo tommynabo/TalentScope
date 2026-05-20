@@ -698,3 +698,223 @@ export function getDefaultFlutterFilters(): SearchFilterCriteria {
     ai_match: 'nice_to_have'
   };
 }
+
+// ============= BACKEND PRODUCT ENGINEER SCORING =============
+//
+// Reuses the same 15-point ScoreBreakdown slots with new semantics:
+//
+// - Age (18-30): 1pt
+// - Engineering Degree: 1pt
+// - published_apps → Backend/APIs in production: 2pts (XX)
+// - core_stack → Node.js + TypeScript + PostgreSQL/Supabase: 2pts (XX)
+// - portfolio → GitHub with active backend repos: 2pts (XX)
+// - open_source → Open source backend contributions: 2pts (XX)
+// - startup → Early-Stage Startup Experience: 2pts (XX)
+// - founder → Founded Business: 1pt
+// - backend → Mobile SDK integrations (RevenueCat, Superwall, Segment): 1pt
+// - ui_ux → Product mindset / feature ownership: 1pt
+// - ai → AI / data pipeline experience: 1pt
+
+export function calculateBackendEngineerScore(
+  candidate: Candidate,
+  criteria: SearchFilterCriteria
+): { score: number; breakdown: ScoreBreakdown; passes_threshold: boolean } {
+
+  const breakdown: ScoreBreakdown = {
+    age: 0,
+    education: 0,
+    published_apps: 0,
+    core_stack: 0,
+    portfolio: 0,
+    open_source: 0,
+    startup: 0,
+    founder: 0,
+    backend: 0,
+    ui_ux: 0,
+    ai: 0,
+    total: 0,
+    normalized: 0,
+    passes_threshold: false
+  };
+
+  // 1. Age (0-1pt)
+  const candidateAge = extractAge(candidate);
+  if (candidateAge && candidateAge >= criteria.min_age && candidateAge <= criteria.max_age) {
+    breakdown.age = 1;
+  }
+
+  // 2. Engineering Degree (0-1pt)
+  if (criteria.has_engineering_degree && hasEngineeringDegree(candidate)) {
+    breakdown.education = 1;
+  }
+
+  // 3. Backend / APIs in production (0-2pts)
+  if (criteria.has_published_apps && hasBackendProductionExperience(candidate)) {
+    breakdown.published_apps = 2;
+  }
+
+  // 4. Core backend stack: Node.js, TypeScript, PostgreSQL/Supabase (0-2pts)
+  if (criteria.has_core_stack_exp && hasBackendCoreStack(candidate)) {
+    breakdown.core_stack = 2;
+  }
+
+  // 5. GitHub portfolio with active backend repos (0-2pts)
+  if (criteria.has_portfolio_online && hasPortfolio(candidate)) {
+    breakdown.portfolio = 2;
+  }
+
+  // 6. Open source backend contributions (0-2pts)
+  if (criteria.open_source_contributor && hasOpenSourceActivity(candidate)) {
+    breakdown.open_source = 2;
+  }
+
+  // 7. Early-Stage Startup Experience (0-2pts)
+  if (criteria.startup_early_stage_exp && hasStartupExperience(candidate)) {
+    breakdown.startup = 2;
+  }
+
+  // 8. Founded Business/SaaS/App (0-1pt)
+  if (criteria.founded_business && hasFoundedBusiness(candidate)) {
+    breakdown.founder = 1;
+  }
+
+  // 9. Mobile SDK integrations: RevenueCat, Superwall, Segment, etc. (0-1pt)
+  if (criteria.backend_knowledge !== 'none' && hasMobileSDKIntegrationExp(candidate)) {
+    breakdown.backend = 1;
+  }
+
+  // 10. Product mindset / feature ownership (0-1pt)
+  if (criteria.ui_ux_awareness && hasProductMindset(candidate)) {
+    breakdown.ui_ux = 1;
+  }
+
+  // 11. AI / data pipeline experience (0-1pt)
+  if (criteria.ai_experience && hasAIExperience(candidate)) {
+    breakdown.ai = 1;
+  }
+
+  breakdown.total =
+    breakdown.age +
+    breakdown.education +
+    breakdown.published_apps +
+    breakdown.core_stack +
+    breakdown.portfolio +
+    breakdown.open_source +
+    breakdown.startup +
+    breakdown.founder +
+    breakdown.backend +
+    breakdown.ui_ux +
+    breakdown.ai;
+
+  breakdown.normalized = Math.round((breakdown.total / 15) * 100);
+  breakdown.passes_threshold = breakdown.total >= 12;
+
+  return {
+    score: breakdown.total,
+    breakdown,
+    passes_threshold: breakdown.passes_threshold
+  };
+}
+
+// ── Backend Engineer helpers ────────────────────────────────────────────────
+
+function hasBackendProductionExperience(candidate: Candidate): boolean {
+  const text = [candidate.ai_analysis, candidate.job_title, ...(candidate.skills ?? [])]
+    .filter(Boolean).join(' ').toLowerCase();
+
+  const keywords = [
+    'production api', 'api en producción', 'deployed service', 'backend para',
+    'server-side', 'shipped backend', 'consumer app backend', 'rest api',
+    'revenuecat', 'superwall', 'segment', 'backend engineer', 'backend developer',
+    'product engineer', 'api design', 'microservices', 'backend service',
+    'backend en producción', 'servicio en producción'
+  ];
+  return keywords.some(kw => text.includes(kw));
+}
+
+function hasBackendCoreStack(candidate: Candidate): boolean {
+  if (!candidate.skills || candidate.skills.length === 0) return false;
+
+  const coreKeywords = [
+    'node', 'nodejs', 'node.js', 'typescript', 'express', 'fastapi',
+    'python', 'go', 'golang', 'rust', 'postgresql', 'postgres',
+    'supabase', 'firebase', 'rest api', 'graphql', 'microservices',
+    'nestjs', 'prisma', 'drizzle', 'trpc'
+  ];
+  return candidate.skills.some(skill =>
+    coreKeywords.some(kw => skill.toLowerCase().includes(kw))
+  );
+}
+
+function hasMobileSDKIntegrationExp(candidate: Candidate): boolean {
+  const text = [candidate.ai_analysis, ...(candidate.skills ?? [])]
+    .filter(Boolean).join(' ').toLowerCase();
+
+  const keywords = [
+    'revenuecat', 'superwall', 'segment', 'amplitude', 'mixpanel',
+    'firebase analytics', 'in-app purchase', 'subscription', 'analytics sdk',
+    'revenue cat', 'in app purchase', 'appstore connect', 'stripe',
+    'payment gateway', 'billing', 'suscripción', 'analytics integration'
+  ];
+  return keywords.some(kw => text.includes(kw));
+}
+
+function hasProductMindset(candidate: Candidate): boolean {
+  const text = (candidate.ai_analysis ?? '').toLowerCase();
+  const keywords = [
+    'ownership', 'feature owner', 'shipped feature', 'end-to-end',
+    'product thinking', 'product engineer', 'product mindset',
+    'autonomy', 'autonomía', 'side project', 'built from scratch',
+    'launched', 'release', 'deploy', 'technical ownership',
+    'producto propio', 'feature completa', 'built end'
+  ];
+  return keywords.some(kw => text.includes(kw));
+}
+
+// ── End Backend Engineer helpers ────────────────────────────────────────────
+
+export function getDefaultBackendEngineerFilters(): SearchFilterCriteria {
+  return {
+    // Demographics
+    min_age: 18,
+    max_age: 30,
+    has_engineering_degree: true,
+    engineering_match: 'preferred',
+
+    // Technical XX (2pts each)
+    // has_published_apps → Backend/APIs in production
+    has_published_apps: true,
+    published_apps_match: 'required',
+
+    // has_core_stack_exp → Node.js + TypeScript + PostgreSQL/Supabase
+    has_core_stack_exp: true,
+    core_stack_match: 'required',
+
+    // GitHub portfolio with active backend repos
+    has_portfolio_online: true,
+    portfolio_match: 'preferred',
+
+    // Open source backend contributions
+    open_source_contributor: true,
+    open_source_match: 'preferred',
+
+    // Entrepreneurship XX
+    startup_early_stage_exp: true,
+    startup_match: 'preferred',
+
+    founded_business: false,
+    founded_match: 'nice_to_have',
+
+    // Complementary X (1pt each)
+    // backend_knowledge → Mobile SDK integrations (RevenueCat, Superwall, Segment)
+    backend_knowledge: 'custom',
+    backend_match: 'nice_to_have',
+
+    // ui_ux_awareness → product mindset / feature ownership
+    ui_ux_awareness: true,
+    ui_ux_match: 'nice_to_have',
+
+    ai_experience: false,
+    ai_match: 'nice_to_have'
+  };
+}

@@ -104,16 +104,20 @@ export function extractSpecialty(
   // Try to extract from job title
   if (jobTitle) {
     const titleLower = jobTitle.toLowerCase();
-    if (titleLower.includes('frontend')) return 'Frontend';
-    if (titleLower.includes('backend')) return 'Backend';
-    if (titleLower.includes('fullstack')) return 'Fullstack';
-    if (titleLower.includes('devops')) return 'DevOps';
-    if (titleLower.includes('mobile')) return 'Mobile';
-    if (titleLower.includes('react')) return 'React';
-    if (titleLower.includes('node')) return 'Node.js';
-    if (titleLower.includes('python')) return 'Python';
-    if (titleLower.includes('data')) return 'Data Science';
-    if (titleLower.includes('engineer')) return 'Software Engineering';
+    if (titleLower.includes('frontend')) return 'Frontend Engineer';
+    if (titleLower.includes('backend') && (titleLower.includes('product') || titleLower.includes('engineer')))
+      return 'Backend Product Engineer';
+    if (titleLower.includes('backend')) return 'Backend Engineer';
+    if (titleLower.includes('fullstack') || titleLower.includes('full stack') || titleLower.includes('full-stack'))
+      return 'Fullstack Engineer';
+    if (titleLower.includes('devops')) return 'DevOps Engineer';
+    if (titleLower.includes('mobile')) return 'Mobile Engineer';
+    if (titleLower.includes('react')) return 'React Developer';
+    if (titleLower.includes('node')) return 'Node.js Engineer';
+    if (titleLower.includes('python')) return 'Python Engineer';
+    if (titleLower.includes('data')) return 'Data Engineer';
+    if (titleLower.includes('flutter')) return 'Flutter Developer';
+    if (titleLower.includes('engineer')) return 'Software Engineer';
     
     // Generic specialty from job title
     return jobTitle;
